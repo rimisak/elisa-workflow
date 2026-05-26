@@ -3,6 +3,7 @@ import UniformTypeIdentifiers
 
 struct ContentView: View {
     @StateObject private var vm = ProcessingViewModel()
+    @State private var showFitSettings = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -32,6 +33,17 @@ struct ContentView: View {
         }
         .padding(24)
         .frame(minWidth: 620, minHeight: 660)
+        .toolbar {
+            ToolbarItem(placement: .automatic) {
+                Button { showFitSettings = true } label: {
+                    Image(systemName: "gearshape")
+                }
+                .help("Curve Fit Settings")
+            }
+        }
+        .sheet(isPresented: $showFitSettings) {
+            CurveFitSettingsView(vm: vm)
+        }
         .alert("Python Not Found", isPresented: $vm.showPythonAlert) {
             Button("OK") {}
         } message: {

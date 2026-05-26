@@ -10,6 +10,28 @@ class ProcessingViewModel: ObservableObject {
     @Published var outputDirectory: URL? = nil
     @Published var outputName: String = "ELISA_Output"
 
+    // MARK: - Curve fit bounds (persisted via UserDefaults, order: bottom/top/ic50/hill)
+    @AppStorage("fitLowerBottom") var fitLowerBottom: Double = 0.029
+    @AppStorage("fitLowerTop")    var fitLowerTop:    Double = 0.5
+    @AppStorage("fitLowerIC50")   var fitLowerIC50:   Double = 0.0
+    @AppStorage("fitLowerHill")   var fitLowerHill:   Double = -1.0
+
+    @AppStorage("fitUpperBottom") var fitUpperBottom: Double = 0.031
+    @AppStorage("fitUpperTop")    var fitUpperTop:    Double = 5.0
+    @AppStorage("fitUpperIC50")   var fitUpperIC50:   Double = 1_000_000.0
+    @AppStorage("fitUpperHill")   var fitUpperHill:   Double = 1.0
+
+    @AppStorage("fitP0Bottom") var fitP0Bottom: Double = 0.03
+    @AppStorage("fitP0Top")    var fitP0Top:    Double = 3.0
+    @AppStorage("fitP0IC50")   var fitP0IC50:   Double = 50.0
+    @AppStorage("fitP0Hill")   var fitP0Hill:   Double = 1.0
+
+    func resetFitBounds() {
+        fitLowerBottom = 0.029; fitLowerTop = 0.5;  fitLowerIC50 = 0.0;       fitLowerHill = -1.0
+        fitUpperBottom = 0.031; fitUpperTop = 5.0;  fitUpperIC50 = 1_000_000; fitUpperHill = 1.0
+        fitP0Bottom    = 0.03;  fitP0Top    = 3.0;  fitP0IC50    = 50.0;      fitP0Hill    = 1.0
+    }
+
     // MARK: - Processing state
     @Published var logText: String = ""
     @Published var isProcessing: Bool = false
@@ -121,9 +143,17 @@ class ProcessingViewModel: ObservableObject {
         let outName  = outputName.trimmingCharacters(in: .whitespaces)
         let metaPath = metadataFile!.path
 
+        // Capture fit config values on MainActor before entering the detached task
+        let lowerBounds = [fitLowerBottom, fitLowerTop, fitLowerIC50, fitLowerHill]
+        let upperBounds = [fitUpperBottom, fitUpperTop, fitUpperIC50, fitUpperHill]
+        let p0Values    = [fitP0Bottom,    fitP0Top,    fitP0IC50,    fitP0Hill]
+
         Task.detached(priority: .userInitiated) { [weak self] in
             var args = ["-u", scriptPath, "--input-files"] + files
             args += ["--metadata", metaPath, "--output-dir", outDir, "--output-name", outName]
+            args += ["--fit-lower-bounds"] + lowerBounds.map { String($0) }
+            args += ["--fit-upper-bounds"] + upperBounds.map { String($0) }
+            args += ["--fit-p0"]           + p0Values.map    { String($0) }
 
             let process = Process()
             process.executableURL = URL(fileURLWithPath: python)

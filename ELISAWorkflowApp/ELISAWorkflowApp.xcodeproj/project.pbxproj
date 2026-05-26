@@ -13,6 +13,7 @@
 		DD1122334455667788990011 /* MetadataDropZone.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE11223344556677889900EE /* MetadataDropZone.swift */; };
 		EE1122334455667788990011 /* LogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF11223344556677889900EE /* LogView.swift */; };
 		FF1122334455667788990011 /* ProcessingViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11223344556677889900FF /* ProcessingViewModel.swift */; };
+		DD1122334455667788990033 /* CurveFitSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC11223344556677889900AB /* CurveFitSettingsView.swift */; };
 		AA1122334455667788990022 /* elisa_workflow.py in Resources */ = {isa = PBXBuildFile; fileRef = BB11223344556677889900FF /* elisa_workflow.py */; };
 		BB1122334455667788990022 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CC11223344556677889900FF /* Assets.xcassets */; };
 /* End PBXBuildFile section */
@@ -24,6 +25,7 @@
 		DD11223344556677889900EE /* CSVDropZone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CSVDropZone.swift; sourceTree = "<group>"; };
 		EE11223344556677889900EE /* MetadataDropZone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataDropZone.swift; sourceTree = "<group>"; };
 		FF11223344556677889900EE /* LogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogView.swift; sourceTree = "<group>"; };
+		CC11223344556677889900AB /* CurveFitSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurveFitSettingsView.swift; sourceTree = "<group>"; };
 		AA11223344556677889900FF /* ProcessingViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessingViewModel.swift; sourceTree = "<group>"; };
 		BB11223344556677889900FF /* elisa_workflow.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; name = elisa_workflow.py; path = ../elisa_workflow.py; sourceTree = SOURCE_ROOT; };
 		CC11223344556677889900FF /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -71,6 +73,7 @@
 				DD11223344556677889900EE /* CSVDropZone.swift */,
 				EE11223344556677889900EE /* MetadataDropZone.swift */,
 				FF11223344556677889900EE /* LogView.swift */,
+				CC11223344556677889900AB /* CurveFitSettingsView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -167,6 +170,7 @@
 				DD1122334455667788990011 /* MetadataDropZone.swift in Sources */,
 				EE1122334455667788990011 /* LogView.swift in Sources */,
 				FF1122334455667788990011 /* ProcessingViewModel.swift in Sources */,
+				DD1122334455667788990033 /* CurveFitSettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

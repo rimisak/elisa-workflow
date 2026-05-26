@@ -24,6 +24,14 @@ from openpyxl.formatting.rule import ColorScaleRule
 import numpy as np
 from scipy.optimize import curve_fit
 
+# Mutable curve-fit config — overridden by CLI args in main().
+# Order for all lists: [bottom, top, ic50, hill]
+_FIT_CONFIG = {
+    "lower": [0.029, 0.5,  0.0,  -1.0],
+    "upper": [0.031, 5.0,  1e6,   1.0],
+    "p0":    [0.03,  3.0,  50.0,  1.0],
+}
+
 
 def ElisaMerge(filepath1, filepath2, newfilepath):
     with open(filepath1, errors='replace') as f:
@@ -210,11 +218,8 @@ def sigFit(xdata, ydata):
         raise ValueError("No finite OD values available for curve fitting")
     xdata_f, ydata_f = zip(*pairs)
 
-    p0 = [0.03, 3, 50, 1]
-    bounds = (
-        [0.029, 0.5, 0, -1],
-        [0.031, 5, 1e6, 1]
-    )
+    p0     = list(_FIT_CONFIG["p0"])
+    bounds = (list(_FIT_CONFIG["lower"]), list(_FIT_CONFIG["upper"]))
     params, cov = curve_fit(four_pl, xdata_f, ydata_f, p0=p0, bounds=bounds, maxfev=10000)
     return params
 
@@ -603,10 +608,12 @@ def addSOPSheet(mergerpath):
     print("")
 
 
-def addProtocolSheet(mergerpath, Mpath):
-    """Append a 'Protocol Parameters' sheet summarising the run's dilution settings."""
+def addProtocolSheet(mergerpath, Mpath, fit_config=None):
+    """Append a 'Protocol Parameters' sheet summarising the run's dilution and curve-fit settings."""
     from openpyxl.styles import Font, PatternFill
     from openpyxl.utils import get_column_letter
+    if fit_config is None:
+        fit_config = _FIT_CONFIG
 
     Nwb = xl.load_workbook(Mpath)
     dilutions = Nwb["Dilutions"]
@@ -666,9 +673,30 @@ def addProtocolSheet(mergerpath, Mpath):
     for i, val in enumerate(seriesSA):
         ws.cell(row=11, column=2 + i).value = round(val, 2)
 
+    # Curve Fit Parameters section
+    ws["A13"] = "Curve Fit Parameters (4PL)"
+    ws["A13"].font = header_font
+    for col in range(1, 5):
+        ws.cell(row=13, column=col).fill = header_fill
+
+    col_headers = ["Parameter", "Lower Bound", "Initial Guess", "Upper Bound"]
+    for col, text in enumerate(col_headers, start=1):
+        cell = ws.cell(row=14, column=col, value=text)
+        cell.font = Font(bold=True)
+
+    param_names = ["Bottom", "Top", "IC50", "Hill"]
+    for i, name in enumerate(param_names):
+        row = 15 + i
+        ws.cell(row=row, column=1, value=name).fill = label_fill
+        ws.cell(row=row, column=2, value=fit_config["lower"][i])
+        ws.cell(row=row, column=3, value=fit_config["p0"][i])
+        ws.cell(row=row, column=4, value=fit_config["upper"][i])
+
     ws.column_dimensions["A"].width = 34
     ws.column_dimensions["B"].width = 14
-    for col_n in range(3, 10):
+    ws.column_dimensions["C"].width = 16
+    ws.column_dimensions["D"].width = 14
+    for col_n in range(5, 11):
         ws.column_dimensions[get_column_letter(col_n)].width = 12
 
     wb.save(mergerpath)
@@ -852,6 +880,26 @@ def main():
         help="Base name for the output file (without extension)"
     )
 
+    # Curve fit bounds (order: bottom top ic50 hill)
+    parser.add_argument(
+        "--fit-lower-bounds", type=float, nargs=4,
+        default=[0.029, 0.5, 0.0, -1.0],
+        metavar=("BOTTOM", "TOP", "IC50", "HILL"),
+        help="Lower bounds for 4PL fit parameters"
+    )
+    parser.add_argument(
+        "--fit-upper-bounds", type=float, nargs=4,
+        default=[0.031, 5.0, 1e6, 1.0],
+        metavar=("BOTTOM", "TOP", "IC50", "HILL"),
+        help="Upper bounds for 4PL fit parameters"
+    )
+    parser.add_argument(
+        "--fit-p0", type=float, nargs=4,
+        default=[0.03, 3.0, 50.0, 1.0],
+        metavar=("BOTTOM", "TOP", "IC50", "HILL"),
+        help="Initial guesses for 4PL fit parameters"
+    )
+
     args = parser.parse_args()
 
     if args.create_template:
@@ -870,6 +918,10 @@ def main():
     if not args.output_name:
         parser.error("--output-name is required")
 
+    _FIT_CONFIG["lower"] = args.fit_lower_bounds
+    _FIT_CONFIG["upper"] = args.fit_upper_bounds
+    _FIT_CONFIG["p0"]    = args.fit_p0
+
     print(f"Processing {len(args.input_files)} CSV file(s)...")
     print("")
 
@@ -879,7 +931,7 @@ def main():
     dil = GetDilInfo(mergerpath, args.metadata)
     addEC50(mergerpath, dil)
     addCon(mergerpath, dil)
-    addProtocolSheet(mergerpath, args.metadata)
+    addProtocolSheet(mergerpath, args.metadata, _FIT_CONFIG)
     addSOPSheet(mergerpath)
     print(f"Complete! Output: {mergerpath}")
 

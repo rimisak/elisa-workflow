@@ -60,6 +60,10 @@ struct ContentView: View {
         }
         .frame(height: 70)
         .onDrop(of: [.fileURL], isTargeted: nil, perform: handleMetadataDrop)
+        .onTapGesture { openMetadataFilePicker() }
+        .onHover { inside in
+            if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+        }
     }
 
     @ViewBuilder
@@ -86,7 +90,7 @@ struct ContentView: View {
             HStack(spacing: 16) {
                 Button("Create MetaData.xlsx…") { vm.createMetadataTemplate() }
                     .buttonStyle(.bordered)
-                Text("or drop an existing MetaData.xlsx here")
+                Text("or drop / click to browse for an existing MetaData.xlsx")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
@@ -107,6 +111,16 @@ struct ContentView: View {
                         style: StrokeStyle(lineWidth: 2, dash: [5, 4])
                     )
             )
+    }
+
+    private func openMetadataFilePicker() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [UTType(filenameExtension: "xlsx")].compactMap { $0 }
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        if panel.runModal() == .OK, let url = panel.url {
+            vm.metadataFile = url
+        }
     }
 
     private func handleMetadataDrop(_ providers: [NSItemProvider]) -> Bool {

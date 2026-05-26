@@ -42,13 +42,27 @@ struct MetadataDropZone: View {
                     Image(systemName: "tablecells")
                         .foregroundColor(.secondary)
                         .font(.title3)
-                    Text("Drop MetaData.xlsx here")
+                    Text("Drop MetaData.xlsx here or click to browse")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
             }
         }
         .onDrop(of: [.fileURL], isTargeted: $isTargeted, perform: handleDrop)
+        .onTapGesture { openFilePicker() }
+        .onHover { inside in
+            if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+        }
+    }
+
+    private func openFilePicker() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [UTType(filenameExtension: "xlsx")].compactMap { $0 }
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        if panel.runModal() == .OK, let url = panel.url {
+            self.file = url
+        }
     }
 
     private func handleDrop(_ providers: [NSItemProvider]) -> Bool {

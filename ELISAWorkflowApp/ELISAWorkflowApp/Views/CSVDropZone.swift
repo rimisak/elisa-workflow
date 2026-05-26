@@ -56,6 +56,9 @@ struct CSVDropZone: View {
         }
         .onDrop(of: [.fileURL], isTargeted: $isTargeted, perform: handleDrop)
         .onTapGesture { openFileDialog() }
+        .onHover { inside in
+            if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+        }
     }
 
     private func openFileDialog() {

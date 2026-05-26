@@ -93,6 +93,7 @@ def MergeSpecificFiles(file_paths, output_dir, output_name):
 
     wb = openpyxl.Workbook()
     ws = wb.active
+    ws.title = "Processed Data"
 
     with open(combinepath) as f:
         reader = f.readlines()

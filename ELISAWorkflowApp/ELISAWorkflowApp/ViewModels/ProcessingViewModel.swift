@@ -192,6 +192,11 @@ class ProcessingViewModel: ObservableObject {
                     self?.errorMessage = errText.isEmpty
                         ? "Processing failed (exit code \(exitCode))"
                         : errText
+                } else {
+                    let outputURL = URL(fileURLWithPath: outDir)
+                        .appendingPathComponent(outName)
+                        .appendingPathExtension("xlsx")
+                    NSWorkspace.shared.open(outputURL)
                 }
                 self?.isProcessing = false
             }

@@ -62,6 +62,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .num-plates-row label{font-size:13px;color:#6e6e73}
 .num-plates-row input{width:60px;padding:4px 8px;border-radius:6px;border:1px solid #c7c7cc;font-size:13px;outline:none}
 .checkmark{color:#34c759;font-size:18px}
+.page-footer{text-align:center;font-size:11px;color:#aeaeb2;padding:12px 0 4px;letter-spacing:.2px}
 </style>
 </head>
 <body>
@@ -127,6 +128,8 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
   <div class="log-box" id="logBox" style="margin-top:12px;display:none"></div>
 </div>
+
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; 29/05/2026</div>
 
 <!-- Settings overlay -->
 <div class="settings-overlay" id="settingsOverlay" onclick="closeSettingsIfBg(event)">
@@ -496,7 +499,7 @@ function mergePlates(csvArrays) {
 
 // ─── METADATA PARSING ─────────────────────────────────────────────────────────
 function parseMetadata(bytes) {
-  const wb = XLSX.read(bytes, {type:'array'});
+  const wb = XLSX.read(bytes, {type:'array', cellStyles:true});
 
   const dilSheet = wb.Sheets['Dilutions'];
   const stdStart  = dilSheet['B2'] ? dilSheet['B2'].v : 1000;
@@ -511,6 +514,7 @@ function parseMetadata(bytes) {
   const allRows = XLSX.utils.sheet_to_json(namesSheet, {header:1});
   const hasHeader = allRows.length > 0 && allRows[0][0] === 'Plate' && allRows[0][1] === 'blank';
   const dataRows  = hasHeader ? allRows.slice(1) : allRows;
+  const colorStartRow = hasHeader ? 1 : 0;  // 0-indexed sheet row where data begins
 
   const names = dataRows.map(row => {
     const arr = [];
@@ -521,7 +525,23 @@ function parseMetadata(bytes) {
     return arr;
   });
 
-  return {names, seriesST, seriesSA, stdStart, stdDil, sampleStart, sampleDil};
+  // Read fill colors from Names sheet cells (cols B–M = sheet col indices 1–12)
+  const colors = dataRows.map((_, pIdx) =>
+    Array.from({length:12}, (_, ci) => {
+      const addr = XLSX.utils.encode_cell({r: colorStartRow + pIdx, c: ci + 1});
+      const cell = namesSheet[addr];
+      if (!cell || !cell.s) return null;
+      const fill = cell.s.fill;
+      if (!fill || fill.patternType !== 'solid') return null;
+      const fg = fill.fgColor;
+      if (!fg || !fg.rgb) return null;
+      const rgb = fg.rgb.toUpperCase();
+      if (rgb === 'FFFFFF' || rgb === 'FFFFFFFF' || rgb === '00000000') return null;
+      return rgb.length === 8 ? rgb.slice(2) : rgb;  // strip alpha prefix if present
+    })
+  );
+
+  return {names, colors, seriesST, seriesSA, stdStart, stdDil, sampleStart, sampleDil};
 }
 
 // ─── PROCESSING PIPELINE ──────────────────────────────────────────────────────
@@ -561,10 +581,21 @@ function estimateIC50(xdata, ydata) {
 // Fit 4PL with multiple IC50 starting points and return best-SSE result
 function fitBest4PL(xdata, ydata, fc) {
   const ic50Est = estimateIC50(xdata, ydata);
-  // 4 candidates: estimated from data, default guess, geometric bracketing
-  const ic50Tries = [ic50Est, fc.p0[2], xdata[0], xdata[Math.floor(xdata.length/2)]];
+
+  // Build a broad candidate set: data-driven estimate, default, data extremes,
+  // explicit small values (catches IC50 << min x), and a log-spaced grid across bounds.
+  const logLo = Math.log10(Math.max(fc.lower[2] + 0.1, 0.1));
+  const logHi = Math.log10(fc.upper[2]);
+  const ic50Set = new Set([
+    ic50Est, fc.p0[2],
+    xdata[0], xdata[xdata.length-1], xdata[Math.floor(xdata.length/2)],
+    1, 5, 10
+  ]);
+  for (let i = 0; i <= 7; i++)
+    ic50Set.add(Math.pow(10, logLo + i * (logHi - logLo) / 7));
+
   let bestParams = null, bestSse = Infinity;
-  for (const ic50Init of ic50Tries) {
+  for (const ic50Init of ic50Set) {
     const ic50Clamped = Math.max(fc.lower[2]+1e-6, Math.min(fc.upper[2], ic50Init));
     const p0 = [fc.p0[0], fc.p0[1], ic50Clamped, fc.p0[3]];
     try {
@@ -706,7 +737,7 @@ function aoaToSheet(data) {
 
 // ─── BUILD PROCESSED DATA SHEET ───────────────────────────────────────────────
 function buildDataSheet(grid, numPlates, meta, fc, logFn) {
-  const {names, seriesST, seriesSA} = meta;
+  const {names, colors, seriesST, seriesSA} = meta;
 
   // Apply names to row 7 of grid
   for (let p=0; p<numPlates; p++) {
@@ -737,76 +768,60 @@ function buildDataSheet(grid, numPlates, meta, fc, logFn) {
   // Full grid: 29 original rows + blank + EC50 + blank + choVal + choDil + con
   const fullData = [...grid.map(r=>[...r])];
   fullData.push(new Array(numPlates*14).fill(null));   // row 29: blank
-  fullData.push(allEC50Rows);                           // row 30: EC50
+  fullData.push(allEC50Rows);                           // row 30: EC50  → XLSX row 31
   fullData.push(new Array(numPlates*14).fill(null));   // row 31: blank
   fullData.push(allCVRows);                             // row 32: Chos. Val.
   fullData.push(allCDRows);                             // row 33: Chos. Dil.
-  fullData.push(allConRows);                            // row 34: Interp. Con.
+  fullData.push(allConRows);                            // row 34: Interp. Con. → XLSX row 35
 
-  // Collect numeric values for color scales
-  const vals450 = [], vals570 = [], valsEC50 = [], valsCon = [];
-  for (let p=0; p<numPlates; p++) {
-    for (let c=1; c<=12; c++) {
-      for (let r=9; r<=16; r++) {
-        const v=fullData[r][p*14+c]; if(typeof v==='number'&&isFinite(v)) vals450.push(v);
-      }
-      for (let r=21; r<=28; r++) {
-        const v=fullData[r][p*14+c]; if(typeof v==='number'&&isFinite(v)) vals570.push(v);
-      }
-    }
-  }
-  // EC50 (row 30), sample cols only (not blank/standard)
-  const ec50RowData = fullData[30];
-  for (let i=0; i<ec50RowData.length; i++) {
-    const v=ec50RowData[i]; if(typeof v==='number'&&isFinite(v)) valsEC50.push(v);
-  }
-  // Con row (row 34)
-  const conRowData = fullData[34];
-  for (let i=0; i<conRowData.length; i++) {
-    const v=conRowData[i]; if(typeof v==='number'&&isFinite(v)) valsCon.push(v);
-  }
-
-  vals450.sort((a,b)=>a-b); vals570.sort((a,b)=>a-b);
-  valsEC50.sort((a,b)=>a-b); valsCon.sort((a,b)=>a-b);
-
-  const p450  = [percentile(vals450,1),  percentile(vals450,50),  percentile(vals450,99)];
-  const p570  = [percentile(vals570,1),  percentile(vals570,50),  percentile(vals570,99)];
-  const pEC50 = [percentile(valsEC50,1), percentile(valsEC50,50), percentile(valsEC50,99)];
-  const pCon  = [percentile(valsCon,1),  percentile(valsCon,50),  percentile(valsCon,99)];
-
-  // Convert fullData to styled cells
+  // Convert fullData to styled cells.
+  // OD / EC50 / Con color scales are Excel conditional formatting (added below).
+  // Only the sample-name row gets explicit cell styling here.
   const styledData = fullData.map((row, R) => {
     if (!row) return [];
     return row.map((v, C) => {
       if (v === null || v === undefined) return null;
-      // Determine if this cell should be colored
-      const plateIdx = Math.floor(C / 14);
+      const plateIdx   = Math.floor(C / 14);
       const colInPlate = C % 14;
-      const isDataCol = colInPlate >= 1 && colInPlate <= 12;
+      const isDataCol  = colInPlate >= 1 && colInPlate <= 12;
 
-      let argb = null;
-      if (isDataCol) {
-        if (R >= 9 && R <= 16) {
-          argb = valueToArgb(v, p450[0], p450[1], p450[2], C_GREEN_YEL_RED);
-        } else if (R >= 21 && R <= 28) {
-          argb = valueToArgb(v, p570[0], p570[1], p570[2], C_BLUE_WHT_RED);
-        } else if (R === 30 && typeof v === 'number') {
-          argb = valueToArgb(v, pEC50[0], pEC50[1], pEC50[2], C_GREEN_YEL_RED);
-        } else if (R === 34 && typeof v === 'number') {
-          argb = valueToArgb(v, pCon[0], pCon[1], pCon[2], C_GREEN_YEL_RED);
-        }
-      }
-
-      // Style row 7 (sample names) - bold
+      // Row 7: sample names — bold, with fill color copied from MetaData Names sheet
       if (R === 7 && isDataCol) {
+        const nameColor = colors && colors[plateIdx] && colors[plateIdx][colInPlate - 1];
+        if (nameColor) return styledCell(v, 'FF' + nameColor, {font:{bold:true}});
         return boldCell(v, null);
       }
-      if (argb) return styledCell(v, argb);
       return {v, t: typeof v==='number'?'n':'s'};
     });
   });
 
-  return aoaToSheet(styledData);
+  const ws = aoaToSheet(styledData);
+
+  // Excel conditional formatting — percentile color scales, recalculated live by Excel.
+  // Mirrors Python's openpyxl ColorScaleRule calls in ColorTheTables / addEC50 / addCon.
+  const mkGYR = () => ({type:'colorScale', priority:1, colorScale:{
+    cfvo: [{type:'percentile',val:1},{type:'percentile',val:50},{type:'percentile',val:99}],
+    color:[{rgb:'FF63BE7B'},{rgb:'FFFFEB84'},{rgb:'FFF8696B'}]
+  }});
+  const mkBWR = () => ({type:'colorScale', priority:1, colorScale:{
+    cfvo: [{type:'percentile',val:1},{type:'percentile',val:50},{type:'percentile',val:99}],
+    color:[{rgb:'FF638ABE'},{rgb:'FFFFFFFF'},{rgb:'FFF8696B'}]
+  }});
+
+  const condfmt = [];
+  for (let p = 0; p < numPlates; p++) {
+    const c1  = XLSX.utils.encode_col(p*14 + 1);   // blank col
+    const c12 = XLSX.utils.encode_col(p*14 + 12);  // standard col
+    const c2  = XLSX.utils.encode_col(p*14 + 2);   // first sample (skip blank)
+    const c11 = XLSX.utils.encode_col(p*14 + 11);  // last sample  (skip standard)
+    condfmt.push({ref:`${c1}10:${c12}17`,  rules:[mkGYR()]});  // 450 nm
+    condfmt.push({ref:`${c1}22:${c12}29`,  rules:[mkBWR()]});  // 570 nm
+    condfmt.push({ref:`${c2}31:${c11}31`,  rules:[mkGYR()]});  // EC50
+    condfmt.push({ref:`${c2}35:${c11}35`,  rules:[mkGYR()]});  // Interp. Con.
+  }
+  ws['!condfmt'] = condfmt;
+
+  return ws;
 }
 
 // ─── PROTOCOL PARAMETERS SHEET ────────────────────────────────────────────────

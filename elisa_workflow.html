@@ -693,7 +693,7 @@ function calculateConcentrations(series, seriesST, seriesSA, fc) {
     }
   }
   conRow.push(''); choValRow.push(''); choDilRow.push('');
-  return {conRow, choValRow, choDilRow};
+  return {conRow, choValRow, choDilRow, fittedParams: [bottom, top, ic50, hill], STindex};
 }
 
 // ─── XLSX SHEET BUILDER ───────────────────────────────────────────────────────
@@ -756,17 +756,19 @@ function buildDataSheet(grid, numPlates, meta, fc, logFn) {
   const allConRows  = [];
   const allCVRows   = [];
   const allCDRows   = [];
+  const plateFits   = [];  // actual fitted 4PL params per plate standard curve
 
   for (let p=0; p<numPlates; p++) {
     const series = getSeries(grid, p);
     logFn(`  Plate ${p+1}: fitting EC50...`);
     const ec50Row  = calculateEC50s(series, seriesSA, fc);
     logFn(`  Plate ${p+1}: calculating concentrations...`);
-    const {conRow, choValRow, choDilRow} = calculateConcentrations(series, seriesST, seriesSA, fc);
+    const {conRow, choValRow, choDilRow, fittedParams, STindex} = calculateConcentrations(series, seriesST, seriesSA, fc);
     allEC50Rows.push(...ec50Row);
     allConRows.push(...conRow);
     allCVRows.push(...choValRow);
     allCDRows.push(...choDilRow);
+    plateFits.push({params: fittedParams, STindex});
   }
 
   // Full grid: 29 original rows + blank + EC50 + blank + choVal + choDil + con
@@ -804,7 +806,7 @@ function buildDataSheet(grid, numPlates, meta, fc, logFn) {
   // Build conditional formatting spec — injected into XLSX XML via JSZip after write.
   const condfmt = buildCondfmtRanges(numPlates);
 
-  return {ws, condfmt};
+  return {ws, condfmt, plateFits};
 }
 
 // ─── CONDITIONAL FORMATTING RANGE BUILDER ─────────────────────────────────────
@@ -863,7 +865,7 @@ async function injectConditionalFormatting(xlsxArray, condfmt) {
 }
 
 // ─── PROTOCOL PARAMETERS SHEET ────────────────────────────────────────────────
-function buildProtocolSheet(meta, fc) {
+function buildProtocolSheet(meta, plateFits) {
   const {seriesST, seriesSA, stdStart, stdDil, sampleStart, sampleDil} = meta;
   const GREY  = 'FFD9D9D9';
   const LBLUE = 'FFEEF2FF';
@@ -872,6 +874,9 @@ function buildProtocolSheet(meta, fc) {
   const titleS = {font:{bold:true,sz:14}};
   const hdrS   = {font:{bold:true}, fill:{patternType:'solid',fgColor:{rgb:GREY}}};
   const lblS   = {fill:{patternType:'solid',fgColor:{rgb:LBLUE}}};
+  const boldS  = {font:{bold:true}};
+
+  function r4(v) { return Math.round(v * 10000) / 10000; }
 
   data[0] = [{v:'ELISA Run Parameters', t:'s', s:titleS}];
   data[1] = [];
@@ -879,7 +884,7 @@ function buildProtocolSheet(meta, fc) {
   data[3] = [{v:'Starting Concentration (ng/mL)', t:'s', s:lblS}, {v:stdStart, t:'n'}];
   data[4] = [{v:'Dilution Factor', t:'s', s:lblS}, {v:stdDil, t:'n'}];
   data[5] = [{v:'Dilution Series', t:'s', s:lblS},
-             ...seriesST.map(v=>({v:Math.round(v*10000)/10000, t:'n'}))];
+             ...seriesST.map(v=>({v:r4(v), t:'n'}))];
   data[6] = [];
   data[7] = [{v:'Samples', t:'s', s:hdrS}];
   data[8] = [{v:'Starting Dilution Factor', t:'s', s:lblS}, {v:sampleStart, t:'n'}];
@@ -887,15 +892,16 @@ function buildProtocolSheet(meta, fc) {
   data[10]= [{v:'Dilution Series', t:'s', s:lblS},
              ...seriesSA.map(v=>({v:Math.round(v*100)/100, t:'n'}))];
   data[11]= [];
-  data[12]= [{v:'Curve Fit Parameters (4PL)', t:'s', s:hdrS}];
-  data[13]= ['Parameter','Lower Bound','Initial Guess','Upper Bound'].map(v=>({v,t:'s',s:{font:{bold:true}}}));
-  const pNames = ['Bottom','Top','IC50','Hill'];
-  for (let i=0; i<4; i++) {
+  data[12]= [{v:'Fitted Standard Curve Parameters (4PL)', t:'s', s:hdrS}];
+  data[13]= ['Plate','Bottom','Top','IC50 (ng/mL)','Hill','Conc. Points Used'].map(v=>({v,t:'s',s:boldS}));
+  plateFits.forEach(({params, STindex}, i) => {
+    const [bottom, top, ic50, hill] = params;
     data[14+i] = [
-      {v:pNames[i], t:'s', s:lblS},
-      {v:fc.lower[i], t:'n'}, {v:fc.p0[i], t:'n'}, {v:fc.upper[i], t:'n'}
+      {v:`Plate ${i+1}`, t:'s', s:lblS},
+      {v:r4(bottom), t:'n'}, {v:r4(top), t:'n'}, {v:r4(ic50), t:'n'}, {v:r4(hill), t:'n'},
+      {v: 8 - STindex, t:'n'}
     ];
-  }
+  });
 
   const ws = aoaToSheet(data);
   ws['!cols'] = [{wch:34},{wch:14},{wch:16},{wch:14},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12}];
@@ -1071,11 +1077,11 @@ async function runProcessing() {
 
     // Yield between plates so browser stays responsive
     await new Promise(r => setTimeout(r, 10));
-    const {ws: wsData, condfmt} = buildDataSheet(grid, numPlates, meta, fitConfig, msg => log(msg));
+    const {ws: wsData, condfmt, plateFits} = buildDataSheet(grid, numPlates, meta, fitConfig, msg => log(msg));
     await new Promise(r => setTimeout(r, 10));
 
     log('Building Protocol Parameters sheet...', 'info');
-    const wsProt = buildProtocolSheet(meta, fitConfig);
+    const wsProt = buildProtocolSheet(meta, plateFits);
 
     log('Building SOP sheet...', 'info');
     const wsSOP = buildSOPSheet();

@@ -289,6 +289,7 @@ def addCon(mergerpath, dil):
     conRow = []
     choValRow = []
     choDilRow = []
+    fitted_params = []   # actual 4PL fit results per plate standard curve
 
     for i in range(int(ws.max_column / 14)):
         results = GetSeries(i, ws)
@@ -303,6 +304,14 @@ def addCon(mergerpath, dil):
 
         params = sigFit(dil[0][STindex:], results["standard"])
         bottom, top, ic50, hill = params
+        fitted_params.append({
+            "plate":   i + 1,
+            "bottom":  bottom,
+            "top":     top,
+            "ic50":    ic50,
+            "hill":    hill,
+            "n_points": len(results["standard"]),  # concentration points used
+        })
         totalCon = []
         chosenVal = []
         chosenDil = []
@@ -368,6 +377,7 @@ def addCon(mergerpath, dil):
     wb.save(mergerpath)
     print("Done with estimating concentrations based on interpolated standard curve!")
     print("")
+    return fitted_params
 
 
 def addSOPSheet(mergerpath):
@@ -609,8 +619,9 @@ def addSOPSheet(mergerpath):
     print("")
 
 
-def addProtocolSheet(mergerpath, Mpath, fit_config=None):
-    """Append a 'Protocol Parameters' sheet summarising the run's dilution and curve-fit settings."""
+def addProtocolSheet(mergerpath, Mpath, fit_config=None, fitted_params=None):
+    """Append a 'Protocol Parameters' sheet summarising dilution settings and
+    the actual 4PL parameters fitted to each plate's standard curve."""
     from openpyxl.styles import Font, PatternFill
     from openpyxl.utils import get_column_letter
     if fit_config is None:
@@ -674,31 +685,32 @@ def addProtocolSheet(mergerpath, Mpath, fit_config=None):
     for i, val in enumerate(seriesSA):
         ws.cell(row=11, column=2 + i).value = round(val, 2)
 
-    # Curve Fit Parameters section
-    ws["A13"] = "Curve Fit Parameters (4PL)"
+    # Fitted standard curve parameters section
+    ws["A13"] = "Fitted Standard Curve Parameters (4PL)"
     ws["A13"].font = header_font
-    for col in range(1, 5):
+    for col in range(1, 7):
         ws.cell(row=13, column=col).fill = header_fill
 
-    col_headers = ["Parameter", "Lower Bound", "Initial Guess", "Upper Bound"]
+    col_headers = ["Plate", "Bottom", "Top", "IC50 (ng/mL)", "Hill", "Conc. Points Used"]
     for col, text in enumerate(col_headers, start=1):
         cell = ws.cell(row=14, column=col, value=text)
         cell.font = Font(bold=True)
 
-    param_names = ["Bottom", "Top", "IC50", "Hill"]
-    for i, name in enumerate(param_names):
+    for i, fp in enumerate(fitted_params or []):
         row = 15 + i
-        ws.cell(row=row, column=1, value=name).fill = label_fill
-        ws.cell(row=row, column=2, value=fit_config["lower"][i])
-        ws.cell(row=row, column=3, value=fit_config["p0"][i])
-        ws.cell(row=row, column=4, value=fit_config["upper"][i])
+        ws.cell(row=row, column=1, value=f"Plate {fp['plate']}").fill = label_fill
+        ws.cell(row=row, column=2, value=round(float(fp["bottom"]), 4))
+        ws.cell(row=row, column=3, value=round(float(fp["top"]),    4))
+        ws.cell(row=row, column=4, value=round(float(fp["ic50"]),   4))
+        ws.cell(row=row, column=5, value=round(float(fp["hill"]),   4))
+        ws.cell(row=row, column=6, value=fp.get("n_points", ""))
 
     ws.column_dimensions["A"].width = 34
     ws.column_dimensions["B"].width = 14
-    ws.column_dimensions["C"].width = 16
-    ws.column_dimensions["D"].width = 14
-    for col_n in range(5, 11):
-        ws.column_dimensions[get_column_letter(col_n)].width = 12
+    ws.column_dimensions["C"].width = 14
+    ws.column_dimensions["D"].width = 16
+    ws.column_dimensions["E"].width = 14
+    ws.column_dimensions["F"].width = 20
 
     wb.save(mergerpath)
     print("Done with adding protocol parameters sheet!")
@@ -931,8 +943,8 @@ def main():
     RenameTheColumns(mergerpath, args.metadata)
     dil = GetDilInfo(mergerpath, args.metadata)
     addEC50(mergerpath, dil)
-    addCon(mergerpath, dil)
-    addProtocolSheet(mergerpath, args.metadata, _FIT_CONFIG)
+    fitted_params = addCon(mergerpath, dil)
+    addProtocolSheet(mergerpath, args.metadata, _FIT_CONFIG, fitted_params)
     addSOPSheet(mergerpath)
     print(f"Complete! Output: {mergerpath}")
 

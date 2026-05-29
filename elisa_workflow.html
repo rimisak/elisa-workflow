@@ -857,8 +857,9 @@ async function injectConditionalFormatting(xlsxArray, condfmt) {
   xml = xml.replace(anchor, cfXml + anchor);
   zip.file(sheetPath, xml);
 
-  const out = await zip.generateAsync({type:'array', compression:'DEFLATE'});
-  return out;
+  // Must use 'uint8array' — plain Array passed to new Blob() gets stringified,
+  // tripling the file size and corrupting every byte.
+  return await zip.generateAsync({type:'uint8array', compression:'DEFLATE'});
 }
 
 // ─── PROTOCOL PARAMETERS SHEET ────────────────────────────────────────────────

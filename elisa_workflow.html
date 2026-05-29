@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ELISA Workflow App</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:#f2f2f7;color:#1c1c1e;min-height:100vh;padding:24px}
@@ -525,16 +526,19 @@ function parseMetadata(bytes) {
     return arr;
   });
 
-  // Read fill colors from Names sheet cells (cols B–M = sheet col indices 1–12)
+  // Read fill colors from Names sheet cells (cols B–M = sheet col indices 1–12).
+  // xlsx-js-style stores read styles directly on cell.s (patternType, fgColor),
+  // NOT nested under cell.s.fill as it does when writing.
   const colors = dataRows.map((_, pIdx) =>
     Array.from({length:12}, (_, ci) => {
       const addr = XLSX.utils.encode_cell({r: colorStartRow + pIdx, c: ci + 1});
       const cell = namesSheet[addr];
       if (!cell || !cell.s) return null;
-      const fill = cell.s.fill;
-      if (!fill || fill.patternType !== 'solid') return null;
-      const fg = fill.fgColor;
-      if (!fg || !fg.rgb) return null;
+      const s = cell.s;
+      // When reading: patternType/fgColor are on s directly; when writing: under s.fill
+      const patternType = s.patternType || (s.fill && s.fill.patternType);
+      const fg = s.fgColor || (s.fill && s.fill.fgColor);
+      if (patternType !== 'solid' || !fg || !fg.rgb) return null;
       const rgb = fg.rgb.toUpperCase();
       if (rgb === 'FFFFFF' || rgb === 'FFFFFFFF' || rgb === '00000000') return null;
       return rgb.length === 8 ? rgb.slice(2) : rgb;  // strip alpha prefix if present
@@ -797,31 +801,59 @@ function buildDataSheet(grid, numPlates, meta, fc, logFn) {
 
   const ws = aoaToSheet(styledData);
 
-  // Excel conditional formatting — percentile color scales, recalculated live by Excel.
-  // Mirrors Python's openpyxl ColorScaleRule calls in ColorTheTables / addEC50 / addCon.
-  const mkGYR = () => ({type:'colorScale', priority:1, colorScale:{
-    cfvo: [{type:'percentile',val:1},{type:'percentile',val:50},{type:'percentile',val:99}],
-    color:[{rgb:'FF63BE7B'},{rgb:'FFFFEB84'},{rgb:'FFF8696B'}]
-  }});
-  const mkBWR = () => ({type:'colorScale', priority:1, colorScale:{
-    cfvo: [{type:'percentile',val:1},{type:'percentile',val:50},{type:'percentile',val:99}],
-    color:[{rgb:'FF638ABE'},{rgb:'FFFFFFFF'},{rgb:'FFF8696B'}]
-  }});
+  // Build conditional formatting spec — injected into XLSX XML via JSZip after write.
+  const condfmt = buildCondfmtRanges(numPlates);
 
-  const condfmt = [];
+  return {ws, condfmt};
+}
+
+// ─── CONDITIONAL FORMATTING RANGE BUILDER ─────────────────────────────────────
+function buildCondfmtRanges(numPlates) {
+  const GYR = {cfvo:[{type:'percentile',val:'1'},{type:'percentile',val:'50'},{type:'percentile',val:'99'}],
+               colors:['FF63BE7B','FFFFEB84','FFF8696B']};
+  const BWR = {cfvo:[{type:'percentile',val:'1'},{type:'percentile',val:'50'},{type:'percentile',val:'99'}],
+               colors:['FF638ABE','FFFFFFFF','FFF8696B']};
+  const rules = [];
   for (let p = 0; p < numPlates; p++) {
-    const c1  = XLSX.utils.encode_col(p*14 + 1);   // blank col
-    const c12 = XLSX.utils.encode_col(p*14 + 12);  // standard col
-    const c2  = XLSX.utils.encode_col(p*14 + 2);   // first sample (skip blank)
-    const c11 = XLSX.utils.encode_col(p*14 + 11);  // last sample  (skip standard)
-    condfmt.push({ref:`${c1}10:${c12}17`,  rules:[mkGYR()]});  // 450 nm
-    condfmt.push({ref:`${c1}22:${c12}29`,  rules:[mkBWR()]});  // 570 nm
-    condfmt.push({ref:`${c2}31:${c11}31`,  rules:[mkGYR()]});  // EC50
-    condfmt.push({ref:`${c2}35:${c11}35`,  rules:[mkGYR()]});  // Interp. Con.
+    const c1  = XLSX.utils.encode_col(p*14+1);   // blank col
+    const c12 = XLSX.utils.encode_col(p*14+12);  // standard col
+    const c2  = XLSX.utils.encode_col(p*14+2);   // first sample (skip blank)
+    const c11 = XLSX.utils.encode_col(p*14+11);  // last sample  (skip standard)
+    rules.push({ref:`${c1}10:${c12}17`,  ...GYR});  // 450 nm  rows 10-17
+    rules.push({ref:`${c1}22:${c12}29`,  ...BWR});  // 570 nm  rows 22-29
+    rules.push({ref:`${c2}31:${c11}31`,  ...GYR});  // EC50    row  31
+    rules.push({ref:`${c2}35:${c11}35`,  ...GYR});  // Con.    row  35
   }
-  ws['!condfmt'] = condfmt;
+  return rules;
+}
 
-  return ws;
+// ─── JSZip: INJECT CONDITIONAL FORMATTING INTO XLSX XML ───────────────────────
+async function injectConditionalFormatting(xlsxArray, condfmt) {
+  const zip = await JSZip.loadAsync(new Uint8Array(xlsxArray));
+  const sheetPath = 'xl/worksheets/sheet1.xml';
+  const sheetFile = zip.file(sheetPath);
+  if (!sheetFile) return xlsxArray;  // safety fallback
+
+  let xml = await sheetFile.async('string');
+
+  // Build <conditionalFormatting> elements from spec
+  let cfXml = '';
+  for (const {ref, cfvo, colors} of condfmt) {
+    cfXml += `<conditionalFormatting sqref="${ref}">`;
+    cfXml += `<cfRule type="colorScale" priority="1"><colorScale>`;
+    for (const {type, val} of cfvo)
+      cfXml += val !== undefined ? `<cfvo type="${type}" val="${val}"/>` : `<cfvo type="${type}"/>`;
+    for (const rgb of colors)
+      cfXml += `<color rgb="${rgb}"/>`;
+    cfXml += `</colorScale></cfRule></conditionalFormatting>`;
+  }
+
+  // Insert before closing worksheet tag
+  xml = xml.replace('</worksheet>', cfXml + '</worksheet>');
+  zip.file(sheetPath, xml);
+
+  const out = await zip.generateAsync({type:'array', compression:'DEFLATE'});
+  return out;
 }
 
 // ─── PROTOCOL PARAMETERS SHEET ────────────────────────────────────────────────
@@ -1033,7 +1065,7 @@ async function runProcessing() {
 
     // Yield between plates so browser stays responsive
     await new Promise(r => setTimeout(r, 10));
-    const wsData = buildDataSheet(grid, numPlates, meta, fitConfig, msg => log(msg));
+    const {ws: wsData, condfmt} = buildDataSheet(grid, numPlates, meta, fitConfig, msg => log(msg));
     await new Promise(r => setTimeout(r, 10));
 
     log('Building Protocol Parameters sheet...', 'info');
@@ -1048,7 +1080,11 @@ async function runProcessing() {
     XLSX.utils.book_append_sheet(wb, wsProt, 'Protocol Parameters');
     XLSX.utils.book_append_sheet(wb, wsSOP, 'SOP');
 
-    const buf = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+    let buf = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+
+    log('Injecting conditional formatting...', 'info');
+    buf = await injectConditionalFormatting(buf, condfmt);
+
     const blob = new Blob([buf], {type:'application/octet-stream'});
     downloadBlob(blob, outputName + '.xlsx');
 

@@ -472,7 +472,10 @@ function parseCsvText(text) {
   return lines.slice(0,29).map(line => {
     return line.split(',').map(cell => {
       const s = cell.trim();
-      const n = parseFloat(s);
+      // Use Number() not parseFloat(): parseFloat("1. Raw Data (450 1)") === 1
+      // because it reads as many characters as it can. Number() requires the
+      // entire string to be a valid number, so non-numeric labels are preserved.
+      const n = Number(s);
       return (s !== '' && !isNaN(n)) ? n : s;
     });
   });

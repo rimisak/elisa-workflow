@@ -848,8 +848,13 @@ async function injectConditionalFormatting(xlsxArray, condfmt) {
     cfXml += `</colorScale></cfRule></conditionalFormatting>`;
   }
 
-  // Insert before closing worksheet tag
-  xml = xml.replace('</worksheet>', cfXml + '</worksheet>');
+  // Per OOXML CT_Worksheet sequence, <conditionalFormatting> must come before
+  // <ignoredErrors>, <pageMargins>, etc. Find the earliest safe anchor after
+  // </sheetData> and inject there.
+  const anchors = ['<ignoredErrors', '<pageMargins', '<pageSetup', '<drawing', '</worksheet>'];
+  let anchor = '</worksheet>';
+  for (const a of anchors) { if (xml.includes(a)) { anchor = a; break; } }
+  xml = xml.replace(anchor, cfXml + anchor);
   zip.file(sheetPath, xml);
 
   const out = await zip.generateAsync({type:'array', compression:'DEFLATE'});

@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ELISA Workflow App</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:#f2f2f7;color:#1c1c1e;min-height:100vh;padding:24px}
+h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
+.toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.toolbar-title{display:flex;align-items:center;gap:10px}
+.app-icon{width:36px;height:36px;background:linear-gradient(135deg,#007aff,#5ac8fa);border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;font-weight:700}
+.gear-btn{background:none;border:none;font-size:20px;cursor:pointer;padding:6px;border-radius:8px;transition:background .15s}
+.gear-btn:hover{background:#e5e5ea}
+.card{background:#fff;border-radius:14px;padding:20px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.card-label{font-size:13px;font-weight:600;color:#6e6e73;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+.drop-zone{border:2px dashed #c7c7cc;border-radius:10px;padding:24px;text-align:center;cursor:pointer;transition:all .2s;user-select:none;min-height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
+.drop-zone:hover,.drop-zone.drag-over{border-color:#007aff;background:#f0f6ff}
+.drop-zone.has-files{border-color:#34c759;background:#f0fff4}
+.drop-zone-icon{font-size:28px;opacity:.5}
+.drop-zone-text{font-size:14px;color:#6e6e73}
+.drop-zone-sub{font-size:12px;color:#aeaeb2}
+.file-list{margin-top:8px;text-align:left;width:100%}
+.file-item{font-size:12px;color:#3a3a3c;padding:2px 0;display:flex;align-items:center;gap:4px}
+.file-item::before{content:"📄";font-size:11px}
+.meta-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.meta-drop-zone{flex:1;min-width:200px}
+.btn{padding:8px 16px;border-radius:8px;border:none;font-size:14px;font-weight:500;cursor:pointer;transition:all .15s}
+.btn-primary{background:#007aff;color:#fff}
+.btn-primary:hover{background:#0066d6}
+.btn-primary:disabled{background:#c7c7cc;cursor:not-allowed}
+.btn-secondary{background:#e5e5ea;color:#1c1c1e}
+.btn-secondary:hover{background:#d1d1d6}
+.btn-danger{background:#ff3b30;color:#fff}
+.btn-danger:hover{background:#d70015}
+.btn-sm{padding:5px 10px;font-size:12px}
+.output-row{display:flex;align-items:center;gap:10px}
+.text-input{padding:8px 12px;border-radius:8px;border:1px solid #c7c7cc;font-size:14px;flex:1;outline:none;transition:border .15s}
+.text-input:focus{border-color:#007aff}
+.process-btn{width:100%;padding:12px;font-size:16px;font-weight:600;border-radius:10px}
+.log-box{background:#1c1c1e;border-radius:10px;padding:14px 16px;min-height:120px;max-height:280px;overflow-y:auto;font-family:'SF Mono',Menlo,Monaco,monospace;font-size:12px;line-height:1.6}
+.log-line{color:#d1d1d6;white-space:pre-wrap;word-break:break-word}
+.log-line.success{color:#30d158}
+.log-line.error{color:#ff453a}
+.log-line.info{color:#64d2ff}
+.log-line.warn{color:#ffd60a}
+.status-row{display:flex;align-items:center;gap:8px;margin-top:6px;font-size:13px;color:#6e6e73}
+/* Settings panel */
+.settings-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:100;align-items:center;justify-content:center}
+.settings-overlay.open{display:flex}
+.settings-panel{background:#fff;border-radius:16px;padding:24px;width:520px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.settings-panel h2{font-size:17px;font-weight:600;margin-bottom:16px}
+.fit-grid{display:grid;grid-template-columns:80px 1fr 1fr 1fr;gap:6px;align-items:center;margin-bottom:14px}
+.fit-grid-header{font-size:12px;font-weight:600;color:#6e6e73;text-align:center}
+.fit-grid-label{font-size:13px;font-weight:500;color:#3a3a3c}
+.fit-input{padding:6px 8px;border-radius:6px;border:1px solid #c7c7cc;font-size:13px;width:100%;outline:none;text-align:right}
+.fit-input:focus{border-color:#007aff}
+.settings-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:6px}
+.num-plates-row{display:flex;align-items:center;gap:8px;margin-top:8px}
+.num-plates-row label{font-size:13px;color:#6e6e73}
+.num-plates-row input{width:60px;padding:4px 8px;border-radius:6px;border:1px solid #c7c7cc;font-size:13px;outline:none}
+.checkmark{color:#34c759;font-size:18px}
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <div class="toolbar-title">
+    <div class="app-icon">E</div>
+    <h1>ELISA Workflow</h1>
+  </div>
+  <button class="gear-btn" onclick="openSettings()" title="Curve fit settings">⚙️</button>
+</div>
+
+<!-- CSV Drop Zone -->
+<div class="card">
+  <div class="card-label">Plate Reader CSV Files</div>
+  <div class="drop-zone" id="csvZone" onclick="browseCSV()" ondragover="onDragOver(event,'csvZone')" ondragleave="onDragLeave('csvZone')" ondrop="onDropCSV(event)">
+    <div class="drop-zone-icon">📂</div>
+    <div class="drop-zone-text" id="csvZoneText">Drop CSV files here or click to browse</div>
+    <div class="drop-zone-sub">BMG Omega plate reader exports (.CSV), multiple files allowed</div>
+    <div class="file-list" id="csvFileList"></div>
+  </div>
+  <div style="margin-top:8px;display:flex;gap:8px;justify-content:flex-end">
+    <button class="btn btn-secondary btn-sm" onclick="clearCSV()">Clear</button>
+  </div>
+  <input type="file" id="csvInput" accept=".csv,.CSV" multiple style="display:none" onchange="onCSVInputChange()">
+</div>
+
+<!-- Metadata -->
+<div class="card">
+  <div class="card-label">Metadata File</div>
+  <div class="meta-row">
+    <div class="drop-zone meta-drop-zone" id="metaZone" onclick="browseMeta()" ondragover="onDragOver(event,'metaZone')" ondragleave="onDragLeave('metaZone')" ondrop="onDropMeta(event)">
+      <div class="drop-zone-icon">📋</div>
+      <div class="drop-zone-text" id="metaZoneText">Drop MetaData.xlsx here or click to browse</div>
+      <div class="drop-zone-sub">Contains sample names and dilution parameters</div>
+    </div>
+  </div>
+  <div style="margin-top:8px;display:flex;gap:8px;align-items:center;justify-content:space-between">
+    <div class="num-plates-row">
+      <label>Plates for new template:</label>
+      <input type="number" id="numPlatesInput" value="6" min="1" max="40">
+      <button class="btn btn-secondary btn-sm" onclick="createTemplate()">Create MetaData.xlsx</button>
+    </div>
+    <button class="btn btn-secondary btn-sm" onclick="clearMeta()">Remove</button>
+  </div>
+  <input type="file" id="metaInput" accept=".xlsx,.XLSX" style="display:none" onchange="onMetaInputChange()">
+</div>
+
+<!-- Output -->
+<div class="card">
+  <div class="card-label">Output</div>
+  <div class="output-row">
+    <span style="font-size:14px;color:#6e6e73;white-space:nowrap">Filename:</span>
+    <input class="text-input" type="text" id="outputName" value="ELISA_Output" placeholder="Output filename (without .xlsx)">
+  </div>
+</div>
+
+<!-- Process -->
+<div class="card">
+  <button class="btn btn-primary process-btn" id="processBtn" onclick="runProcessing()" disabled>Process</button>
+  <div class="status-row" id="statusRow">
+    <span id="statusText">Load CSV files and a metadata file to begin.</span>
+  </div>
+  <div class="log-box" id="logBox" style="margin-top:12px;display:none"></div>
+</div>
+
+<!-- Settings overlay -->
+<div class="settings-overlay" id="settingsOverlay" onclick="closeSettingsIfBg(event)">
+  <div class="settings-panel">
+    <h2>Curve Fit Settings (4PL)</h2>
+    <div class="fit-grid">
+      <div class="fit-grid-header"></div>
+      <div class="fit-grid-header">Lower Bound</div>
+      <div class="fit-grid-header">Initial Guess</div>
+      <div class="fit-grid-header">Upper Bound</div>
+      <div class="fit-grid-label">Bottom</div>
+      <input class="fit-input" id="f_lo_bottom" type="number" step="any">
+      <input class="fit-input" id="f_p0_bottom" type="number" step="any">
+      <input class="fit-input" id="f_hi_bottom" type="number" step="any">
+      <div class="fit-grid-label">Top</div>
+      <input class="fit-input" id="f_lo_top" type="number" step="any">
+      <input class="fit-input" id="f_p0_top" type="number" step="any">
+      <input class="fit-input" id="f_hi_top" type="number" step="any">
+      <div class="fit-grid-label">IC50</div>
+      <input class="fit-input" id="f_lo_ic50" type="number" step="any">
+      <input class="fit-input" id="f_p0_ic50" type="number" step="any">
+      <input class="fit-input" id="f_hi_ic50" type="number" step="any">
+      <div class="fit-grid-label">Hill</div>
+      <input class="fit-input" id="f_lo_hill" type="number" step="any">
+      <input class="fit-input" id="f_p0_hill" type="number" step="any">
+      <input class="fit-input" id="f_hi_hill" type="number" step="any">
+    </div>
+    <div class="settings-actions">
+      <button class="btn btn-secondary" onclick="resetFit()">Reset to Standard</button>
+      <button class="btn btn-primary" onclick="closeSettings()">Done</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ─── DEFAULTS ─────────────────────────────────────────────────────────────────
+const DEFAULT_FIT = {
+  lower: [0.029, 0.5,  0.0,  -1.0],
+  upper: [0.031, 5.0,  1e6,   1.0],
+  p0:    [0.03,  3.0,  50.0,  1.0]
+};
+
+// State
+let csvFiles   = [];  // {name, text}
+let metaBytes  = null;
+let metaName   = '';
+let fitConfig  = JSON.parse(JSON.stringify(DEFAULT_FIT));
+
+// ─── UI HELPERS ───────────────────────────────────────────────────────────────
+function updateProcessBtn() {
+  const ok = csvFiles.length > 0 && metaBytes !== null;
+  document.getElementById('processBtn').disabled = !ok;
+  document.getElementById('statusText').textContent = ok
+    ? `Ready: ${csvFiles.length} CSV file(s) + metadata loaded.`
+    : 'Load CSV files and a metadata file to begin.';
+}
+
+function onDragOver(e, id) {
+  e.preventDefault();
+  document.getElementById(id).classList.add('drag-over');
+}
+function onDragLeave(id) {
+  document.getElementById(id).classList.remove('drag-over');
+}
+
+// CSV zone
+function browseCSV() { document.getElementById('csvInput').click(); }
+function onCSVInputChange() {
+  const files = Array.from(document.getElementById('csvInput').files);
+  loadCSVFiles(files);
+}
+function onDropCSV(e) {
+  e.preventDefault();
+  onDragLeave('csvZone');
+  const files = Array.from(e.dataTransfer.files).filter(f => f.name.match(/\.csv$/i));
+  loadCSVFiles(files);
+}
+function loadCSVFiles(files) {
+  if (!files.length) return;
+  const readers = files.map(f => new Promise(res => {
+    const r = new FileReader();
+    r.onload = ev => res({ name: f.name, text: ev.target.result });
+    r.readAsText(f);
+  }));
+  Promise.all(readers).then(results => {
+    csvFiles = results.sort((a, b) => a.name.localeCompare(b.name));
+    const zone = document.getElementById('csvZone');
+    zone.classList.add('has-files');
+    document.getElementById('csvZoneText').textContent = `${csvFiles.length} file(s) loaded`;
+    const list = document.getElementById('csvFileList');
+    list.innerHTML = csvFiles.map(f => `<div class="file-item">${f.name}</div>`).join('');
+    updateProcessBtn();
+  });
+}
+function clearCSV() {
+  csvFiles = [];
+  document.getElementById('csvZone').classList.remove('has-files');
+  document.getElementById('csvZoneText').textContent = 'Drop CSV files here or click to browse';
+  document.getElementById('csvFileList').innerHTML = '';
+  document.getElementById('csvInput').value = '';
+  updateProcessBtn();
+}
+
+// Meta zone
+function browseMeta() { document.getElementById('metaInput').click(); }
+function onMetaInputChange() {
+  const f = document.getElementById('metaInput').files[0];
+  if (f) loadMetaFile(f);
+}
+function onDropMeta(e) {
+  e.preventDefault();
+  onDragLeave('metaZone');
+  const f = Array.from(e.dataTransfer.files).find(f => f.name.match(/\.xlsx?$/i));
+  if (f) loadMetaFile(f);
+}
+function loadMetaFile(f) {
+  const r = new FileReader();
+  r.onload = ev => {
+    metaBytes = new Uint8Array(ev.target.result);
+    metaName  = f.name;
+    const zone = document.getElementById('metaZone');
+    zone.classList.add('has-files');
+    document.getElementById('metaZoneText').textContent = `✅ ${f.name}`;
+    updateProcessBtn();
+  };
+  r.readAsArrayBuffer(f);
+}
+function clearMeta() {
+  metaBytes = null; metaName = '';
+  document.getElementById('metaZone').classList.remove('has-files');
+  document.getElementById('metaZoneText').textContent = 'Drop MetaData.xlsx here or click to browse';
+  document.getElementById('metaInput').value = '';
+  updateProcessBtn();
+}
+
+// Settings
+const FIT_IDS = [
+  ['f_lo_bottom','f_p0_bottom','f_hi_bottom'],
+  ['f_lo_top',   'f_p0_top',   'f_hi_top'  ],
+  ['f_lo_ic50',  'f_p0_ic50',  'f_hi_ic50' ],
+  ['f_lo_hill',  'f_p0_hill',  'f_hi_hill' ]
+];
+function openSettings() {
+  for (let i = 0; i < 4; i++) {
+    document.getElementById(FIT_IDS[i][0]).value = fitConfig.lower[i];
+    document.getElementById(FIT_IDS[i][1]).value = fitConfig.p0[i];
+    document.getElementById(FIT_IDS[i][2]).value = fitConfig.upper[i];
+  }
+  document.getElementById('settingsOverlay').classList.add('open');
+}
+function closeSettings() {
+  for (let i = 0; i < 4; i++) {
+    fitConfig.lower[i] = parseFloat(document.getElementById(FIT_IDS[i][0]).value) || DEFAULT_FIT.lower[i];
+    fitConfig.p0[i]    = parseFloat(document.getElementById(FIT_IDS[i][1]).value) || DEFAULT_FIT.p0[i];
+    fitConfig.upper[i] = parseFloat(document.getElementById(FIT_IDS[i][2]).value) || DEFAULT_FIT.upper[i];
+  }
+  document.getElementById('settingsOverlay').classList.remove('open');
+}
+function closeSettingsIfBg(e) { if (e.target === e.currentTarget) closeSettings(); }
+function resetFit() {
+  fitConfig = JSON.parse(JSON.stringify(DEFAULT_FIT));
+  openSettings();
+}
+
+// Log
+function clearLog() {
+  const box = document.getElementById('logBox');
+  box.innerHTML = '';
+  box.style.display = 'block';
+}
+function log(msg, cls='') {
+  const box = document.getElementById('logBox');
+  const line = document.createElement('div');
+  line.className = 'log-line' + (cls ? ' ' + cls : '');
+  line.textContent = msg;
+  box.appendChild(line);
+  box.scrollTop = box.scrollHeight;
+}
+
+// Download helper
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ─── CREATE METADATA TEMPLATE ─────────────────────────────────────────────────
+function createTemplate() {
+  const numPlates = parseInt(document.getElementById('numPlatesInput').value) || 6;
+  const wb = XLSX.utils.book_new();
+  const sampleLabels = ['blank', ...Array.from({length:10},(_,i)=>`sample ${i+1}`), 'standard'];
+
+  // Names sheet
+  const namesData = [['Plate', ...sampleLabels]];
+  for (let p = 0; p < numPlates; p++)
+    namesData.push([`plate ${p+1} - dXX assayXX`, ...sampleLabels]);
+  const wsNames = XLSX.utils.aoa_to_sheet(namesData);
+  wsNames['!cols'] = [{wch:28}, ...Array(12).fill({wch:12})];
+  XLSX.utils.book_append_sheet(wb, wsNames, 'Names');
+
+  // Dilutions sheet
+  const dilData = [
+    [],
+    ['Standard Starting Concentration (ng/mL)', 1000],
+    ['Standard Dilution Factor', 5],
+    [], [],
+    ['Sample Starting Dilution Factor', 50],
+    ['Sample Dilution Factor', 3]
+  ];
+  const wsDil = XLSX.utils.aoa_to_sheet(dilData);
+  wsDil['!cols'] = [{wch:42},{wch:12}];
+  XLSX.utils.book_append_sheet(wb, wsDil, 'Dilutions');
+
+  const buf = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+  downloadBlob(new Blob([buf], {type:'application/octet-stream'}), 'MetaData.xlsx');
+}
+
+// ─── MATH UTILITIES ───────────────────────────────────────────────────────────
+function percentile(sortedArr, pct) {
+  if (!sortedArr.length) return 0;
+  const idx = (pct / 100) * (sortedArr.length - 1);
+  const lo = Math.floor(idx), hi = Math.ceil(idx);
+  return sortedArr[lo] + (sortedArr[hi] - sortedArr[lo]) * (idx - lo);
+}
+
+function lerpColor(t, stops) {
+  // stops: array of 3 [r,g,b]. t in [0,1]
+  let i = 0, lt = t;
+  if (t > 0.5) { i = 1; lt = (t - 0.5) * 2; } else { lt = t * 2; }
+  const c1 = stops[i], c2 = stops[i+1];
+  const r = Math.round(c1[0] + (c2[0]-c1[0])*lt);
+  const g = Math.round(c1[1] + (c2[1]-c1[1])*lt);
+  const b = Math.round(c1[2] + (c2[2]-c1[2])*lt);
+  return 'FF' + [r,g,b].map(x=>x.toString(16).padStart(2,'0')).join('').toUpperCase();
+}
+
+function valueToArgb(v, p1, p50, p99, stops) {
+  if (p99 <= p1 || isNaN(v)) return null;
+  let t;
+  if (v <= p1) t = 0;
+  else if (v >= p99) t = 1;
+  else if (v <= p50) t = 0.5 * (v - p1) / Math.max(p50 - p1, 1e-10);
+  else t = 0.5 + 0.5 * (v - p50) / Math.max(p99 - p50, 1e-10);
+  return lerpColor(Math.min(1, Math.max(0, t)), stops);
+}
+
+const C_GREEN_YEL_RED = [[0x63,0xBE,0x7B],[0xFF,0xEB,0x84],[0xF8,0x69,0x6B]];
+const C_BLUE_WHT_RED  = [[0x63,0x8A,0xBE],[0xFF,0xFF,0xFF],[0xF8,0x69,0x6B]];
+
+// ─── 4PL CURVE FITTING (Levenberg-Marquardt) ──────────────────────────────────
+function model4PL(x, p) {
+  const [bottom, top, ic50, hill] = p;
+  if (ic50 <= 0) return bottom;
+  const ratio = Math.pow(Math.max(x / ic50, 1e-15), hill);
+  return bottom + (top - bottom) / (1 + ratio);
+}
+
+function solveGaussian(A, b) {
+  const n = b.length;
+  const M = A.map((row, i) => [...row, b[i]]);
+  for (let col = 0; col < n; col++) {
+    let maxRow = col;
+    for (let row = col+1; row < n; row++)
+      if (Math.abs(M[row][col]) > Math.abs(M[maxRow][col])) maxRow = row;
+    [M[col], M[maxRow]] = [M[maxRow], M[col]];
+    if (Math.abs(M[col][col]) < 1e-14) return null;
+    for (let row = col+1; row < n; row++) {
+      const f = M[row][col] / M[col][col];
+      for (let k = col; k <= n; k++) M[row][k] -= f * M[col][k];
+    }
+  }
+  const x = new Array(n).fill(0);
+  for (let i = n-1; i >= 0; i--) {
+    x[i] = M[i][n] / M[i][i];
+    for (let k = i-1; k >= 0; k--) M[k][n] -= M[k][i] * x[i];
+  }
+  return x;
+}
+
+function levenbergMarquardt(xdata, ydata, p0, lower, upper) {
+  if (!xdata.length || !ydata.length) throw new Error('No data');
+
+  function clamp(p) { return p.map((v,i)=>Math.max(lower[i],Math.min(upper[i],v))); }
+  function residuals(p) { return xdata.map((x,i)=>ydata[i]-model4PL(x,p)); }
+  function sse(p) { return residuals(p).reduce((s,r)=>s+r*r,0); }
+  function jacobian(p) {
+    const eps = 1e-7;
+    return xdata.map(x => p.map((_, j) => {
+      const p1=[...p]; p1[j]+=eps;
+      const p2=[...p]; p2[j]-=eps;
+      return (model4PL(x,p1)-model4PL(x,p2))/(2*eps);
+    }));
+  }
+
+  let p = clamp([...p0]);
+  let lambda = 1e-3;
+
+  for (let iter = 0; iter < 500; iter++) {
+    const r = residuals(p);
+    const J = jacobian(p);
+    const JtJ = Array.from({length:4},()=>new Array(4).fill(0));
+    const Jtr = new Array(4).fill(0);
+    for (let i=0; i<xdata.length; i++) {
+      for (let j=0; j<4; j++) {
+        for (let k=0; k<4; k++) JtJ[j][k] += J[i][j]*J[i][k];
+        Jtr[j] += J[i][j]*r[i];
+      }
+    }
+    const A = JtJ.map((row,i)=>row.map((v,j)=>i===j?v+lambda:v));
+    const dp = solveGaussian(A, Jtr);
+    if (!dp) { lambda*=10; continue; }
+    const pNew = clamp(p.map((v,i)=>v+dp[i]));
+    if (sse(pNew) < sse(p)) {
+      const diff = dp.reduce((s,d)=>s+Math.abs(d),0);
+      p = pNew;
+      lambda = Math.max(lambda/10, 1e-10);
+      if (diff < 1e-8) break;
+    } else {
+      lambda = Math.min(lambda*10, 1e10);
+    }
+  }
+  return p;
+}
+
+function inverse4PL(y, top, bottom, hill, ic50) {
+  const eps = 1e-12;
+  const yc = Math.max(bottom+eps, Math.min(top-eps, y));
+  return ic50 * Math.pow((top-yc)/(yc-bottom), 1.0/hill);
+}
+
+// ─── CSV PARSING ──────────────────────────────────────────────────────────────
+function parseCsvText(text) {
+  const lines = text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
+  return lines.slice(0,29).map(line => {
+    return line.split(',').map(cell => {
+      const s = cell.trim();
+      const n = parseFloat(s);
+      return (s !== '' && !isNaN(n)) ? n : s;
+    });
+  });
+}
+
+// Build merged grid from array of parsed CSV arrays (each 29×N)
+function mergePlates(csvArrays) {
+  const numPlates = csvArrays.length;
+  const numCols   = numPlates * 14;
+  const grid      = Array.from({length:29}, ()=>new Array(numCols).fill(null));
+
+  for (let p = 0; p < numPlates; p++) {
+    const csv    = csvArrays[p];
+    const offset = p * 14;
+    for (let r = 0; r < Math.min(29, csv.length); r++) {
+      const row = csv[r] || [];
+      for (let c = 0; c < row.length && offset+c < numCols; c++) {
+        const v = row[c];
+        grid[r][offset+c] = (v === '' || v === undefined) ? null : v;
+      }
+    }
+  }
+  return grid;
+}
+
+// ─── METADATA PARSING ─────────────────────────────────────────────────────────
+function parseMetadata(bytes) {
+  const wb = XLSX.read(bytes, {type:'array'});
+
+  const dilSheet = wb.Sheets['Dilutions'];
+  const stdStart  = dilSheet['B2'] ? dilSheet['B2'].v : 1000;
+  const stdDil    = dilSheet['B3'] ? dilSheet['B3'].v : 5;
+  const sampleStart = dilSheet['B6'] ? dilSheet['B6'].v : 50;
+  const sampleDil   = dilSheet['B7'] ? dilSheet['B7'].v : 3;
+
+  const seriesST = Array.from({length:8}, (_,i) => stdStart / Math.pow(stdDil, i));
+  const seriesSA = Array.from({length:8}, (_,i) => sampleStart * Math.pow(sampleDil, i));
+
+  const namesSheet = wb.Sheets['Names'];
+  const allRows = XLSX.utils.sheet_to_json(namesSheet, {header:1});
+  const hasHeader = allRows.length > 0 && allRows[0][0] === 'Plate' && allRows[0][1] === 'blank';
+  const dataRows  = hasHeader ? allRows.slice(1) : allRows;
+
+  const names = dataRows.map(row => {
+    const arr = [];
+    for (let c = 1; c <= 12; c++) {
+      const v = row[c];
+      arr.push(v !== undefined && v !== null ? String(v) : '');
+    }
+    return arr;
+  });
+
+  return {names, seriesST, seriesSA, stdStart, stdDil, sampleStart, sampleDil};
+}
+
+// ─── PROCESSING PIPELINE ──────────────────────────────────────────────────────
+function getSeries(grid, plateIdx) {
+  const offset = plateIdx * 14;
+  const result = new Map();  // preserves insertion order
+  for (let c = 1; c <= 12; c++) {
+    const colIdx = offset + c;
+    const rawName = grid[7][colIdx];
+    const name    = (rawName !== null && rawName !== undefined) ? String(rawName) : '';
+    const key     = name === 'blank' ? `blank${colIdx}` : (name || `col${colIdx}`);
+    const vals    = [];
+    for (let r = 9; r <= 16; r++) {
+      const v = grid[r][colIdx];
+      vals.push((v !== null && v !== undefined && typeof v === 'number' && isFinite(v)) ? v : null);
+    }
+    result.set(key, vals);
+  }
+  return result;
+}
+
+// Estimate a better IC50 initial guess from data by finding the x where y crosses midpoint
+function estimateIC50(xdata, ydata) {
+  const maxY = Math.max(...ydata), minY = Math.min(...ydata);
+  const mid = (maxY + minY) / 2;
+  for (let i = 0; i < ydata.length - 1; i++) {
+    if ((ydata[i] - mid) * (ydata[i+1] - mid) <= 0) {
+      const slope = ydata[i+1] - ydata[i];
+      if (Math.abs(slope) < 1e-12) return xdata[i];
+      return xdata[i] + (mid - ydata[i]) / slope * (xdata[i+1] - xdata[i]);
+    }
+  }
+  // fallback: geometric mean of x range
+  return Math.sqrt(xdata[0] * xdata[xdata.length-1]);
+}
+
+// Fit 4PL with multiple IC50 starting points and return best-SSE result
+function fitBest4PL(xdata, ydata, fc) {
+  const ic50Est = estimateIC50(xdata, ydata);
+  // 4 candidates: estimated from data, default guess, geometric bracketing
+  const ic50Tries = [ic50Est, fc.p0[2], xdata[0], xdata[Math.floor(xdata.length/2)]];
+  let bestParams = null, bestSse = Infinity;
+  for (const ic50Init of ic50Tries) {
+    const ic50Clamped = Math.max(fc.lower[2]+1e-6, Math.min(fc.upper[2], ic50Init));
+    const p0 = [fc.p0[0], fc.p0[1], ic50Clamped, fc.p0[3]];
+    try {
+      const p = levenbergMarquardt(xdata, ydata, p0, fc.lower, fc.upper);
+      const sse = xdata.reduce((s,x,i) => s + (ydata[i]-model4PL(x,p))**2, 0);
+      if (sse < bestSse) { bestSse = sse; bestParams = p; }
+    } catch(_) {}
+  }
+  if (!bestParams) throw new Error('all fits failed');
+  return bestParams;
+}
+
+function calculateEC50s(series, seriesSA, fc) {
+  const row = ['Est. ED50'];
+  for (const [name, vals] of series) {
+    if (name === 'standard' || name.startsWith('blank')) {
+      row.push('/');
+    } else {
+      try {
+        const pairs = vals.map((v,i)=>({x:seriesSA[i],v})).filter(p=>p.v!==null&&isFinite(p.v));
+        if (pairs.length < 3) throw new Error('insufficient');
+        const xdata = pairs.map(p=>p.x), ydata = pairs.map(p=>p.v);
+        const params = fitBest4PL(xdata, ydata, fc);
+        let ic50 = Math.round(params[2]);
+        row.push(ic50 < 10 ? 10 : ic50);
+      } catch(_) { row.push('/'); }
+    }
+  }
+  row.push('');
+  return row;
+}
+
+function calculateConcentrations(series, seriesST, seriesSA, fc) {
+  let stdVals = (series.get('standard') || []).filter(v=>v!==null&&isFinite(v));
+  // Also try keys starting with 'standard' (shouldn't happen but safe)
+  if (!stdVals.length) {
+    for (const [k,v] of series) {
+      if (k === 'standard') { stdVals = v.filter(x=>x!==null&&isFinite(x)); break; }
+    }
+  }
+
+  let STindex = 0;
+  while (stdVals.length > 0 && Math.max(...stdVals) > 2) {
+    const maxV = Math.max(...stdVals);
+    stdVals.splice(stdVals.indexOf(maxV), 1);
+    STindex++;
+  }
+
+  let params;
+  try {
+    const xST = seriesST.slice(STindex, STindex + stdVals.length);
+    params = fitBest4PL(xST, stdVals, fc);
+  } catch(_) {
+    params = fc.p0;
+  }
+  const [bottom, top, ic50, hill] = params;
+
+  const conRow = ['Interp. Con.'];
+  const choValRow = ['Chos. Val.'];
+  const choDilRow = ['Chos. Dil.'];
+
+  for (const [name, vals] of series) {
+    if (name.startsWith('blank')) {
+      conRow.push('/'); choValRow.push('/'); choDilRow.push('/');
+    } else if (name === 'standard') {
+      const first = stdVals[0];
+      if (first === undefined || first === null) {
+        conRow.push('/'); choValRow.push('/'); choDilRow.push('/');
+      } else {
+        const con = inverse4PL(first, top, bottom, hill, ic50) * Math.pow(5, STindex) / 1000;
+        conRow.push(Math.round(con * 100)/100);
+        choValRow.push(first);
+        choDilRow.push(String(seriesST[STindex]) + ' (Con)');
+      }
+    } else {
+      let sVals = vals.filter(v=>v!==null&&isFinite(v));
+      if (!sVals.length) sVals = [1.49];
+      let idxDil = 0;
+      while (sVals.length > 0 && Math.max(...sVals) > 1.5) {
+        const maxV = Math.max(...sVals);
+        sVals.splice(sVals.indexOf(maxV), 1);
+        idxDil++;
+        if (sVals.length === 0) { sVals = [1.49]; idxDil--; }
+      }
+      const maxV = Math.max(...sVals);
+      const dilFactor = seriesSA[Math.min(idxDil, seriesSA.length-1)];
+      const con = inverse4PL(maxV, top, bottom, hill, ic50) * dilFactor / 1000;
+      conRow.push(Math.round(con * 100)/100);
+      choValRow.push(maxV);
+      choDilRow.push(dilFactor);
+    }
+  }
+  conRow.push(''); choValRow.push(''); choDilRow.push('');
+  return {conRow, choValRow, choDilRow};
+}
+
+// ─── XLSX SHEET BUILDER ───────────────────────────────────────────────────────
+function cell(v, t, s) {
+  const type = t || (typeof v === 'number' ? 'n' : 's');
+  return {v, t:type, s:s||{}};
+}
+function styledCell(v, argb, extraStyle) {
+  const t = typeof v === 'number' ? 'n' : 's';
+  const s = {
+    fill: { patternType:'solid', fgColor:{rgb:argb} },
+    ...(extraStyle||{})
+  };
+  return {v, t, s};
+}
+function boldCell(v, argb) {
+  const t = typeof v === 'number' ? 'n' : 's';
+  const s = {
+    font: {bold:true},
+    ...(argb ? {fill:{patternType:'solid',fgColor:{rgb:argb}}} : {})
+  };
+  return {v, t, s};
+}
+
+function aoaToSheet(data) {
+  const ws = {};
+  let maxR=0, maxC=0;
+  for (let R=0; R<data.length; R++) {
+    const row = data[R]; if (!row) continue;
+    for (let C=0; C<row.length; C++) {
+      const raw = row[C];
+      if (raw === null || raw === undefined) continue;
+      const addr = XLSX.utils.encode_cell({r:R, c:C});
+      if (typeof raw === 'object' && 'v' in raw) {
+        ws[addr] = raw;
+      } else {
+        ws[addr] = {v: raw, t: typeof raw==='number'?'n':'s'};
+      }
+      maxR = Math.max(maxR, R); maxC = Math.max(maxC, C);
+    }
+  }
+  ws['!ref'] = XLSX.utils.encode_range({s:{r:0,c:0},e:{r:maxR,c:maxC}});
+  return ws;
+}
+
+// ─── BUILD PROCESSED DATA SHEET ───────────────────────────────────────────────
+function buildDataSheet(grid, numPlates, meta, fc, logFn) {
+  const {names, seriesST, seriesSA} = meta;
+
+  // Apply names to row 7 of grid
+  for (let p=0; p<numPlates; p++) {
+    const plateNames = names[p] || [];
+    for (let c=0; c<12; c++) {
+      grid[7][p*14+1+c] = plateNames[c] || '';
+    }
+  }
+
+  // Build EC50 and concentration rows
+  const allEC50Rows = [];
+  const allConRows  = [];
+  const allCVRows   = [];
+  const allCDRows   = [];
+
+  for (let p=0; p<numPlates; p++) {
+    const series = getSeries(grid, p);
+    logFn(`  Plate ${p+1}: fitting EC50...`);
+    const ec50Row  = calculateEC50s(series, seriesSA, fc);
+    logFn(`  Plate ${p+1}: calculating concentrations...`);
+    const {conRow, choValRow, choDilRow} = calculateConcentrations(series, seriesST, seriesSA, fc);
+    allEC50Rows.push(...ec50Row);
+    allConRows.push(...conRow);
+    allCVRows.push(...choValRow);
+    allCDRows.push(...choDilRow);
+  }
+
+  // Full grid: 29 original rows + blank + EC50 + blank + choVal + choDil + con
+  const fullData = [...grid.map(r=>[...r])];
+  fullData.push(new Array(numPlates*14).fill(null));   // row 29: blank
+  fullData.push(allEC50Rows);                           // row 30: EC50
+  fullData.push(new Array(numPlates*14).fill(null));   // row 31: blank
+  fullData.push(allCVRows);                             // row 32: Chos. Val.
+  fullData.push(allCDRows);                             // row 33: Chos. Dil.
+  fullData.push(allConRows);                            // row 34: Interp. Con.
+
+  // Collect numeric values for color scales
+  const vals450 = [], vals570 = [], valsEC50 = [], valsCon = [];
+  for (let p=0; p<numPlates; p++) {
+    for (let c=1; c<=12; c++) {
+      for (let r=9; r<=16; r++) {
+        const v=fullData[r][p*14+c]; if(typeof v==='number'&&isFinite(v)) vals450.push(v);
+      }
+      for (let r=21; r<=28; r++) {
+        const v=fullData[r][p*14+c]; if(typeof v==='number'&&isFinite(v)) vals570.push(v);
+      }
+    }
+  }
+  // EC50 (row 30), sample cols only (not blank/standard)
+  const ec50RowData = fullData[30];
+  for (let i=0; i<ec50RowData.length; i++) {
+    const v=ec50RowData[i]; if(typeof v==='number'&&isFinite(v)) valsEC50.push(v);
+  }
+  // Con row (row 34)
+  const conRowData = fullData[34];
+  for (let i=0; i<conRowData.length; i++) {
+    const v=conRowData[i]; if(typeof v==='number'&&isFinite(v)) valsCon.push(v);
+  }
+
+  vals450.sort((a,b)=>a-b); vals570.sort((a,b)=>a-b);
+  valsEC50.sort((a,b)=>a-b); valsCon.sort((a,b)=>a-b);
+
+  const p450  = [percentile(vals450,1),  percentile(vals450,50),  percentile(vals450,99)];
+  const p570  = [percentile(vals570,1),  percentile(vals570,50),  percentile(vals570,99)];
+  const pEC50 = [percentile(valsEC50,1), percentile(valsEC50,50), percentile(valsEC50,99)];
+  const pCon  = [percentile(valsCon,1),  percentile(valsCon,50),  percentile(valsCon,99)];
+
+  // Convert fullData to styled cells
+  const styledData = fullData.map((row, R) => {
+    if (!row) return [];
+    return row.map((v, C) => {
+      if (v === null || v === undefined) return null;
+      // Determine if this cell should be colored
+      const plateIdx = Math.floor(C / 14);
+      const colInPlate = C % 14;
+      const isDataCol = colInPlate >= 1 && colInPlate <= 12;
+
+      let argb = null;
+      if (isDataCol) {
+        if (R >= 9 && R <= 16) {
+          argb = valueToArgb(v, p450[0], p450[1], p450[2], C_GREEN_YEL_RED);
+        } else if (R >= 21 && R <= 28) {
+          argb = valueToArgb(v, p570[0], p570[1], p570[2], C_BLUE_WHT_RED);
+        } else if (R === 30 && typeof v === 'number') {
+          argb = valueToArgb(v, pEC50[0], pEC50[1], pEC50[2], C_GREEN_YEL_RED);
+        } else if (R === 34 && typeof v === 'number') {
+          argb = valueToArgb(v, pCon[0], pCon[1], pCon[2], C_GREEN_YEL_RED);
+        }
+      }
+
+      // Style row 7 (sample names) - bold
+      if (R === 7 && isDataCol) {
+        return boldCell(v, null);
+      }
+      if (argb) return styledCell(v, argb);
+      return {v, t: typeof v==='number'?'n':'s'};
+    });
+  });
+
+  return aoaToSheet(styledData);
+}
+
+// ─── PROTOCOL PARAMETERS SHEET ────────────────────────────────────────────────
+function buildProtocolSheet(meta, fc) {
+  const {seriesST, seriesSA, stdStart, stdDil, sampleStart, sampleDil} = meta;
+  const GREY  = 'FFD9D9D9';
+  const LBLUE = 'FFEEF2FF';
+
+  const data = [];
+  const titleS = {font:{bold:true,sz:14}};
+  const hdrS   = {font:{bold:true}, fill:{patternType:'solid',fgColor:{rgb:GREY}}};
+  const lblS   = {fill:{patternType:'solid',fgColor:{rgb:LBLUE}}};
+
+  data[0] = [{v:'ELISA Run Parameters', t:'s', s:titleS}];
+  data[1] = [];
+  data[2] = [{v:'Standard Curve', t:'s', s:hdrS}];
+  data[3] = [{v:'Starting Concentration (ng/mL)', t:'s', s:lblS}, {v:stdStart, t:'n'}];
+  data[4] = [{v:'Dilution Factor', t:'s', s:lblS}, {v:stdDil, t:'n'}];
+  data[5] = [{v:'Dilution Series', t:'s', s:lblS},
+             ...seriesST.map(v=>({v:Math.round(v*10000)/10000, t:'n'}))];
+  data[6] = [];
+  data[7] = [{v:'Samples', t:'s', s:hdrS}];
+  data[8] = [{v:'Starting Dilution Factor', t:'s', s:lblS}, {v:sampleStart, t:'n'}];
+  data[9] = [{v:'Dilution Factor', t:'s', s:lblS}, {v:sampleDil, t:'n'}];
+  data[10]= [{v:'Dilution Series', t:'s', s:lblS},
+             ...seriesSA.map(v=>({v:Math.round(v*100)/100, t:'n'}))];
+  data[11]= [];
+  data[12]= [{v:'Curve Fit Parameters (4PL)', t:'s', s:hdrS}];
+  data[13]= ['Parameter','Lower Bound','Initial Guess','Upper Bound'].map(v=>({v,t:'s',s:{font:{bold:true}}}));
+  const pNames = ['Bottom','Top','IC50','Hill'];
+  for (let i=0; i<4; i++) {
+    data[14+i] = [
+      {v:pNames[i], t:'s', s:lblS},
+      {v:fc.lower[i], t:'n'}, {v:fc.p0[i], t:'n'}, {v:fc.upper[i], t:'n'}
+    ];
+  }
+
+  const ws = aoaToSheet(data);
+  ws['!cols'] = [{wch:34},{wch:14},{wch:16},{wch:14},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12}];
+  return ws;
+}
+
+// ─── SOP SHEET ────────────────────────────────────────────────────────────────
+function buildSOPSheet() {
+  const rows = [];
+  const GREY  = 'FFD9D9D9';
+  const LBLUE = 'FFEEF2FF';
+
+  const TITLE  = {font:{bold:true,sz:16,name:'Calibri'}};
+  const META   = {font:{italic:true,sz:11,name:'Calibri'}};
+  const SEC    = {font:{bold:true,sz:12,name:'Calibri'},fill:{patternType:'solid',fgColor:{rgb:GREY}}};
+  const SUB    = {font:{bold:true,sz:11,name:'Calibri'},fill:{patternType:'solid',fgColor:{rgb:LBLUE}}};
+  const BODY   = {font:{sz:10,name:'Calibri'},alignment:{wrapText:true,vertical:'top'}};
+  const STEP   = {font:{sz:10,name:'Calibri'},alignment:{vertical:'top'}};
+  const BREAK  = {font:{italic:true,sz:9,color:{rgb:'FF808080'},name:'Calibri'}};
+
+  let r = 0;
+  function addRow(col1, val1, s1, col2, val2, s2) {
+    while (rows.length <= r) rows.push([]);
+    if (col1 !== null) rows[r][0] = {v:String(val1??''),t:'s',s:s1||{}};
+    if (col2 !== null) rows[r][1] = {v:String(val2??''),t:'s',s:s2||{}};
+    r++;
+  }
+
+  function title(text)  { addRow(0,'',{},1,text,TITLE); }
+  function meta(text)   { addRow(0,'',{},1,text,META); }
+  function blank()      { addRow(0,'',{},1,'',{}); }
+  function body(text)   { addRow(0,'',{},1,text,BODY); }
+  function section(n,h) { blank(); addRow(0,n,SEC,1,h.toUpperCase(),SEC); }
+  function subsect(n,h) { blank(); addRow(0,n,SUB,1,h,SUB); }
+  function step(n,text) { addRow(0,n+'.',STEP,1,text,BODY); }
+  function substep(l,t) { addRow(0,'  ('+l+')',STEP,1,t,BODY); }
+  function brk(label)   {
+    blank();
+    addRow(0,'',{},1,'· · · · · · · · · · · · · · · · · ·  '+label+'  · · · · · · · · · · · · · · · · · ·',BREAK);
+    blank();
+  }
+
+  title('SOP ELISA');
+  meta('Kasimir Reich  |  03-20-2026');
+  blank();
+  body('Goal: An enzyme-linked immunosorbent assay (ELISA) is described, which can be used to determine the quantity of antibodies or other proteins. Attached is an Excel file for calculations.');
+  body('Estimated Time: Coating usually takes < 30 minutes the evening before, then around a day including waiting times.');
+
+  section(1,'Preparation');
+  subsect('1.1','Planning of the Plates');
+  step(1,'Determine the number and type of samples. Decide which proteins or antibodies to test for.');
+  step(2,'Plan the plates. Around 15 plates can be run on a single day, but start with a lower number if still gaining experience. On each plate, the first column should be a negative control with water (blank). The last should be the positive control of known concentration (standard). Each column is the dilution series for a single sample.');
+  step(3,'Plan the starting dilution and the dilution coefficient for both samples and standard. For example: Start with 1:50 for samples and then dilute 1:3. Start with 1000 ng/mL for the standard and do a 1:5 dilution.');
+  step(4,'Do the calculations using the Excel spreadsheet.');
+  step(5,'Check that the washing machine is available for the day of your ELISA.');
+  brk('Flexible Break Point');
+  subsect('1.2','Coating');
+  step(1,'Prepare a 2 µg/mL coating solution of the protein you want to coat with (e.g. TM4 core gp140 protein or the anti-idiotype antibody anti-3BNC117 human IgG1k). The total volume can be calculated using the spreadsheet.');
+  step(2,'Prepare a wet chamber: Take the plastic box from the 4°C room. Put wet paper towels around the edges.');
+  step(3,'Take a flat bottom ELISA 96-well plate.');
+  step(4,'Fill 25 µL of the coating solution into each well.');
+  step(5,'Put the plate into the wet chamber box and put the box into the 4°C room.');
+  step(6,'Repeat for all plates.');
+  step(7,'Let the plates incubate overnight.');
+  step(8,'Check whether blocking solution (5% milk) is prepared. It can be found in the door of the Mr. Shiny fridge.');
+  step(9,'If not, prepare new 5% milk: Take a fresh bottle of 1X PBS (Attention: not 10X!). Go to the weighing room and add 25 g of milk powder. Mix well by inverting and put into the fridge door.');
+  brk('Overnight Break Point');
+
+  section(2,'Performing the ELISA');
+  body('Work one plate at a time to avoid the drying out of plates. If plates dry out, the margins will have a higher signal in the measurements (edge effect). Always keep the plates covered by another (empty) plate. Keep in the wet chamber as much as possible.');
+  subsect('2.1','Blocking');
+  step(1,'Take the plates from the 4°C room.');
+  step(2,'Throw out the coating solution and blot dry.');
+  step(3,'Add 170 µL of the 5% milk to each well using the automatic multichannel pipette.');
+  step(4,'Incubate for 2 h in the wet chamber at room temperature.');
+  step(5,'Prepare for later steps:');
+  substep('a','Take all samples from the freezer and let them unthaw.');
+  substep('b','Get the secondary antibody (Harry\'s ELISA box in the Mr. Shiny fridge) and the standard (freezer below Harry\'s bench) and keep them on ice.');
+  substep('c','Take the TMB solutions for the enzymatic reaction out of the 4°C room and let them warm up to room temperature.');
+  brk('Coffee Break Point');
+  subsect('2.2','Preparation of Dilution Series and Sample Loading');
+  body('Once the samples are ready, start making the dilution series.');
+  step(1,'Take a V-shaped 96 ELISA well plate and begin by preparing with PBS (e.g. 120 µL into each well of the first row and 90 µL into the others).');
+  step(2,'Leave the blank and add the serum (e.g. 2.4 µL for 1:50) starting dilution for each sample into the first row.');
+  step(3,'Use the "Pipette and Mix" mode of the automatic multichannel pipette to mix and transfer (e.g. 30 µL for 1:4).');
+  step(4,'Prepare the standard once for all the plates using 8 FACS tubes (e.g. start at 1000 ng/mL in 625 µL and then transfer 125 µL to 500 µL to a 1:5 dilution).');
+  step(5,'Once the blocking time is passed, wash plates using the plate washer George Washington.');
+  substep('a','Before opening any bottle be sure to depressurize!');
+  substep('b','Check that the PBS and water bottles are full and the trash empty.');
+  substep('c','Prime the machine using the yellow bottle (PBS). Sometimes there is a problem with the pressure. This can often be circumvented by having the bottle fully filled and checking the cap. Depressurize before opening.');
+  substep('d','Load the plates into the front tower and cover both towers with empty plates to prevent the plates from drying out.');
+  substep('e','Select the program halfwell 6x PBS and click run.');
+  substep('f','After the plates are washed, prime with water (green).');
+  step(6,'Load 25 µL of the samples:');
+  substep('a','Throw out the washing PBS and blot dry.');
+  substep('b','Using a normal multichannel transfer 25 µL of the dilution series: Reuse the tips. Start with the highest dilution, transfer without blowing out, blow out over the original dilution and then move on to the next highest dilution.');
+  substep('c','To keep things simple, use a second pipette to transfer the standard and reuse these tips.');
+  step(7,'Incubate for 1.5 h in the wet chamber at room temperature.');
+  brk('Lunch Break Point');
+  subsect('2.3','Adding the Secondary Antibody');
+  step(1,'After incubation, wash the plates using the program halfwell 6x PBS. Prime with PBS before and with water after.');
+  step(2,'Meanwhile, prepare a 1:5000 dilution of the secondary antibody (e.g. anti-mouse IgG-HRP, antibody is Jackson Cat. 115-035-071 (0.8 mg/mL Harry April 2025)). Calculate the needed volume using the table. (25 µL × 96 wells × plate number + a little extra)');
+  step(3,'Throw away the washing PBS and blot dry.');
+  step(4,'Add 25 µL of the secondary antibody solution.');
+  step(5,'Incubate for 1 h in the wet chamber at room temperature.');
+  brk('Coffee Break Point');
+  subsect('2.4','Performing the Enzymatic Reaction');
+  step(1,'After incubation, wash the plates using the program halfwell 6x PBS. Prime with PBS before and with water after. If you\'re likely to be the last person using the machine that day, start the shut down sequence — this cleans and depressurizes the machine.');
+  step(2,'Meanwhile, prepare a 1:1 mix of the TMB substrate and the H₂O₂. In total, it\'s double the volume of the secondary antibody stain.');
+  step(3,'Throw away the washing PBS and blot dry.');
+  step(4,'Add 50 µL of the solution to each well.');
+  step(5,'Develop the reaction for around 12 min until the highest concentration of standard is maxed out.');
+  step(6,'Stop the reaction using 50 µL of 1 M H₂SO₄. Attention: Do not let any H₂SO₄ come on your clothes or skin!');
+  step(7,'Read immediately afterwards using the plate reader.');
+  subsect('2.5','Reading the Results');
+  step(1,'Use the plate reader machine. Open the Omega software and use the experiment Harry 450 and 570. 450 nm is the wavelength of the reaction. 570 nm is for measuring potential contamination or dirt.');
+  step(2,'Name the plates with date, experiment name, and number.');
+  step(3,'Use the software to open the plate holder and insert the plate.');
+  step(4,'Start an experiment.');
+  step(5,'Wait... (Great time to talk to someone or do some flashcards.)');
+  step(6,'Repeat for all plates.');
+  subsect('2.6','Transfer of Data');
+  step(1,'Open the Omega Analysis Software.');
+  step(2,'Click on open, select all the files and right-click them to select "Export as multiple ASCII files".');
+  step(3,'Save the data to the folder "tempshare/*yourname*".');
+  brk('Flexible Break Point');
+
+  section(3,'Analysis');
+  subsect('3.1','Cleaning of the Data');
+  step(1,'Copy the files from tempshare to your computer.');
+  step(2,'Merge the separate files manually or using Python.');
+  step(3,'Color the individual tables according to Harry\'s color scheme (Red = larger) manually or using Python.');
+  step(4,'Add the sample names using Python or manually.');
+  subsect('3.2','Determination of EC₅₀ or Concentration');
+  step(1,'The EC₅₀ is the concentration at which half the maximum reaction occurs. It is the turning point of a sigmoidal function fitted to the data. This has the advantage of being independent of the starting concentration (as long as the data points allow for the fitting of a curve).');
+  step(2,'It can be calculated using a Prism sheet or using Python.');
+  step(3,'Based on the standard, an absolute concentration can also be calculated. This is done by fitting a function to the standard with the known concentration as x values and then using the inverse function to calculate the concentrations in the samples. Use Prism or Python.');
+
+  const ws = aoaToSheet(rows);
+  ws['!cols'] = [{wch:7},{wch:105}];
+  return ws;
+}
+
+// ─── MAIN PROCESSING ──────────────────────────────────────────────────────────
+async function runProcessing() {
+  const btn = document.getElementById('processBtn');
+  btn.disabled = true;
+  btn.textContent = 'Processing...';
+  clearLog();
+
+  const outputName = document.getElementById('outputName').value.trim() || 'ELISA_Output';
+
+  // Yield to browser to render log before heavy work
+  await new Promise(r => setTimeout(r, 50));
+
+  try {
+    log('Parsing CSV files...', 'info');
+    const csvArrays = csvFiles.map(f => parseCsvText(f.text));
+    const numPlates = csvArrays.length;
+    log(`  ${numPlates} plate(s) parsed.`);
+
+    log('Merging plates...', 'info');
+    const grid = mergePlates(csvArrays);
+    log('  Done.');
+
+    log('Reading metadata...', 'info');
+    const meta = parseMetadata(metaBytes);
+    log(`  ${meta.names.length} plate name row(s) found.`);
+    log(`  Standard: ${meta.stdStart} ng/mL, 1:${meta.stdDil} dilution.`);
+    log(`  Samples: 1:${meta.sampleStart} start, 1:${meta.sampleDil} dilution.`);
+
+    log('Fitting curves and calculating results...', 'info');
+
+    // Yield between plates so browser stays responsive
+    await new Promise(r => setTimeout(r, 10));
+    const wsData = buildDataSheet(grid, numPlates, meta, fitConfig, msg => log(msg));
+    await new Promise(r => setTimeout(r, 10));
+
+    log('Building Protocol Parameters sheet...', 'info');
+    const wsProt = buildProtocolSheet(meta, fitConfig);
+
+    log('Building SOP sheet...', 'info');
+    const wsSOP = buildSOPSheet();
+
+    log('Writing workbook...', 'info');
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, wsData, 'Processed Data');
+    XLSX.utils.book_append_sheet(wb, wsProt, 'Protocol Parameters');
+    XLSX.utils.book_append_sheet(wb, wsSOP, 'SOP');
+
+    const buf = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+    const blob = new Blob([buf], {type:'application/octet-stream'});
+    downloadBlob(blob, outputName + '.xlsx');
+
+    log(`✅ Done! Output: ${outputName}.xlsx`, 'success');
+  } catch (err) {
+    log(`❌ Error: ${err.message}`, 'error');
+    console.error(err);
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Process';
+  updateProcessBtn();
+}
+</script>
+</body>
+</html>

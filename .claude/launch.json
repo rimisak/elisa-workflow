@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "elisa-app",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "-p", "7823", "--no-clipboard", "."],
+      "port": 7823
+    }
+  ]
+}

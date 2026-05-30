@@ -338,10 +338,13 @@ function downloadBlob(blob, filename) {
 function createTemplate() {
   const numPlates = parseInt(document.getElementById('numPlatesInput').value) || 6;
   const wb = XLSX.utils.book_new();
+  // Header row labels the 12 physical plate columns; data rows are pre-filled
+  // with the suggested default layout (blank · samples · standard).
+  const columnLabels = Array.from({length:12},(_,i)=>`column ${i+1}`);
   const sampleLabels = ['blank', ...Array.from({length:10},(_,i)=>`sample ${i+1}`), 'standard'];
 
   // Names sheet
-  const namesData = [['Plate', ...sampleLabels]];
+  const namesData = [['Plate', ...columnLabels]];
   for (let p = 0; p < numPlates; p++)
     namesData.push([`plate ${p+1} - dXX assayXX`, ...sampleLabels]);
   const wsNames = XLSX.utils.aoa_to_sheet(namesData);
@@ -528,7 +531,9 @@ function parseMetadata(bytes) {
 
   const namesSheet = wb.Sheets['Names'];
   const allRows = XLSX.utils.sheet_to_json(namesSheet, {header:1});
-  const hasHeader = allRows.length > 0 && allRows[0][0] === 'Plate' && allRows[0][1] === 'blank';
+  // Header row is identified by A1 === 'Plate' (data rows start with 'plate N - ...').
+  // Don't test B1: it may be 'blank' (old template) or 'column 1' (current template).
+  const hasHeader = allRows.length > 0 && allRows[0][0] === 'Plate';
   const dataRows  = hasHeader ? allRows.slice(1) : allRows;
   const colorStartRow = hasHeader ? 1 : 0;  // 0-indexed sheet row where data begins
 

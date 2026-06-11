@@ -31,3 +31,6 @@ venv/
 
 # Build
 build/
+
+# Excel temporary/owner lock files
+~$*

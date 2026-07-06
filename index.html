@@ -256,7 +256,7 @@ function loadCSVFiles(files) {
     r.readAsText(f);
   }));
   Promise.all(readers).then(results => {
-    csvFiles = results.sort((a, b) => a.name.localeCompare(b.name));
+    csvFiles = results.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
     const zone = document.getElementById('csvZone');
     zone.classList.add('has-files');
     document.getElementById('csvZoneText').textContent = `${csvFiles.length} file(s) loaded`;
@@ -539,7 +539,32 @@ function mergePlates(csvArrays) {
       }
     }
   }
+  labelExtraIds(grid, numPlates);
   return grid;
+}
+
+// Row 3 (line 4) holds "ID1: ..., ID2: ..., ID3: ..." — some BMG Omega exports
+// include additional custom ID fields (ID4, ID5, ...) as bare comma-separated
+// values with no "IDn:" prefix, e.g. "ID3: name,49,d56". Label those so they
+// don't show up as unexplained floating values next to the named IDs.
+function labelExtraIds(grid, numPlates) {
+  const idRow = grid[3];
+  if (!idRow) return;
+  for (let p = 0; p < numPlates; p++) {
+    const offset = p * 14;
+    let idNum = 0;
+    for (let c = 0; c < 14; c++) {
+      const v = idRow[offset + c];
+      if (v === null || v === undefined || v === '') continue;
+      const match = typeof v === 'string' && v.match(/^ID(\d+):/);
+      if (match) {
+        idNum = Math.max(idNum, parseInt(match[1], 10));
+      } else {
+        idNum++;
+        idRow[offset + c] = `ID${idNum}: ${v}`;
+      }
+    }
+  }
 }
 
 // ─── BACKGROUND SUBTRACTION (570 nm reference) ────────────────────────────────

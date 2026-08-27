@@ -42,6 +42,12 @@ These row/col numbers are hard-coded in `getSeries`, `subtractBackground`, and `
 5. `buildProtocolSheet` + `buildSOPSheet` (the SOP is static lab-protocol text).
 6. `XLSX.write` → `injectConditionalFormatting` → `downloadBlob`; `renderCharts` draws on-page SVGs.
 
+### Optional "Edge-effect ED50" stage (toggle, default off)
+
+Ported from `elisa_ed50.py`. When `#corrEd50Chk` is on, `buildDataSheet` also runs `buildCorrectedAnalysis` and `writeCorrectedRows`, and `runProcessing` appends two sheets: **"ED50 Corrected"** (one row per sample: censored ED50, 4PL cross-check, plateau OD, flags, back-calculated conc.) and **"QC Edge Effect"** (per-row blank ODs, edge excess, corrected standard-curve params). It also writes labelled rows **37–41** onto the Processed Data sheet (directly into the `ws` object after `aoaToSheet`, extending `!ref` — *not* via `fullData`, whose `styledData` map would re-wrap the cells). Rows 31/35 are left untouched.
+
+What it does differently from the main pipeline: background is subtracted **per row** using in-plate blank columns (columns named `blank`; two → distinct edge/interior profiles, one → both fall back to it, none → that plate is skipped, not corrupted), the descending limb is fitted with **Bottom fixed at 0** and **Top fixed to the observed plateau**, ED50 is the interpolated half-plateau crossing (not a 4PL midpoint), and a curve whose plateau is below `CORR.MIN_PLATEAU_OD` is censored (`n.d.`). Thresholds live in the `CORR` block. Column roles come from the `grid[7]` names, so this is robust to the app's name-driven layout unlike the Python's fixed `COL_*` indices. If "Subtract 570 nm background" is also on, this stage runs on the 570-subtracted values (a warning is logged).
+
 ## Things that are easy to get wrong
 
 - **Conditional formatting is injected as raw XML, not via the library.** `xlsx-js-style` can't emit color-scale rules, so `injectConditionalFormatting` opens the written workbook with JSZip, splices `<conditionalFormatting>` elements into `xl/worksheets/sheet1.xml` (anchored before the first of `<ignoredErrors>/<pageMargins>/…` per the OOXML element order), and re-zips. It **must** re-emit with `type:'uint8array'` — a plain `Array` passed to `new Blob()` gets stringified and corrupts the file.

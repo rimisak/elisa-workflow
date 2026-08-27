@@ -154,6 +154,16 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
       <span class="slider"></span>
     </label>
   </div>
+  <div class="option-row" style="margin-top:14px;border-top:1px solid #f0f0f0;padding-top:14px">
+    <span class="option-text">
+      <span class="option-title">Edge-effect ED50 (in-plate blanks)</span>
+      <span class="option-sub">elisa_ed50.py method: row-wise background from blank column(s), Bottom fixed at 0, censored half-plateau ED50. Adds rows 37–41 plus "ED50 Corrected" &amp; "QC Edge Effect" sheets.</span>
+    </span>
+    <label class="switch">
+      <input type="checkbox" id="corrEd50Chk">
+      <span class="slider"></span>
+    </label>
+  </div>
 </div>
 
 <!-- Process -->
@@ -859,7 +869,7 @@ function aoaToSheet(data) {
 }
 
 // ─── BUILD PROCESSED DATA SHEET ───────────────────────────────────────────────
-function buildDataSheet(grid, numPlates, meta, fc, logFn) {
+function buildDataSheet(grid, numPlates, meta, fc, corrEnabled, logFn) {
   const {names, colors, seriesST, seriesSA} = meta;
 
   // Apply names to row 7 of grid
@@ -949,10 +959,21 @@ function buildDataSheet(grid, numPlates, meta, fc, logFn) {
 
   const ws = aoaToSheet(styledData);
 
+  // Optional elisa_ed50.py stage: in-plate blank background + censored ED50.
+  // Writes rows 37–41 straight onto the worksheet and returns the summary/QC
+  // data for the two extra sheets built in runProcessing.
+  let corrected = null;
+  if (corrEnabled) {
+    logFn('Corrected ED50: in-plate blank background, Bottom fixed at 0...');
+    corrected = buildCorrectedAnalysis(grid, numPlates, meta, allEC50Rows, logFn);
+    writeCorrectedRows(ws, numPlates, corrected);
+    logFn(`  ${corrected.summary.length} sample curve(s) analysed.`);
+  }
+
   // Build conditional formatting spec — injected into XLSX XML via JSZip after write.
   const condfmt = buildCondfmtRanges(numPlates);
 
-  return {ws, condfmt, plateFits, plateCharts};
+  return {ws, condfmt, plateFits, plateCharts, corrected};
 }
 
 // ─── CONDITIONAL FORMATTING RANGE BUILDER ─────────────────────────────────────
@@ -1191,6 +1212,368 @@ function buildSOPSheet() {
   return ws;
 }
 
+// ─── CORRECTED ED50 (in-plate blank background + censored interpolation) ──────
+// Optional stage ported from elisa_ed50.py, enabled by the "Edge-effect ED50"
+// toggle. Evaporation raises background at the plate margins; a free-Bottom 4PL
+// absorbs that artifact into Bottom and turns it into spurious ED50s. Here each
+// well is background-subtracted row-by-row using the in-plate blank column(s),
+// the descending limb is fitted with Bottom fixed at 0 and Top fixed to the
+// observed plateau, and a curve that never leaves background is censored
+// ("n.d.") rather than fitted. Reads whatever is currently in the 450 block
+// (rows 9–16), i.e. the 570-subtracted values if that toggle is also on.
+const CORR = {
+  MIN_PLATEAU_OD: 0.30,    // plateau below this → no measurable titre (censored)
+  PLATEAU_BAND: 0.80,      // plateau = median of points within this frac of max
+  WEAK_PLATEAU_OD: 0.50,   // flag (do not censor) real-but-weak plateaus
+  TOP_REACHED_FRAC: 0.80,  // 2nd point below this frac of 1st → series starts on the slope
+  HILL_BOUNDS: [0.5, 3.0],
+  FIT_AGREEMENT_FACTOR: 1.5,
+  STD_VALID_FRAC: [0.20, 0.70]
+};
+
+function corrMedian(a) {
+  const s = [...a].sort((x, y) => x - y), n = s.length;
+  return !n ? NaN : (n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2);
+}
+
+// od[row 0..7][col 0..11] for one plate, null for missing / non-numeric wells.
+function getPlateMatrix(grid, p) {
+  const off = p * 14, od = [];
+  for (let r = 9; r <= 16; r++) {
+    const row = [];
+    for (let c = 1; c <= 12; c++) {
+      const v = grid[r][off + c];
+      row.push((typeof v === 'number' && isFinite(v)) ? v : null);
+    }
+    od.push(row);
+  }
+  return od;
+}
+
+// Column roles from the sample-name row (grid[7]) — driven by name, not fixed
+// position. Two columns named "blank" → distinct edge/interior profiles (the
+// elisa_ed50.py layout). One "blank" → both profiles fall back to it.
+function plateColumnRoles(grid, p) {
+  const off = p * 14, names = [];
+  for (let c = 1; c <= 12; c++) {
+    const v = grid[7][off + c];
+    names.push((v == null ? '' : String(v)).trim().toLowerCase());
+  }
+  const blanks = [], samples = [];
+  let standardIdx = -1;
+  names.forEach((n, i) => {
+    if (n === 'blank') blanks.push(i);
+    else if (n === 'standard') standardIdx = i;
+    else if (n) samples.push(i);
+  });
+  if (standardIdx < 0) standardIdx = 11;
+  const edgeBlankIdx = blanks.includes(0) ? 0 : (blanks.length ? blanks[0] : -1);
+  const interior = blanks.filter(i => i > 0 && i < 11);
+  const innerBlankIdx = interior.length ? interior[interior.length - 1] : edgeBlankIdx;
+  return { names, blanks, samples, standardIdx, edgeBlankIdx, innerBlankIdx };
+}
+
+function correctPlate(od, roles) {
+  const col = j => od.map(r => r[j]);
+  const edge  = roles.edgeBlankIdx  >= 0 ? col(roles.edgeBlankIdx)  : new Array(8).fill(0);
+  const inner = roles.innerBlankIdx >= 0 ? col(roles.innerBlankIdx) : edge;
+  const sub = (series, bg) => series.map((v, i) =>
+    (typeof v === 'number' && typeof bg[i] === 'number')
+      ? Math.round((v - bg[i]) * 1e4) / 1e4 : null);
+  const corrected = {};
+  for (const j of roles.samples) corrected[j] = sub(col(j), inner);
+  corrected[roles.standardIdx] = sub(col(roles.standardIdx), edge);
+  return { corrected, edge, inner };
+}
+
+// Standard curve: 4PL ascending in x with Bottom fixed at 0. model4PL is
+// descending in x, so ascending is expressed with a negative Hill (as the
+// app's own concentration fit already does).
+function fitCorrectedStandard(yCol, conc) {
+  const xd = [], yd = [];
+  yCol.forEach((v, i) => {
+    if (typeof v === 'number' && isFinite(v)) { xd.push(conc[i]); yd.push(v); }
+  });
+  if (xd.length < 4) return null;
+  const ymax = Math.max(...yd);
+  const lower = [0,     Math.max(0.1, ymax * 0.3), 1e-4, -6];
+  const upper = [1e-6,  Math.max(1,   ymax * 3),   1e8,  -0.3];
+  const seeds = [estimateIC50(xd, yd), 30, 1, 10, xd[Math.floor(xd.length / 2)]];
+  let best = null, bestSse = Infinity;
+  for (const s of seeds) {
+    const ic = Math.max(1e-3, Math.min(1e7, s || 30));
+    try {
+      const p = levenbergMarquardt(xd, yd, [0, Math.max(ymax, 0.5), ic, -1], lower, upper);
+      if (!isFinite(p[2]) || p[2] <= 0 || !isFinite(p[3])) continue;
+      const sse = xd.reduce((a, x, i) => a + (yd[i] - model4PL(x, p)) ** 2, 0);
+      if (sse < bestSse) { bestSse = sse; best = p; }
+    } catch (_) {}
+  }
+  return best ? { top: best[1], ic50: best[2], hill: best[3] } : null;  // hill < 0
+}
+
+function interpCorrectedConc(yCol, std, dilutions) {
+  if (!std) return { conc: NaN, note: 'no standard curve' };
+  const lo = CORR.STD_VALID_FRAC[0] * std.top, hi = CORR.STD_VALID_FRAC[1] * std.top;
+  const vals = [];
+  yCol.forEach((v, i) => {
+    if (typeof v !== 'number' || !isFinite(v) || v < lo || v > hi) return;
+    const ratio = std.top / v - 1;
+    if (ratio <= 0) return;
+    const concNg = std.ic50 * Math.pow(ratio, 1 / std.hill);  // hill<0 ⇒ ratio^(-1/|hill|)
+    vals.push(concNg * dilutions[i] / 1000);
+  });
+  if (!vals.length) return { conc: NaN, note: 'no point in standard range' };
+  const mn = Math.min(...vals), mx = Math.max(...vals);
+  return { conc: corrMedian(vals), note: `${vals.length} pts, ${(mn > 0 ? mx / mn : Infinity).toFixed(1)}x spread` };
+}
+
+// Bounded 4PL cross-check on the descending limb, Bottom=0 and Top fixed.
+// Coarse grid over (log ED50, Hill) — a diagnostic, not the reported value.
+function fitDescending4PL(lx, y, top) {
+  const loE = Math.min(...lx) - 1, hiE = Math.max(...lx) + 1;
+  let best = null, bestSse = Infinity;
+  for (let a = 0; a <= 80; a++) {
+    const le = loE + (hiE - loE) * a / 80;
+    for (let b = 0; b <= 40; b++) {
+      const h = CORR.HILL_BOUNDS[0] + (CORR.HILL_BOUNDS[1] - CORR.HILL_BOUNDS[0]) * b / 40;
+      let sse = 0;
+      for (let i = 0; i < lx.length; i++) {
+        const pred = top / (1 + Math.pow(10, h * (lx[i] - le)));
+        sse += (y[i] - pred) ** 2;
+      }
+      if (sse < bestSse) { bestSse = sse; best = { logEd50: le, hill: h }; }
+    }
+  }
+  return best;
+}
+
+function estimateCorrectedED50(yCol, dilutions) {
+  const res = { ed50: NaN, ed50_4pl: NaN, top: NaN, hill: NaN, nTransition: 0, rowsFitted: '', flag: '' };
+  const y = yCol.map(v => (typeof v === 'number' && isFinite(v)) ? v : NaN);
+  const logX = dilutions.map(d => Math.log10(d));
+  const fin = y.filter(v => isFinite(v));
+  if (fin.length < 4) { res.flag = 'incomplete series'; return res; }
+
+  let imax = -1, ymax = -Infinity;
+  for (let i = 0; i < 8; i++) if (isFinite(y[i]) && y[i] > ymax) { ymax = y[i]; imax = i; }
+
+  const plateau = corrMedian(fin.filter(v => v >= CORR.PLATEAU_BAND * ymax));
+  res.top = plateau;
+  if (!(plateau >= CORR.MIN_PLATEAU_OD)) { res.flag = 'no titre (plateau below threshold)'; return res; }
+
+  const half = plateau / 2;
+  res.nTransition = fin.filter(v => v > 0.1 * plateau && v < 0.9 * plateau).length;
+
+  let last = 7;
+  while (last >= 0 && !isFinite(y[last])) last--;
+  if (last >= 0 && y[last] > half) { res.flag = '> highest dilution'; return res; }
+
+  let cross = null;
+  for (let i = imax; i < 7; i++) {
+    if (!isFinite(y[i]) || !isFinite(y[i + 1])) continue;
+    if (y[i] >= half && half > y[i + 1]) {
+      const frac = (y[i] - half) / (y[i] - y[i + 1]);
+      cross = logX[i] + frac * (logX[i + 1] - logX[i]);
+      break;
+    }
+  }
+  if (cross === null) { res.flag = 'no half-maximal crossing'; return res; }
+  res.ed50 = Math.pow(10, cross);
+  res.rowsFitted = 'ABCDEFGH'[imax] + '-H';
+
+  const fi = [];
+  for (let i = imax; i < 8; i++) if (isFinite(y[i])) fi.push(i);
+  if (fi.length >= 3) {
+    const f = fitDescending4PL(fi.map(i => logX[i]), fi.map(i => y[i]), plateau);
+    if (f) { res.ed50_4pl = Math.pow(10, f.logEd50); res.hill = f.hill; }
+  }
+
+  const flags = [];
+  if (imax === 0 && isFinite(y[1]) && y[1] < CORR.TOP_REACHED_FRAC * y[0])
+    flags.push('top not reached - ED50 is a lower bound');
+  if (plateau < CORR.WEAK_PLATEAU_OD) flags.push('weak signal');
+  if (res.nTransition < 2) flags.push(`only ${res.nTransition} point(s) on the transition`);
+  if (isFinite(res.ed50_4pl) && res.ed50_4pl > 0) {
+    const ratio = Math.max(res.ed50 / res.ed50_4pl, res.ed50_4pl / res.ed50);
+    if (ratio > CORR.FIT_AGREEMENT_FACTOR) flags.push(`4PL disagrees ${ratio.toFixed(1)}x`);
+  }
+  res.flag = flags.length ? flags.join('; ') : 'ok';
+  return res;
+}
+
+// Timepoint / coating from the ID row (grid[3]): "ID1: ..." and "ID3: ...".
+function plateIds(grid, p) {
+  const off = p * 14;
+  let timepoint = '', coating = '';
+  for (let c = 0; c < 14; c++) {
+    const v = grid[3] && grid[3][off + c];
+    if (typeof v !== 'string') continue;
+    let m = v.match(/^ID1:\s*(.*)$/); if (m) timepoint = m[1].trim();
+    m = v.match(/^ID3:\s*(.*)$/); if (m) coating = m[1].trim();
+  }
+  return { timepoint, coating };
+}
+
+function buildCorrectedAnalysis(grid, numPlates, meta, allEC50Rows, logFn) {
+  const { seriesSA, seriesST } = meta;
+  const plates = [], summary = [], qc = [], stdCurves = [];
+  let singleBlankWarned = false;
+
+  for (let p = 0; p < numPlates; p++) {
+    const roles = plateColumnRoles(grid, p);
+    if (roles.edgeBlankIdx < 0) {
+      logFn(`  Plate ${p + 1}: no blank column — skipped in corrected analysis.`);
+      plates.push(null);
+      stdCurves.push({ plate: p + 1, std: null });
+      continue;
+    }
+    if (roles.innerBlankIdx === roles.edgeBlankIdx && !singleBlankWarned) {
+      logFn('  Note: single blank column — edge and interior corrections are identical.');
+      singleBlankWarned = true;
+    }
+    const od = getPlateMatrix(grid, p);
+    const { corrected, edge, inner } = correctPlate(od, roles);
+    const std = fitCorrectedStandard(corrected[roles.standardIdx], seriesST);
+    stdCurves.push({ plate: p + 1, std });
+    const ids = plateIds(grid, p);
+
+    const perCol = {};
+    for (const j of roles.samples) {
+      const r = estimateCorrectedED50(corrected[j], seriesSA);
+      const c = interpCorrectedConc(corrected[j], std, seriesSA);
+      r.conc = c.conc; r.concNote = c.note;
+      perCol[j] = r;
+      const nm = grid[7][p * 14 + 1 + j] != null ? String(grid[7][p * 14 + 1 + j]) : '';
+      summary.push({
+        plate: p + 1, timepoint: ids.timepoint, coating: ids.coating, sample: nm,
+        ed50Prism: allEC50Rows[p * 14 + 1 + j], r, conc: c.conc, concNote: c.note
+      });
+    }
+    for (let i = 0; i < 8; i++) {
+      const e = edge[i], n = inner[i];
+      const both = typeof e === 'number' && typeof n === 'number';
+      qc.push({
+        plate: p + 1, timepoint: ids.timepoint, coating: ids.coating,
+        row: 'ABCDEFGH'[i], dilution: seriesSA[i], edge: e, inner: n,
+        excess: both ? Math.round((e - n) * 1e3) / 1e3 : null,
+        ratio: both && n !== 0 ? Math.round(e / n * 1e2) / 1e2 : null
+      });
+    }
+    plates.push({ roles, perCol });
+  }
+  return { plates, summary, qc, stdCurves };
+}
+
+// Append rows 37–41 (per plate) directly onto the Processed Data worksheet,
+// mirroring elisa_ed50.py. Existing rows 31/35 are left untouched.
+function writeCorrectedRows(ws, numPlates, corr) {
+  const labels = ['Corr. ED50', '4PL check', 'Plateau OD', 'Rows fitted', 'Fit flag'];
+  const start = 36;  // 0-indexed grid row → worksheet row 37
+  const rng = XLSX.utils.decode_range(ws['!ref']);
+  const put = (r, c, v, s) => {
+    ws[XLSX.utils.encode_cell({ r, c })] = { v, t: typeof v === 'number' ? 'n' : 's', ...(s ? { s } : {}) };
+    if (r > rng.e.r) rng.e.r = r;
+    if (c > rng.e.c) rng.e.c = c;
+  };
+  const flagFill = { fill: { patternType: 'solid', fgColor: { rgb: 'FFFCE4D6' } }, alignment: { wrapText: true } };
+
+  for (let li = 0; li < labels.length; li++) {
+    const lab = labels[li], r = start + li;
+    for (let p = 0; p < numPlates; p++) {
+      const off = p * 14;
+      put(r, off, lab, { font: { bold: true } });
+      const pd = corr.plates[p];
+      for (let j = 0; j < 12; j++) {
+        const isSample = pd && pd.roles.samples.includes(j);
+        if (!isSample) { put(r, off + 1 + j, '/'); continue; }
+        const res = pd.perCol[j];
+        if (lab === 'Corr. ED50')
+          put(r, off + 1 + j, isFinite(res.ed50) ? Math.round(res.ed50) : 'n.d.');
+        else if (lab === '4PL check')
+          put(r, off + 1 + j, isFinite(res.ed50_4pl) ? Math.round(res.ed50_4pl) : '/');
+        else if (lab === 'Plateau OD')
+          put(r, off + 1 + j, isFinite(res.top) ? Math.round(res.top * 1e3) / 1e3 : '/');
+        else if (lab === 'Rows fitted')
+          put(r, off + 1 + j, res.rowsFitted || '/');
+        else
+          put(r, off + 1 + j, res.flag, (res.flag && res.flag !== 'ok') ? flagFill : null);
+      }
+    }
+  }
+  put(start + labels.length + 1, 0,
+    'Rows 37-41: elisa_ed50.py method — background subtracted per row from the in-plate blank column(s) '
+    + '(interior blank for sample columns, edge blank for the standard), 4PL fitted with Bottom fixed at 0 and '
+    + 'Top fixed to the observed plateau over the descending limb only. Corr. ED50 = interpolated half-plateau '
+    + 'crossing; "4PL check" is a bounded cross-check; "n.d." = no measurable titre. Rows 31/35 are unchanged.',
+    { font: { sz: 9 } });
+  ws['!ref'] = XLSX.utils.encode_range(rng);
+}
+
+function buildCorrectedSummarySheet(corr) {
+  const hs = { font: { bold: true }, fill: { patternType: 'solid', fgColor: { rgb: 'FFDCE6F1' } }, alignment: { wrapText: true } };
+  const flagFill = { fill: { patternType: 'solid', fgColor: { rgb: 'FFFCE4D6' } } };
+  const head = ['Plate', 'Timepoint', 'Coating', 'Sample', 'ED50 (app, current)', 'ED50 (corrected)',
+    '4PL cross-check', 'Hill (4PL)', 'Plateau OD', 'Points on transition', 'Rows fitted',
+    'Conc. (µg/mL)', 'Conc. source', 'Flag'];
+  const data = [head.map(h => ({ v: h, t: 's', s: hs }))];
+  for (const s of corr.summary) {
+    const r = s.r;
+    const raw = [
+      s.plate, s.timepoint || '', s.coating || '', s.sample || '',
+      (typeof s.ed50Prism === 'number' || typeof s.ed50Prism === 'string') ? s.ed50Prism : '',
+      isFinite(r.ed50) ? Math.round(r.ed50) : 'n.d.',
+      isFinite(r.ed50_4pl) ? Math.round(r.ed50_4pl) : '',
+      isFinite(r.hill) ? Math.round(Math.abs(r.hill) * 100) / 100 : '',
+      isFinite(r.top) ? Math.round(r.top * 1000) / 1000 : '',
+      r.nTransition,
+      r.rowsFitted || '',
+      isFinite(s.conc) ? Math.round(s.conc * 100) / 100 : '',
+      s.concNote || '', r.flag || ''
+    ];
+    const row = raw.map(v => ({ v: v == null ? '' : v, t: typeof v === 'number' ? 'n' : 's' }));
+    if (r.flag && r.flag !== 'ok') row[13].s = flagFill;
+    data.push(row);
+  }
+  const ws = aoaToSheet(data);
+  ws['!cols'] = [{ wch: 6 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 16 }, { wch: 15 }, { wch: 13 },
+    { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 11 }, { wch: 13 }, { wch: 16 }, { wch: 44 }];
+  return ws;
+}
+
+function buildCorrectedQCSheet(corr) {
+  const hs = { font: { bold: true }, fill: { patternType: 'solid', fgColor: { rgb: 'FFDCE6F1' } }, alignment: { wrapText: true } };
+  const head = ['Plate', 'Timepoint', 'Coating', 'Row', 'Sample dilution',
+    'Blank – edge', 'Blank – interior', 'Edge excess', 'Edge / interior'];
+  const data = [head.map(h => ({ v: h, t: 's', s: hs }))];
+  for (const q of corr.qc) {
+    const raw = [
+      q.plate, q.timepoint || '', q.coating || '', q.row, Math.round(q.dilution * 100) / 100,
+      typeof q.edge === 'number' ? Math.round(q.edge * 1000) / 1000 : '',
+      typeof q.inner === 'number' ? Math.round(q.inner * 1000) / 1000 : '',
+      q.excess == null ? '' : q.excess,
+      q.ratio == null ? '' : q.ratio
+    ];
+    data.push(raw.map(v => ({ v: v == null ? '' : v, t: typeof v === 'number' ? 'n' : 's' })));
+  }
+  data.push([]);
+  data.push([{ v: 'Corrected standard curves (Bottom fixed at 0)', t: 's', s: { font: { bold: true } } }]);
+  data.push(['Plate', 'Top', 'IC50 (ng/mL)', 'Hill'].map(h => ({ v: h, t: 's', s: hs })));
+  for (const sc of corr.stdCurves) {
+    if (sc.std) data.push([
+      { v: sc.plate, t: 'n' },
+      { v: Math.round(sc.std.top * 1000) / 1000, t: 'n' },
+      { v: Math.round(sc.std.ic50 * 1000) / 1000, t: 'n' },
+      { v: Math.round(Math.abs(sc.std.hill) * 1000) / 1000, t: 'n' }
+    ]);
+    else data.push([{ v: sc.plate, t: 'n' }, { v: 'fit failed', t: 's' }]);
+  }
+  const ws = aoaToSheet(data);
+  ws['!cols'] = [{ wch: 6 }, { wch: 14 }, { wch: 12 }, { wch: 6 }, { wch: 14 },
+    { wch: 13 }, { wch: 15 }, { wch: 12 }, { wch: 13 }];
+  return ws;
+}
+
 // ─── MAIN PROCESSING ──────────────────────────────────────────────────────────
 // ─── ON-PAGE CHARTS (inline SVG, no dependencies) ─────────────────────────────
 const SAMPLE_PALETTE = [
@@ -1410,6 +1793,10 @@ async function runProcessing() {
       log(`  Corrected ${n} well(s) across ${numPlates} plate(s).`);
     }
 
+    const corrEnabled = document.getElementById('corrEd50Chk').checked;
+    if (corrEnabled && document.getElementById('subtractBgChk').checked)
+      log('  Note: both background options on — corrected ED50 runs on the 570-subtracted values.', 'warn');
+
     log('Reading metadata...', 'info');
     const meta = parseMetadata(metaBytes);
     log(`  ${meta.names.length} plate name row(s) found.`);
@@ -1420,7 +1807,7 @@ async function runProcessing() {
 
     // Yield between plates so browser stays responsive
     await new Promise(r => setTimeout(r, 10));
-    const {ws: wsData, condfmt, plateFits, plateCharts} = buildDataSheet(grid, numPlates, meta, fitConfig, msg => log(msg));
+    const {ws: wsData, condfmt, plateFits, plateCharts, corrected} = buildDataSheet(grid, numPlates, meta, fitConfig, corrEnabled, msg => log(msg));
     await new Promise(r => setTimeout(r, 10));
 
     log('Building Protocol Parameters sheet...', 'info');
@@ -1434,6 +1821,11 @@ async function runProcessing() {
     XLSX.utils.book_append_sheet(wb, wsData, 'Processed Data');
     XLSX.utils.book_append_sheet(wb, wsProt, 'Protocol Parameters');
     XLSX.utils.book_append_sheet(wb, wsSOP, 'SOP');
+    if (corrected) {
+      log('Building ED50 Corrected + QC Edge Effect sheets...', 'info');
+      XLSX.utils.book_append_sheet(wb, buildCorrectedSummarySheet(corrected), 'ED50 Corrected');
+      XLSX.utils.book_append_sheet(wb, buildCorrectedQCSheet(corrected), 'QC Edge Effect');
+    }
 
     let buf = XLSX.write(wb, {bookType:'xlsx', type:'array'});
 

@@ -1922,6 +1922,7 @@ function plateBlockHtml(pc) {
 
 function reviewHeaderHtml() {
   const r = review, n = r.numPlates;
+  if (r.accepted.size === n) prepareDownload();
   const nSug = [...r.suggested].filter(k => !r.excl.has(k)).length;
   const nAcc = r.accepted.size;
   return `<div class="card-label" style="margin-bottom:10px">Review &amp; accept</div>
@@ -1932,7 +1933,7 @@ function reviewHeaderHtml() {
         <button class="btn btn-secondary btn-sm" data-act="excludeSuggested" ${nSug ? '' : 'disabled'}>Exclude suggested (${nSug})</button>
         <button class="btn btn-secondary btn-sm" data-act="clearExcl" ${r.excl.size ? '' : 'disabled'}>Clear exclusions</button>
         <button class="btn btn-secondary btn-sm" data-act="acceptAll" ${nAcc === n ? 'disabled' : ''}>Accept all</button>
-        <button class="btn btn-primary btn-sm" data-act="download" ${nAcc === n ? '' : 'disabled'}>Download ${escapeXml(r.outputName)}.xlsx</button>
+        <button class="btn btn-primary btn-sm" data-act="download" ${nAcc === n && r.blob ? '' : 'disabled'}>${nAcc === n && !r.blob ? 'Preparing…' : 'Download ' + escapeXml(r.outputName) + '.xlsx'}</button>
       </div>
     </div>`;
 }
@@ -1956,6 +1957,7 @@ function toggleExclusion(key) {
   if (r.excl.has(key)) r.excl.delete(key); else r.excl.add(key);
   const p = Number(key.split('|')[0]);
   r.accepted.delete(p);   // data changed — plate must be re-accepted
+  r.blob = null; r.blobTok = (r.blobTok || 0) + 1;
   reanalyze();
   refreshReview(p);
 }
@@ -1963,6 +1965,7 @@ function toggleExclusion(key) {
 function setAllExclusions(mutate) {
   review.excl = mutate(review.excl);
   review.accepted.clear();
+  review.blob = null; review.blobTok = (review.blobTok || 0) + 1;
   reanalyze();
   renderReview();
 }
@@ -2013,29 +2016,49 @@ function buildExcludedSheet() {
   return ws;
 }
 
-async function downloadResults() {
+// The workbook is built ahead of the click: Safari only honours a download that starts
+// synchronously inside the user's click, not after awaits (it opens the blob instead).
+async function buildResultsBlob() {
   const r = review;
-  if (!r || r.accepted.size !== r.numPlates) return;
-  try {
-    const {ws: wsData, condfmt, plateFits, corrected} = r.analysis;
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, wsData, 'Processed Data');
-    XLSX.utils.book_append_sheet(wb, buildProtocolSheet(r.meta, plateFits), 'Protocol Parameters');
-    XLSX.utils.book_append_sheet(wb, buildSOPSheet(), 'SOP');
-    if (corrected) {
-      XLSX.utils.book_append_sheet(wb, buildCorrectedSummarySheet(corrected), 'ED50 Corrected');
-      XLSX.utils.book_append_sheet(wb, buildCorrectedQCSheet(corrected), 'QC Edge Effect');
-    }
-    if (r.excl.size) XLSX.utils.book_append_sheet(wb, buildExcludedSheet(), 'Excluded Points');
+  const {ws: wsData, condfmt, plateFits, corrected} = r.analysis;
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, wsData, 'Processed Data');
+  XLSX.utils.book_append_sheet(wb, buildProtocolSheet(r.meta, plateFits), 'Protocol Parameters');
+  XLSX.utils.book_append_sheet(wb, buildSOPSheet(), 'SOP');
+  if (corrected) {
+    XLSX.utils.book_append_sheet(wb, buildCorrectedSummarySheet(corrected), 'ED50 Corrected');
+    XLSX.utils.book_append_sheet(wb, buildCorrectedQCSheet(corrected), 'QC Edge Effect');
+  }
+  if (r.excl.size) XLSX.utils.book_append_sheet(wb, buildExcludedSheet(), 'Excluded Points');
+  let buf = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+  buf = await injectConditionalFormatting(buf, condfmt);
+  return new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+}
 
-    let buf = XLSX.write(wb, {bookType:'xlsx', type:'array'});
-    buf = await injectConditionalFormatting(buf, condfmt);
-    downloadBlob(new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}), r.outputName + '.xlsx');
-    log(`✅ Downloaded ${r.outputName}.xlsx (${r.excl.size} point(s) excluded).`, 'success');
+async function prepareDownload() {
+  const r = review;
+  if (r.blob || r.preparing) return;
+  r.preparing = true;
+  const tok = r.blobTok || 0;
+  try {
+    const blob = await buildResultsBlob();
+    if (review === r && (r.blobTok || 0) === tok && r.accepted.size === r.numPlates) r.blob = blob;
   } catch (err) {
     log(`❌ Error: ${err.message}`, 'error');
     console.error(err);
   }
+  r.preparing = false;
+  if (review === r) {
+    const h = document.getElementById('reviewHeader');
+    if (h) h.innerHTML = reviewHeaderHtml();
+  }
+}
+
+function downloadResults() {
+  const r = review;
+  if (!r || !r.blob) return;
+  downloadBlob(r.blob, r.outputName + '.xlsx');
+  log(`✅ Downloaded ${r.outputName}.xlsx (${r.excl.size} point(s) excluded).`, 'success');
 }
 
 async function runProcessing() {

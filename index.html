@@ -230,9 +230,11 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 
 // ─── DEFAULTS ─────────────────────────────────────────────────────────────────
 const DEFAULT_FIT = {
-  lower: [0.029, 1.9,  0.0,  -1.0],
-  upper: [0.031, 5.0,  1e6,   1.0],
-  p0:    [0.03,  3.0,  50.0,  1.0]
+  // Hill is the sample-curve slope (> 0: OD falls with dilution). The standard curve
+  // uses the mirrored range (< 0: OD rises with concentration) — see stdFitConfig().
+  lower: [0.029, 1.9,  0.0,  0.3],
+  upper: [0.031, 3.5,  1e6,  4.0],
+  p0:    [0.03,  2.8,  50.0, 1.0]
 };
 
 // State
@@ -379,7 +381,7 @@ function downloadBlob(blob, filename) {
   a.href = url; a.download = filename;
   document.body.appendChild(a); a.click();
   document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
 // ─── CREATE METADATA TEMPLATE ─────────────────────────────────────────────────
@@ -787,7 +789,15 @@ function sampleChoicePoint(vals) {
   return best || {y:1.49, i:last};
 }
 
+// Standard-curve config: same Bottom/Top/IC50, Hill mirrored to negative so the curve rises.
+function stdFitConfig(fc) {
+  const lo = fc.lower.slice(), hi = fc.upper.slice(), p0 = fc.p0.slice();
+  lo[3] = -Math.abs(fc.upper[3]); hi[3] = -Math.abs(fc.lower[3]); p0[3] = -Math.abs(fc.p0[3]);
+  return {lower: lo, upper: hi, p0};
+}
+
 function calculateConcentrations(series, seriesST, seriesSA, fc) {
+  fc = stdFitConfig(fc);
   const stdPts = stdFitPoints(series.get('standard') || [], seriesST);
   const xST = stdPts.map(p=>p.x), stdVals = stdPts.map(p=>p.y);
   let params;
@@ -886,8 +896,11 @@ async function computeSuggestions(plateCharts, fc) {
   for (const pc of plateCharts) {
     const series = pc.samples.map(s => [s.points, s.params]);
     series.push([pc.std.points, pc.std.params]);
-    for (const [pts, params] of series)
-      for (const q of suggestOutliers(pts, params, fc)) found.add(q.key);
+    const std = stdFitConfig(fc);
+    series.forEach(([pts, params], si) => {
+      const isStd = si === series.length - 1;
+      for (const q of suggestOutliers(pts, params, isStd ? std : fc)) found.add(q.key);
+    });
     await new Promise(r => setTimeout(r, 0));
   }
   return found;
@@ -2017,7 +2030,7 @@ async function downloadResults() {
 
     let buf = XLSX.write(wb, {bookType:'xlsx', type:'array'});
     buf = await injectConditionalFormatting(buf, condfmt);
-    downloadBlob(new Blob([buf], {type:'application/octet-stream'}), r.outputName + '.xlsx');
+    downloadBlob(new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}), r.outputName + '.xlsx');
     log(`✅ Downloaded ${r.outputName}.xlsx (${r.excl.size} point(s) excluded).`, 'success');
   } catch (err) {
     log(`❌ Error: ${err.message}`, 'error');

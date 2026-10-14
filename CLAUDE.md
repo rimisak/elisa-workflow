@@ -40,7 +40,8 @@ These row/col numbers are hard-coded in `getSeries`, `subtractBackground`, and `
 3. `parseMetadata(metaBytes)` → sample names, per-cell fill colors (copied into the output names row), and dilution series.
 4. `buildDataSheet` → per plate: `getSeries` slices each column's 8-point dilution series, then `calculateEC50s` and `calculateConcentrations` fit a 4PL curve and interpolate. Returns the worksheet, a conditional-formatting spec, fitted params, and chart geometry.
 5. `buildProtocolSheet` + `buildSOPSheet` (the SOP is static lab-protocol text).
-6. `XLSX.write` → `injectConditionalFormatting` → `downloadBlob`; `renderCharts` draws on-page SVGs.
+6. **Review step, then download.** Process no longer downloads. It stores state in `review` (grid, meta, `excl` Set, `suggested` Set, `accepted` Set, per-plate fit `cache`) and renders interactive SVG charts (`renderReview`). Clicking a point toggles its exclusion (`toggleExclusion` → `reanalyze`, which refits only the touched plate via the cache). Exclusion keys are `"plate|col(1-12)|doseIndex(0-7)"` (`exKey`); `getSeries(grid, p, excl)` blanks excluded wells so they drop out of every fit, while the output sheet keeps the raw value, struck through, and adds an "Excluded Points" sheet. Suggested outliers come from `suggestOutliers` (leave-one-out refit of the two largest residuals; thresholds in `OUTLIER`) and are only suggestions until excluded. Download (`downloadResults`: `XLSX.write` → `injectConditionalFormatting` → `downloadBlob`) is enabled once every plate is accepted; any change to a plate un-accepts it.
+   - Standard fit uses wells with OD ≤ 2; sample interpolation uses the highest OD ≤ 1.5 (`stdFitPoints`, `sampleChoicePoint`), each with its own true dilution index.
 
 ### Optional "Edge-effect ED50" stage (toggle, default off)
 

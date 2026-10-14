@@ -83,6 +83,18 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .chart-title{font-size:13px;font-weight:600;color:#3a3a3c;margin-bottom:8px}
 .chart-legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin-bottom:8px}
 .legend-item{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#3a3a3c}
+.plate-charts-header{display:flex;align-items:center;gap:10px}
+.btn-accepted{background:#34c759;color:#fff}
+.btn-accepted:hover{background:#2aa84a}
+.review-bar{display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+.review-info{font-size:13px;color:#3a3a3c;flex:1;min-width:260px}
+.review-actions{display:flex;gap:8px;flex-wrap:wrap}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.chip-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.chip{border:1px solid;border-radius:999px;padding:3px 10px;font-size:12px;cursor:pointer;background:#fff}
+.chip.suggested{border-color:#ff9500;color:#a35c00;background:#fff6e8}
+.chip.excluded{border-color:#8e8e93;color:#636366;background:#f2f2f7;text-decoration:line-through}
+.pt:hover circle:last-child{fill:rgba(0,0,0,.08)}
 .legend-swatch{width:11px;height:11px;border-radius:3px;display:inline-block;flex-shrink:0}
 </style>
 </head>
@@ -658,9 +670,15 @@ function parseMetadata(bytes) {
 }
 
 // ─── PROCESSING PIPELINE ──────────────────────────────────────────────────────
-function getSeries(grid, plateIdx) {
+// Exclusion keys identify one well: "plate|col(1-12)|doseIndex(0-7)".
+function exKey(p, c, i) { return `${p}|${c}|${i}`; }
+
+// `excl` (optional Set of exKeys) blanks excluded wells so they drop out of every fit.
+// The returned Map also carries `colOf` (series key → well column 1-12).
+function getSeries(grid, plateIdx, excl) {
   const offset = plateIdx * 14;
   const result = new Map();  // preserves insertion order
+  result.colOf = new Map();
   for (let c = 1; c <= 12; c++) {
     const colIdx = offset + c;
     const rawName = grid[7][colIdx];
@@ -669,9 +687,12 @@ function getSeries(grid, plateIdx) {
     const vals    = [];
     for (let r = 9; r <= 16; r++) {
       const v = grid[r][colIdx];
-      vals.push((v !== null && v !== undefined && typeof v === 'number' && isFinite(v)) ? v : null);
+      const ok = v !== null && v !== undefined && typeof v === 'number' && isFinite(v)
+                 && !(excl && excl.has(exKey(plateIdx, c, r - 9)));
+      vals.push(ok ? v : null);
     }
     result.set(key, vals);
+    result.colOf.set(key, c);
   }
   return result;
 }
@@ -727,7 +748,7 @@ function calculateEC50s(series, seriesSA, fc) {
   for (const [name, vals] of series) {
     const isSample = !(name === 'standard' || name.startsWith('blank'));
     const points = vals
-      .map((v,i)=>({x:seriesSA[i], y:v}))
+      .map((v,i)=>({x:seriesSA[i], y:v, i}))
       .filter(p=>p.y!==null&&isFinite(p.y));
     if (!isSample) {
       row.push('/');
@@ -742,29 +763,33 @@ function calculateEC50s(series, seriesSA, fc) {
       let ic50 = Math.round(params[2]);
       row.push(ic50 < 10 ? 10 : ic50);
     } catch(_) { row.push('/'); params = null; }
-    fits.push({name, isSample:true, params, points});
+    fits.push({name, isSample:true, params, points, col: series.colOf.get(name)});
   }
   row.push('');
   return {row, fits};
 }
 
+// Points the standard-curve fit uses: readings above OD 2 are saturated and dropped.
+function stdFitPoints(vals, seriesST) {
+  return vals.map((v,i)=>({x:seriesST[i], y:v, i}))
+             .filter(p=>p.y!==null&&isFinite(p.y)&&p.y<=2);
+}
+
+// Reading used to interpolate a sample: the highest OD at or below 1.5 (the curve's
+// reliable range). If everything is saturated, assume 1.49 at the last populated dilution.
+function sampleChoicePoint(vals) {
+  let best = null, last = 0;
+  vals.forEach((v,i) => {
+    if (v === null || !isFinite(v)) return;
+    last = i;
+    if (v <= 1.5 && (best === null || v > best.y)) best = {y:v, i};
+  });
+  return best || {y:1.49, i:last};
+}
+
 function calculateConcentrations(series, seriesST, seriesSA, fc) {
-  let stdVals = (series.get('standard') || []).filter(v=>v!==null&&isFinite(v));
-  // Also try keys starting with 'standard' (shouldn't happen but safe)
-  if (!stdVals.length) {
-    for (const [k,v] of series) {
-      if (k === 'standard') { stdVals = v.filter(x=>x!==null&&isFinite(x)); break; }
-    }
-  }
-
-  let STindex = 0;
-  while (stdVals.length > 0 && Math.max(...stdVals) > 2) {
-    const maxV = Math.max(...stdVals);
-    stdVals.splice(stdVals.indexOf(maxV), 1);
-    STindex++;
-  }
-
-  const xST = seriesST.slice(STindex, STindex + stdVals.length);
+  const stdPts = stdFitPoints(series.get('standard') || [], seriesST);
+  const xST = stdPts.map(p=>p.x), stdVals = stdPts.map(p=>p.y);
   let params;
   try {
     params = fitBest4PL(xST, stdVals, fc);
@@ -772,11 +797,8 @@ function calculateConcentrations(series, seriesST, seriesSA, fc) {
     params = fc.p0;
   }
   const [bottom, top, ic50, hill] = params;
-
-  // Standard curve data points for on-page charts
-  const stdPoints = xST
-    .map((x,i)=>({x, y: stdVals[i]}))
-    .filter(p=>p.y!==null&&isFinite(p.y));
+  const STindex = stdPts.length ? stdPts[0].i : 0;
+  const stdPoints = stdPts;  // standard curve data points for on-page charts
 
   const conRow = ['Interp. Con.'];
   const choValRow = ['Chos. Val.'];
@@ -788,41 +810,87 @@ function calculateConcentrations(series, seriesST, seriesSA, fc) {
       conRow.push('/'); choValRow.push('/'); choDilRow.push('/');
       sampleChoices.push({name, isSample:false, chosenVal:null, intersectionX:null});
     } else if (name === 'standard') {
-      const first = stdVals[0];
-      if (first === undefined || first === null) {
+      const first = stdPts[0];
+      if (!first) {
         conRow.push('/'); choValRow.push('/'); choDilRow.push('/');
       } else {
-        const con = inverse4PL(first, top, bottom, hill, ic50) * Math.pow(5, STindex) / 1000;
+        const con = inverse4PL(first.y, top, bottom, hill, ic50) * Math.pow(5, first.i) / 1000;
         conRow.push(Math.round(con * 100)/100);
-        choValRow.push(first);
-        choDilRow.push(String(seriesST[STindex]) + ' (Con)');
+        choValRow.push(first.y);
+        choDilRow.push(String(seriesST[first.i]) + ' (Con)');
       }
       sampleChoices.push({name, isSample:false, chosenVal:null, intersectionX:null});
     } else {
-      let sVals = vals.filter(v=>v!==null&&isFinite(v));
-      if (!sVals.length) sVals = [1.49];
-      let idxDil = 0;
-      while (sVals.length > 0 && Math.max(...sVals) > 1.5) {
-        const maxV = Math.max(...sVals);
-        sVals.splice(sVals.indexOf(maxV), 1);
-        idxDil++;
-        if (sVals.length === 0) { sVals = [1.49]; idxDil--; }
-      }
-      const maxV = Math.max(...sVals);
-      const dilFactor = seriesSA[Math.min(idxDil, seriesSA.length-1)];
-      const con = inverse4PL(maxV, top, bottom, hill, ic50) * dilFactor / 1000;
+      const ch = sampleChoicePoint(vals);
+      const dilFactor = seriesSA[Math.min(ch.i, seriesSA.length-1)];
+      const con = inverse4PL(ch.y, top, bottom, hill, ic50) * dilFactor / 1000;
       conRow.push(Math.round(con * 100)/100);
-      choValRow.push(maxV);
+      choValRow.push(ch.y);
       choDilRow.push(dilFactor);
       sampleChoices.push({
-        name, isSample:true, chosenVal:maxV,
-        intersectionX: inverse4PL(maxV, top, bottom, hill, ic50)
+        name, isSample:true, chosenVal:ch.y,
+        intersectionX: inverse4PL(ch.y, top, bottom, hill, ic50)
       });
     }
   }
   conRow.push(''); choValRow.push(''); choDilRow.push('');
   return {conRow, choValRow, choDilRow, fittedParams: [bottom, top, ic50, hill], STindex,
           stdPoints, stdParams: [bottom, top, ic50, hill], sampleChoices};
+}
+
+// ─── OUTLIER SUGGESTION ───────────────────────────────────────────────────────
+const OUTLIER = {
+  MIN_DEV: 0.15,    // OD: a point must sit at least this far from the curve fitted without it
+  REL_DEV: 0.20,    // ...and at least this fraction of the series' OD range
+  RMS_MULT: 4,      // ...and at least this many times the RMS misfit of the remaining points
+  SSE_DROP: 0.35,   // ...and removing it must cut the fit's squared error to below this fraction
+  MIN_POINTS: 6,    // never suggest when fewer than this many points remain
+  MAX_PER_SERIES: 2
+};
+
+// Leave-one-out check on the two largest residuals of an existing fit; returns the points
+// to suggest. Clean series cost nothing — refits only happen for series with a large residual.
+function suggestOutliers(pts, fit, fc) {
+  const out = [];
+  let cur = pts.slice();
+  for (let k = 0; k < OUTLIER.MAX_PER_SERIES; k++) {
+    if (!fit || cur.length < OUTLIER.MIN_POINTS) break;
+    const y = cur.map(p=>p.y);
+    const res = cur.map(p=>p.y - model4PL(p.x, fit));
+    const sse = res.reduce((s,r)=>s+r*r, 0);
+    const floor = Math.max(OUTLIER.MIN_DEV, OUTLIER.REL_DEV * (Math.max(...y) - Math.min(...y)));
+    if (Math.max(...res.map(Math.abs)) < 0.5 * floor) break;
+    const cands = res.map((r,i)=>i).sort((a,b)=>Math.abs(res[b]) - Math.abs(res[a])).slice(0, 2);
+    let pick = null;
+    for (const j of cands) {
+      const rest = cur.filter((_,i)=>i!==j);
+      let fit2;
+      try { fit2 = fitBest4PL(rest.map(p=>p.x), rest.map(p=>p.y), fc); } catch(_) { continue; }
+      const dev = Math.abs(cur[j].y - model4PL(cur[j].x, fit2));
+      const sse2 = rest.reduce((s,p)=>s + (p.y - model4PL(p.x, fit2))**2, 0);
+      const rms2 = Math.sqrt(sse2 / rest.length);
+      if (dev >= floor && dev >= OUTLIER.RMS_MULT * rms2 && sse2 <= OUTLIER.SSE_DROP * sse && (!pick || dev > pick.dev))
+        pick = {j, dev, fit2};
+    }
+    if (!pick) break;
+    out.push(cur[pick.j]);
+    cur = cur.filter((_,i)=>i!==pick.j);
+    fit = pick.fit2;
+  }
+  return out;
+}
+
+// Suggested outliers from a first, unexcluded analysis. Returns a Set of exKeys.
+async function computeSuggestions(plateCharts, fc) {
+  const found = new Set();
+  for (const pc of plateCharts) {
+    const series = pc.samples.map(s => [s.points, s.params]);
+    series.push([pc.std.points, pc.std.params]);
+    for (const [pts, params] of series)
+      for (const q of suggestOutliers(pts, params, fc)) found.add(q.key);
+    await new Promise(r => setTimeout(r, 0));
+  }
+  return found;
 }
 
 // ─── XLSX SHEET BUILDER ───────────────────────────────────────────────────────
@@ -869,7 +937,9 @@ function aoaToSheet(data) {
 }
 
 // ─── BUILD PROCESSED DATA SHEET ───────────────────────────────────────────────
-function buildDataSheet(grid, numPlates, meta, fc, corrEnabled, logFn) {
+// `excl`: Set of exKeys excluded from every fit (kept, struck through, in the output).
+function buildDataSheet(grid, numPlates, meta, fc, corrEnabled, logFn, excl, cache) {
+  excl = excl || new Set();
   const {names, colors, seriesST, seriesSA} = meta;
 
   // Apply names to row 7 of grid
@@ -889,8 +959,26 @@ function buildDataSheet(grid, numPlates, meta, fc, corrEnabled, logFn) {
 
   const plateCharts = [];  // per-plate geometry for on-page SVG charts
 
+  // `cache` (optional Map) memoises each plate's fits by that plate's exclusions, so
+  // toggling one point only refits its own plate.
   for (let p=0; p<numPlates; p++) {
-    const series = getSeries(grid, p);
+    const sig = p + ':' + [...excl].filter(k => k.startsWith(p + '|')).sort().join(',');
+    const hit = cache && cache.get(sig);
+    if (hit) {
+      allEC50Rows.push(...hit.ec50Row); allConRows.push(...hit.conRow);
+      allCVRows.push(...hit.choValRow); allCDRows.push(...hit.choDilRow);
+      plateFits.push(hit.plateFit); plateCharts.push(hit.plateChart);
+      continue;
+    }
+    const series = getSeries(grid, p, excl);
+    const rawSeries = getSeries(grid, p);   // includes excluded wells, for the charts
+    const mkPts = (vals, xs, pred) => vals
+      .map((v,i)=>({x:xs[i], y:v, i}))
+      .filter(q=>q.y!==null&&isFinite(q.y)&&(!pred||pred(q)));
+    const flag = (q, col) => {
+      const key = exKey(p, col, q.i);
+      return {...q, key, excluded: excl.has(key), suggested: false};
+    };
     logFn(`  Plate ${p+1}: fitting EC50...`);
     const {row: ec50Row, fits: ec50Fits} = calculateEC50s(series, seriesSA, fc);
     logFn(`  Plate ${p+1}: calculating concentrations...`);
@@ -908,23 +996,30 @@ function buildDataSheet(grid, numPlates, meta, fc, corrEnabled, logFn) {
     const samples = [];
     for (let i = 0; i < ec50Fits.length; i++) {
       const f = ec50Fits[i];
-      if (!f.isSample || !f.points || f.points.length === 0) continue;
+      if (!f.isSample) continue;
+      const allPts = mkPts(rawSeries.get(f.name), seriesSA).map(q => flag(q, f.col));
+      if (allPts.length === 0) continue;
       const c = sampleChoices[i] || {};
       samples.push({
         name: f.name,
         params: f.params,
         ed50: f.params ? f.params[2] : null,
-        points: f.points,
+        points: allPts,
         chosenVal: c.chosenVal != null ? c.chosenVal : null,
         intersectionX: c.intersectionX != null ? c.intersectionX : null,
       });
     }
-    plateCharts.push({
+    const stdCol = rawSeries.colOf.get('standard');
+    const stdAll = stdCol == null ? [] :
+      mkPts(rawSeries.get('standard'), seriesST, q => q.y <= 2).map(q => flag(q, stdCol));
+    const plateChart = {
       plateIndex: p,
       samples,
-      std: {points: stdPoints, params: stdParams},
+      std: {points: stdAll, params: stdParams},
       axes: {seriesSA, seriesST},
-    });
+    };
+    plateCharts.push(plateChart);
+    if (cache) cache.set(sig, {ec50Row, conRow, choValRow, choDilRow, plateFit: plateFits[plateFits.length-1], plateChart});
   }
 
   // Full grid: 29 original rows + blank + EC50 + blank + choVal + choDil + con
@@ -948,6 +1043,8 @@ function buildDataSheet(grid, numPlates, meta, fc, corrEnabled, logFn) {
       const isDataCol  = colInPlate >= 1 && colInPlate <= 12;
 
       // Row 7: sample names — bold, with fill color copied from MetaData Names sheet
+      if (R >= 9 && R <= 16 && isDataCol && typeof v === 'number' && excl.has(exKey(plateIdx, colInPlate, R - 9)))
+        return {v, t:'n', s:{font:{strike:true, color:{rgb:'FF9A9A9A'}}}};
       if (R === 7 && isDataCol) {
         const nameColor = colors && colors[plateIdx] && colors[plateIdx][colInPlate - 1];
         if (nameColor) return styledCell(v, 'FF' + nameColor, {font:{bold:true}});
@@ -965,7 +1062,15 @@ function buildDataSheet(grid, numPlates, meta, fc, corrEnabled, logFn) {
   let corrected = null;
   if (corrEnabled) {
     logFn('Corrected ED50: in-plate blank background, Bottom fixed at 0...');
-    corrected = buildCorrectedAnalysis(grid, numPlates, meta, allEC50Rows, logFn);
+    let cgrid = grid;
+    if (excl.size) {
+      cgrid = grid.map(r => [...r]);
+      for (const k of excl) {
+        const [p, c, i] = k.split('|').map(Number);
+        cgrid[9 + i][p*14 + c] = null;
+      }
+    }
+    corrected = buildCorrectedAnalysis(cgrid, numPlates, meta, allEC50Rows, logFn);
     writeCorrectedRows(ws, numPlates, corrected);
     logFn(`  ${corrected.summary.length} sample curve(s) analysed.`);
   }
@@ -1679,6 +1784,24 @@ function svgWrap(body) {
   return `<svg viewBox="0 0 ${CHART_W} ${CHART_H}" width="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">${body}</svg>`;
 }
 
+// One clickable data point. Click toggles exclusion (handled by delegation on #chartsSection).
+// Excluded = hollow grey with a cross; suggested (not yet excluded) = orange ring.
+function pointSvg(p, S, col, r, label) {
+  const cx = S.X(p.x).toFixed(1), cy = S.Y(p.y).toFixed(1);
+  const state = p.excluded ? 'excluded — click to restore'
+              : p.suggested ? 'suggested outlier — click to exclude' : 'click to exclude';
+  let g = `<g class="pt" data-k="${p.key}"><title>${escapeXml(label)} · OD ${p.y.toFixed(3)} (${state})</title>`;
+  if (p.excluded) {
+    g += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#fff" stroke="#8e8e93" stroke-width="1.3"/>`;
+    const d = r * 0.65;
+    g += `<path d="M${(+cx-d).toFixed(1)},${(+cy-d).toFixed(1)}L${(+cx+d).toFixed(1)},${(+cy+d).toFixed(1)}M${(+cx-d).toFixed(1)},${(+cy+d).toFixed(1)}L${(+cx+d).toFixed(1)},${(+cy-d).toFixed(1)}" stroke="#8e8e93" stroke-width="1.2"/>`;
+  } else {
+    if (p.suggested) g += `<circle cx="${cx}" cy="${cy}" r="${r + 4}" fill="none" stroke="#ff9500" stroke-width="2"/>`;
+    g += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${col}"/>`;
+  }
+  return g + `<circle cx="${cx}" cy="${cy}" r="9" fill="transparent" style="cursor:pointer"/></g>`;
+}
+
 // Left graph: each sample's measured points, its fitted 4PL curve, and a vertical line at its ED50.
 function renderSampleChart(pc) {
   const xs = [], ys = [];
@@ -1699,9 +1822,7 @@ function renderSampleChart(pc) {
     if (s.params) {
       body += `<path d="${curvePath(s.params, xd, S)}" fill="none" stroke="${col}" stroke-width="1.6"/>`;
     }
-    for (const p of s.points) {
-      body += `<circle cx="${S.X(p.x).toFixed(1)}" cy="${S.Y(p.y).toFixed(1)}" r="2.8" fill="${col}"/>`;
-    }
+    for (const p of s.points) body += pointSvg(p, S, col, 2.8, `${s.name}, 1:${fmtTick(p.x)}`);
   });
   return svgWrap(body);
 }
@@ -1723,9 +1844,7 @@ function renderStandardChart(pc) {
   if (pc.std.params) {
     body += `<path d="${curvePath(pc.std.params, xd, S)}" fill="none" stroke="#1c1c1e" stroke-width="1.8"/>`;
   }
-  for (const p of pc.std.points) {
-    body += `<circle cx="${S.X(p.x).toFixed(1)}" cy="${S.Y(p.y).toFixed(1)}" r="3" fill="#1c1c1e"/>`;
-  }
+  for (const p of pc.std.points) body += pointSvg(p, S, '#1c1c1e', 3, `Standard, ${fmtTick(p.x)}`);
   pc.samples.forEach((s, i) => {
     if (s.chosenVal == null || s.intersectionX == null || !(s.intersectionX > 0)) return;
     const col = sampleColor(i);
@@ -1739,28 +1858,171 @@ function renderStandardChart(pc) {
   return svgWrap(body);
 }
 
-function renderCharts(plateCharts) {
-  const sec = document.getElementById('chartsSection');
-  if (!sec) return;
-  if (!plateCharts || !plateCharts.length) { sec.style.display = 'none'; sec.innerHTML = ''; return; }
-  let html = '<div class="card-label" style="margin-bottom:10px">Plate Visualizations</div>';
-  plateCharts.forEach(pc => {
-    let legend = '';
-    pc.samples.forEach((s, i) => {
-      legend += `<span class="legend-item"><span class="legend-swatch" style="background:${sampleColor(i)}"></span>${escapeXml(s.name)}</span>`;
-    });
-    if (!legend) legend = '<span class="legend-item" style="color:#aeaeb2">No sample curves for this plate</span>';
-    html += `<div class="plate-charts-block">
-      <div class="plate-charts-header">Plate ${pc.plateIndex + 1}</div>
-      <div class="chart-legend">${legend}</div>
-      <div class="plate-charts-row">
-        <div class="chart-card"><div class="chart-title">Sample dose–response &amp; ED50</div>${renderSampleChart(pc)}</div>
-        <div class="chart-card"><div class="chart-title">Standard curve &amp; interpolation</div>${renderStandardChart(pc)}</div>
+// ─── REVIEW STATE ─────────────────────────────────────────────────────────────
+// Set after Process; the workbook is only written when every plate is accepted.
+let review = null;  // {grid, numPlates, meta, outputName, corrEnabled, excl, suggested, accepted, analysis}
+
+function pointLabel(key) {
+  const [p, c, i] = key.split('|').map(Number);
+  const pc = review.analysis.plateCharts[p];
+  for (const s of pc.samples) for (const q of s.points) if (q.key === key) return {name: s.name, q};
+  for (const q of pc.std.points) if (q.key === key) return {name: 'Standard', q};
+  return null;
+}
+
+function reanalyze() {
+  const r = review;
+  r.analysis = buildDataSheet(r.grid, r.numPlates, r.meta, fitConfig, r.corrEnabled, () => {}, r.excl, r.cache);
+}
+
+function plateBlockHtml(pc) {
+  const p = pc.plateIndex, r = review;
+  for (const q of [...pc.samples.flatMap(s => s.points), ...pc.std.points]) q.suggested = r.suggested.has(q.key);
+  let legend = '';
+  pc.samples.forEach((s, i) => {
+    const ed = s.params && s.ed50 > 0 ? ` · ED50 ≈ ${Math.max(10, Math.round(s.ed50))}` : '';
+    legend += `<span class="legend-item"><span class="legend-swatch" style="background:${sampleColor(i)}"></span>${escapeXml(s.name)}${ed}</span>`;
+  });
+  if (!legend) legend = '<span class="legend-item" style="color:#aeaeb2">No sample curves for this plate</span>';
+
+  // Chips: every excluded or suggested point on this plate, toggleable.
+  let chips = '';
+  const allPts = [...pc.samples.map(s => [s.name, s.points]), ['Standard', pc.std.points]];
+  for (const [name, pts] of allPts) for (const q of pts) {
+    if (!q.excluded && !q.suggested) continue;
+    const cls = q.excluded ? 'excluded' : 'suggested';
+    chips += `<button class="chip ${cls}" data-k="${q.key}">${escapeXml(name)} · ${'ABCDEFGH'[q.i]} · OD ${q.y.toFixed(3)} — ${q.excluded ? (q.suggested ? 'excluded (suggested), restore' : 'excluded, restore') : 'suggested, exclude'}</button>`;
+  }
+  const acc = r.accepted.has(p);
+  return `<div class="plate-charts-block" id="plateBlock${p}">
+    <div class="plate-charts-header">Plate ${p + 1}
+      <button class="btn btn-sm ${acc ? 'btn-accepted' : 'btn-secondary'}" data-accept="${p}">${acc ? '✓ Accepted' : 'Accept plate'}</button>
+    </div>
+    <div class="chart-legend">${legend}</div>
+    ${chips ? `<div class="chip-row">${chips}</div>` : ''}
+    <div class="plate-charts-row">
+      <div class="chart-card"><div class="chart-title">Sample dose–response &amp; ED50</div>${renderSampleChart(pc)}</div>
+      <div class="chart-card"><div class="chart-title">Standard curve &amp; interpolation</div>${renderStandardChart(pc)}</div>
+    </div>
+  </div>`;
+}
+
+function reviewHeaderHtml() {
+  const r = review, n = r.numPlates;
+  const nSug = [...r.suggested].filter(k => !r.excl.has(k)).length;
+  const nAcc = r.accepted.size;
+  return `<div class="card-label" style="margin-bottom:10px">Review &amp; accept</div>
+    <div class="review-bar">
+      <div class="review-info">Click a point on any graph to exclude or restore it. Orange rings are suggested outliers.
+        <b>${r.excl.size}</b> excluded · <b>${nSug}</b> suggested not yet excluded · <b>${nAcc}/${n}</b> plates accepted.</div>
+      <div class="review-actions">
+        <button class="btn btn-secondary btn-sm" data-act="excludeSuggested" ${nSug ? '' : 'disabled'}>Exclude suggested (${nSug})</button>
+        <button class="btn btn-secondary btn-sm" data-act="clearExcl" ${r.excl.size ? '' : 'disabled'}>Clear exclusions</button>
+        <button class="btn btn-secondary btn-sm" data-act="acceptAll" ${nAcc === n ? 'disabled' : ''}>Accept all</button>
+        <button class="btn btn-primary btn-sm" data-act="download" ${nAcc === n ? '' : 'disabled'}>Download ${escapeXml(r.outputName)}.xlsx</button>
       </div>
     </div>`;
-  });
-  sec.innerHTML = html;
+}
+
+function renderReview() {
+  const sec = document.getElementById('chartsSection');
+  if (!sec || !review) return;
+  sec.innerHTML = `<div id="reviewHeader" class="card">${reviewHeaderHtml()}</div>`
+    + review.analysis.plateCharts.map(plateBlockHtml).join('');
   sec.style.display = 'block';
+}
+
+function refreshReview(plate) {
+  document.getElementById('reviewHeader').innerHTML = reviewHeaderHtml();
+  if (plate == null) { renderReview(); return; }
+  document.getElementById('plateBlock' + plate).outerHTML = plateBlockHtml(review.analysis.plateCharts[plate]);
+}
+
+function toggleExclusion(key) {
+  const r = review;
+  if (r.excl.has(key)) r.excl.delete(key); else r.excl.add(key);
+  const p = Number(key.split('|')[0]);
+  r.accepted.delete(p);   // data changed — plate must be re-accepted
+  reanalyze();
+  refreshReview(p);
+}
+
+function setAllExclusions(mutate) {
+  review.excl = mutate(review.excl);
+  review.accepted.clear();
+  reanalyze();
+  renderReview();
+}
+
+document.addEventListener('click', e => {
+  if (!review) return;
+  const sec = document.getElementById('chartsSection');
+  if (!sec || !sec.contains(e.target)) return;
+  const pt = e.target.closest('[data-k]');
+  if (pt) { toggleExclusion(pt.dataset.k); return; }
+  const acc = e.target.closest('[data-accept]');
+  if (acc) {
+    const p = Number(acc.dataset.accept);
+    if (review.accepted.has(p)) review.accepted.delete(p); else review.accepted.add(p);
+    refreshReview(p);
+    return;
+  }
+  const act = e.target.closest('[data-act]');
+  if (!act || act.disabled) return;
+  switch (act.dataset.act) {
+    case 'excludeSuggested': setAllExclusions(ex => new Set([...ex, ...review.suggested])); break;
+    case 'clearExcl': setAllExclusions(() => new Set()); break;
+    case 'acceptAll':
+      for (let p = 0; p < review.numPlates; p++) review.accepted.add(p);
+      renderReview(); break;
+    case 'download': downloadResults(); break;
+  }
+});
+
+function buildExcludedSheet() {
+  const r = review, off = p => p * 14;
+  const hs = { font: { bold: true }, fill: { patternType: 'solid', fgColor: { rgb: 'FFDCE6F1' } } };
+  const data = [['Plate', 'Sample', 'Well', 'Dilution / conc. factor', 'OD', 'Origin']
+    .map(h => ({ v: h, t: 's', s: hs }))];
+  const keys = [...r.excl].map(k => k.split('|').map(Number))
+    .sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]);
+  for (const [p, c, i] of keys) {
+    const name = String(r.grid[7][off(p) + c] ?? '');
+    const x = name === 'standard' ? r.meta.seriesST[i] : r.meta.seriesSA[i];
+    const od = r.grid[9 + i][off(p) + c];
+    const row = [p + 1, name, 'ABCDEFGH'[i] + c, Math.round(x * 100) / 100,
+      typeof od === 'number' ? Math.round(od * 1e4) / 1e4 : '',
+      r.suggested.has(exKey(p, c, i)) ? 'Suggested + accepted' : 'Manual'];
+    data.push(row.map(v => ({ v, t: typeof v === 'number' ? 'n' : 's' })));
+  }
+  const ws = aoaToSheet(data);
+  ws['!cols'] = [{ wch: 6 }, { wch: 16 }, { wch: 6 }, { wch: 22 }, { wch: 9 }, { wch: 20 }];
+  return ws;
+}
+
+async function downloadResults() {
+  const r = review;
+  if (!r || r.accepted.size !== r.numPlates) return;
+  try {
+    const {ws: wsData, condfmt, plateFits, corrected} = r.analysis;
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, wsData, 'Processed Data');
+    XLSX.utils.book_append_sheet(wb, buildProtocolSheet(r.meta, plateFits), 'Protocol Parameters');
+    XLSX.utils.book_append_sheet(wb, buildSOPSheet(), 'SOP');
+    if (corrected) {
+      XLSX.utils.book_append_sheet(wb, buildCorrectedSummarySheet(corrected), 'ED50 Corrected');
+      XLSX.utils.book_append_sheet(wb, buildCorrectedQCSheet(corrected), 'QC Edge Effect');
+    }
+    if (r.excl.size) XLSX.utils.book_append_sheet(wb, buildExcludedSheet(), 'Excluded Points');
+
+    let buf = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+    buf = await injectConditionalFormatting(buf, condfmt);
+    downloadBlob(new Blob([buf], {type:'application/octet-stream'}), r.outputName + '.xlsx');
+    log(`✅ Downloaded ${r.outputName}.xlsx (${r.excl.size} point(s) excluded).`, 'success');
+  } catch (err) {
+    log(`❌ Error: ${err.message}`, 'error');
+    console.error(err);
+  }
 }
 
 async function runProcessing() {
@@ -1768,6 +2030,7 @@ async function runProcessing() {
   btn.disabled = true;
   btn.textContent = 'Processing...';
   clearLog();
+  review = null;
 
   const chartsSec = document.getElementById('chartsSection');
   if (chartsSec) { chartsSec.style.display = 'none'; chartsSec.innerHTML = ''; }
@@ -1803,42 +2066,25 @@ async function runProcessing() {
     log(`  Standard: ${meta.stdStart} ng/mL, 1:${meta.stdDil} dilution.`);
     log(`  Samples: 1:${meta.sampleStart} start, 1:${meta.sampleDil} dilution.`);
 
-    log('Fitting curves and calculating results...', 'info');
-
-    // Yield between plates so browser stays responsive
-    await new Promise(r => setTimeout(r, 10));
-    const {ws: wsData, condfmt, plateFits, plateCharts, corrected} = buildDataSheet(grid, numPlates, meta, fitConfig, corrEnabled, msg => log(msg));
-    await new Promise(r => setTimeout(r, 10));
-
-    log('Building Protocol Parameters sheet...', 'info');
-    const wsProt = buildProtocolSheet(meta, plateFits);
-
-    log('Building SOP sheet...', 'info');
-    const wsSOP = buildSOPSheet();
-
-    log('Writing workbook...', 'info');
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, wsData, 'Processed Data');
-    XLSX.utils.book_append_sheet(wb, wsProt, 'Protocol Parameters');
-    XLSX.utils.book_append_sheet(wb, wsSOP, 'SOP');
-    if (corrected) {
-      log('Building ED50 Corrected + QC Edge Effect sheets...', 'info');
-      XLSX.utils.book_append_sheet(wb, buildCorrectedSummarySheet(corrected), 'ED50 Corrected');
-      XLSX.utils.book_append_sheet(wb, buildCorrectedQCSheet(corrected), 'QC Edge Effect');
+    // Names must be on the grid before series are keyed by sample name.
+    for (let p = 0; p < numPlates; p++) {
+      const plateNames = meta.names[p] || [];
+      for (let c = 0; c < 12; c++) grid[7][p*14+1+c] = plateNames[c] || '';
     }
 
-    let buf = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+    log('Fitting curves and calculating results...', 'info');
+    await new Promise(r => setTimeout(r, 10));
+    review = {grid, numPlates, meta, outputName, corrEnabled,
+              excl: new Set(), suggested: new Set(), accepted: new Set(), analysis: null, cache: new Map()};
+    review.analysis = buildDataSheet(grid, numPlates, meta, fitConfig, corrEnabled, msg => log(msg), review.excl, review.cache);
 
-    log('Injecting conditional formatting...', 'info');
-    buf = await injectConditionalFormatting(buf, condfmt);
+    log('Looking for outliers...', 'info');
+    await new Promise(r => setTimeout(r, 10));
+    review.suggested = await computeSuggestions(review.analysis.plateCharts, fitConfig);
+    log(`  ${review.suggested.size} suggested outlier(s).`);
 
-    const blob = new Blob([buf], {type:'application/octet-stream'});
-    downloadBlob(blob, outputName + '.xlsx');
-
-    log('Rendering plate visualizations...', 'info');
-    renderCharts(plateCharts);
-
-    log(`✅ Done! Output: ${outputName}.xlsx`, 'success');
+    renderReview();
+    log('Review the graphs, exclude outliers if needed, accept each plate, then download.', 'success');
   } catch (err) {
     log(`❌ Error: ${err.message}`, 'error');
     console.error(err);

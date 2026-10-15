@@ -114,7 +114,8 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
     <div class="drop-zone-sub">BMG Omega plate reader exports (.CSV), multiple files allowed</div>
     <div class="file-list" id="csvFileList"></div>
   </div>
-  <div style="margin-top:8px;display:flex;gap:8px;justify-content:flex-end">
+  <div style="margin-top:8px;display:flex;gap:8px;justify-content:space-between">
+    <button class="btn btn-secondary btn-sm" onclick="createCsvTemplate()">Create a template file</button>
     <button class="btn btn-secondary btn-sm" onclick="clearCSV()">Clear</button>
   </div>
   <input type="file" id="csvInput" accept=".csv,.CSV" multiple style="display:none" onchange="onCSVInputChange()">
@@ -185,7 +186,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 <!-- Per-plate visualizations (populated after processing) -->
 <div id="chartsSection" style="display:none"></div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.2.9 &nbsp;·&nbsp; 15/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.3.0 &nbsp;·&nbsp; 15/10/2026</div>
 
 <script>
 'use strict';
@@ -466,6 +467,43 @@ function downloadBlob(blob, filename) {
 }
 
 // ─── CREATE METADATA TEMPLATE ─────────────────────────────────────────────────
+// Example plate-reader CSV in the layout the app reads: 29 lines — run header, ID row, a 450 nm
+// block (rows A–H × columns 1–12) and a 570 nm block 12 lines below. Values are illustrative.
+function createCsvTemplate() {
+  const d = new Date(), p = n => String(n).padStart(2, '0');
+  const yymmdd = `${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}`;
+  const sig = (x, ic, top, hill) => 0.03 + top / (1 + Math.pow(x / ic, hill));
+  const block = od570 => 'ABCDEFGH'.split('').map((row, r) => {
+    const vals = [];
+    for (let c = 0; c < 12; c++) {
+      let v;
+      if (od570) v = 0.03 + 0.005 * ((r + c) % 4);
+      else if (c === 0) v = 0.05 + 0.01 * (r % 3);                                   // blank column
+      else if (c === 11) v = sig(5, 1000 / Math.pow(5, r), 3, 1.1);                  // standard column (OD falls with concentration)
+      else v = sig(50 * Math.pow(3, r), 1500 * c, 2.7, 1.5);                         // sample columns
+      vals.push(v.toFixed(3));
+    }
+    return `${row},${vals.join(',')}`;
+  });
+  const cols = ',1,2,3,4,5,6,7,8,9,10,11,12,';
+  const lines = [
+    'User: USER,Path: C:\\Program Files (x86)\\BMG\\Omega\\User\\Data\\,Test run no.: 1',
+    `Test name: Template 450+570,Date: ${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()},Time: 12:00:00 PM`,
+    '',
+    `ID1: 1,ID2: ${yymmdd},ID3: describe_plate_here,`,
+    'Absorbance',
+    '',
+    '1. Raw Data (450 1)',
+    '',
+    cols, ...block(false),
+    '',
+    '2. Raw Data (570 2)',
+    '',
+    cols, ...block(true)
+  ];
+  downloadBlob(new Blob([lines.join('\r\n') + '\r\n'], {type:'text/csv'}), 'Plate_template.csv');
+}
+
 function createTemplate() {
   // One Names row per loaded CSV file (6 when none are loaded yet).
   const numPlates = csvFiles.length || 6;

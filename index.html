@@ -186,7 +186,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 <!-- Per-plate visualizations (populated after processing) -->
 <div id="chartsSection" style="display:none"></div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.3.1 &nbsp;·&nbsp; 15/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.3.2 &nbsp;·&nbsp; 15/10/2026</div>
 
 <script>
 'use strict';
@@ -470,15 +470,13 @@ function downloadBlob(blob, filename) {
 // Blank plate-reader CSV in the layout the app reads: 29 lines — two free-text metadata lines, an ID
 // row, a 450 nm block (rows A–H × columns 1–12) and a 570 nm block 12 lines below. Wells are left empty.
 function createCsvTemplate() {
-  const d = new Date(), p = n => String(n).padStart(2, '0');
-  const yymmdd = `${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}`;
   const block = () => 'ABCDEFGH'.split('').map(row => row + ','.repeat(12));
   const cols = ',1,2,3,4,5,6,7,8,9,10,11,12,';
   const lines = [
     'Here more Metadata can be added...',
     '(for example user, instrument, date; these two lines are not used by the app)',
     '',
-    `ID1: assay_platenumber,ID2: ${yymmdd},ID3: experiment,`,
+    'ID1: assay_platenumber,ID2: date,ID3: experiment,',
     'Absorbance',
     '',
     '1. Raw Data (450 1)',

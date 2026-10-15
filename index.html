@@ -247,7 +247,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.4.2 &nbsp;·&nbsp; 15/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.4.3 &nbsp;·&nbsp; 15/10/2026</div>
 
 <script>
 'use strict';
@@ -431,9 +431,9 @@ async function restoreFiles() {
 }
 
 // ─── UI HELPERS ───────────────────────────────────────────────────────────────
-// "New analysis" is only useful when there is something to clear.
+// "New analysis" only becomes available once an analysis has been run (until then the Clear buttons suffice).
 function updateNewAnalysisBtn() {
-  document.getElementById('newAnalysisBtn').disabled = !(csvFiles.length || metaBytes || review);
+  document.getElementById('newAnalysisBtn').disabled = !(review && review.analysis);
 }
 function updateProcessBtn() {
   updateNewAnalysisBtn();

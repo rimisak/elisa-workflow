@@ -100,6 +100,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
     <div class="app-icon" id="appIcon"></div>
     <h1>ELISA Workflow</h1>
   </div>
+  <button class="btn btn-secondary btn-sm" id="newAnalysisBtn" onclick="newAnalysis()" title="Clear both files and the current analysis">New analysis</button>
 </div>
 
 <!-- CSV Drop Zone -->
@@ -184,7 +185,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 <!-- Per-plate visualizations (populated after processing) -->
 <div id="chartsSection" style="display:none"></div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.2.4 &nbsp;·&nbsp; 15/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.2.5 &nbsp;·&nbsp; 15/10/2026</div>
 
 <script>
 'use strict';
@@ -416,6 +417,22 @@ function clearMeta() {
 }
 
 // Log
+// Reset everything: both input files, the review on screen, the log and the saved session.
+function newAnalysis() {
+  if ((csvFiles.length || metaBytes || review) &&
+      !confirm('Start a new analysis? This clears both files and the current analysis, including any exclusions.')) return;
+  runGen++;
+  dropSession();
+  review = null;
+  clearCSV();
+  clearMeta();
+  const sec = document.getElementById('chartsSection');
+  sec.style.display = 'none'; sec.innerHTML = '';
+  const box = document.getElementById('logBox');
+  box.innerHTML = ''; box.style.display = 'none';
+  window.scrollTo({top: 0, behavior: 'smooth'});
+}
+
 function clearLog() {
   const box = document.getElementById('logBox');
   box.innerHTML = '';
@@ -2256,7 +2273,9 @@ function downloadResults() {
   log(`✅ Downloaded ${r.outputName}.xlsx (${r.excl.size} point(s) excluded).`, 'success');
 }
 
+let runGen = 0;   // bumped by newAnalysis() so an in-flight run can tell it was cancelled
 async function runProcessing(saved) {
+  const gen = ++runGen;
   const btn = document.getElementById('processBtn');
   btn.disabled = true;
   btn.textContent = 'Processing...';
@@ -2315,6 +2334,7 @@ async function runProcessing(saved) {
     log('Looking for outliers...', 'info');
     await new Promise(r => setTimeout(r, 10));
     review.suggested = await computeSuggestions(review.analysis.plateCharts, fitConfig);
+    if (gen !== runGen) { btn.disabled = false; btn.textContent = 'Process'; updateProcessBtn(); return; }
     log(`  ${review.suggested.size} suggested outlier(s).`);
 
     if (saved) {

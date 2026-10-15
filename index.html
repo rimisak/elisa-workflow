@@ -13,8 +13,6 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
 .toolbar-title{display:flex;align-items:center;gap:10px}
 .app-icon{width:36px;height:36px;background:linear-gradient(135deg,#007aff,#5ac8fa);border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;font-weight:700}
-.gear-btn{background:none;border:none;font-size:20px;cursor:pointer;padding:6px;border-radius:8px;transition:background .15s}
-.gear-btn:hover{background:#e5e5ea}
 .card{background:#fff;border-radius:14px;padding:20px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .card-label{font-size:13px;font-weight:600;color:#6e6e73;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
 .drop-zone{border:2px dashed #c7c7cc;border-radius:10px;padding:24px;text-align:center;cursor:pointer;transition:all .2s;user-select:none;min-height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
@@ -59,17 +57,6 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .switch .slider::before{content:"";position:absolute;height:24px;width:24px;left:2px;top:2px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.3)}
 .switch input:checked + .slider{background:#34c759}
 .switch input:checked + .slider::before{transform:translateX(18px)}
-/* Settings panel */
-.settings-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:100;align-items:center;justify-content:center}
-.settings-overlay.open{display:flex}
-.settings-panel{background:#fff;border-radius:16px;padding:24px;width:520px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,.3)}
-.settings-panel h2{font-size:17px;font-weight:600;margin-bottom:16px}
-.fit-grid{display:grid;grid-template-columns:80px 1fr 1fr 1fr;gap:6px;align-items:center;margin-bottom:14px}
-.fit-grid-header{font-size:12px;font-weight:600;color:#6e6e73;text-align:center}
-.fit-grid-label{font-size:13px;font-weight:500;color:#3a3a3c}
-.fit-input{padding:6px 8px;border-radius:6px;border:1px solid #c7c7cc;font-size:13px;width:100%;outline:none;text-align:right}
-.fit-input:focus{border-color:#007aff}
-.settings-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:6px}
 .num-plates-row{display:flex;align-items:center;gap:8px;margin-top:8px}
 .num-plates-row label{font-size:13px;color:#6e6e73}
 .num-plates-row input{width:60px;padding:4px 8px;border-radius:6px;border:1px solid #c7c7cc;font-size:13px;outline:none}
@@ -113,7 +100,6 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
     <div class="app-icon">E</div>
     <h1>ELISA Workflow</h1>
   </div>
-  <button class="gear-btn" onclick="openSettings()" title="Curve fit settings">⚙️</button>
 </div>
 
 <!-- CSV Drop Zone -->
@@ -198,40 +184,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 <!-- Per-plate visualizations (populated after processing) -->
 <div id="chartsSection" style="display:none"></div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.1.0 &nbsp;·&nbsp; 15/10/2026</div>
-
-<!-- Settings overlay -->
-<div class="settings-overlay" id="settingsOverlay" onclick="closeSettingsIfBg(event)">
-  <div class="settings-panel">
-    <h2>Curve Fit Settings (4PL)</h2>
-    <div class="fit-grid">
-      <div class="fit-grid-header"></div>
-      <div class="fit-grid-header">Lower Bound</div>
-      <div class="fit-grid-header">Initial Guess</div>
-      <div class="fit-grid-header">Upper Bound</div>
-      <div class="fit-grid-label">Bottom</div>
-      <input class="fit-input" id="f_lo_bottom" type="number" step="any">
-      <input class="fit-input" id="f_p0_bottom" type="number" step="any">
-      <input class="fit-input" id="f_hi_bottom" type="number" step="any">
-      <div class="fit-grid-label">Top</div>
-      <input class="fit-input" id="f_lo_top" type="number" step="any">
-      <input class="fit-input" id="f_p0_top" type="number" step="any">
-      <input class="fit-input" id="f_hi_top" type="number" step="any">
-      <div class="fit-grid-label">IC50</div>
-      <input class="fit-input" id="f_lo_ic50" type="number" step="any">
-      <input class="fit-input" id="f_p0_ic50" type="number" step="any">
-      <input class="fit-input" id="f_hi_ic50" type="number" step="any">
-      <div class="fit-grid-label">Hill</div>
-      <input class="fit-input" id="f_lo_hill" type="number" step="any">
-      <input class="fit-input" id="f_p0_hill" type="number" step="any">
-      <input class="fit-input" id="f_hi_hill" type="number" step="any">
-    </div>
-    <div class="settings-actions">
-      <button class="btn btn-secondary" onclick="resetFit()">Reset to Standard</button>
-      <button class="btn btn-primary" onclick="closeSettings()">Done</button>
-    </div>
-  </div>
-</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.2.0 &nbsp;·&nbsp; 15/10/2026</div>
 
 <script>
 'use strict';
@@ -290,8 +243,7 @@ function saveSession() {
       subtractBg: document.getElementById('subtractBgChk').checked,
       corrEd50: document.getElementById('corrEd50Chk').checked,
       outputName: document.getElementById('outputName').value
-    },
-    fitConfig
+    }
   });
 }
 // New or removed input files make any saved review (and the one on screen) obsolete.
@@ -312,7 +264,6 @@ async function restoreFiles() {
     document.getElementById('subtractBgChk').checked = !!o.subtractBg;
     document.getElementById('corrEd50Chk').checked = !!o.corrEd50;
     if (o.outputName) document.getElementById('outputName').value = o.outputName;
-    if (sess.fitConfig) fitConfig = sess.fitConfig;
     runProcessing(sess);
   }
 }
@@ -417,35 +368,6 @@ function clearMeta() {
   updateProcessBtn();
 }
 
-// Settings
-const FIT_IDS = [
-  ['f_lo_bottom','f_p0_bottom','f_hi_bottom'],
-  ['f_lo_top',   'f_p0_top',   'f_hi_top'  ],
-  ['f_lo_ic50',  'f_p0_ic50',  'f_hi_ic50' ],
-  ['f_lo_hill',  'f_p0_hill',  'f_hi_hill' ]
-];
-function openSettings() {
-  for (let i = 0; i < 4; i++) {
-    document.getElementById(FIT_IDS[i][0]).value = fitConfig.lower[i];
-    document.getElementById(FIT_IDS[i][1]).value = fitConfig.p0[i];
-    document.getElementById(FIT_IDS[i][2]).value = fitConfig.upper[i];
-  }
-  document.getElementById('settingsOverlay').classList.add('open');
-}
-function closeSettings() {
-  for (let i = 0; i < 4; i++) {
-    fitConfig.lower[i] = parseFloat(document.getElementById(FIT_IDS[i][0]).value) || DEFAULT_FIT.lower[i];
-    fitConfig.p0[i]    = parseFloat(document.getElementById(FIT_IDS[i][1]).value) || DEFAULT_FIT.p0[i];
-    fitConfig.upper[i] = parseFloat(document.getElementById(FIT_IDS[i][2]).value) || DEFAULT_FIT.upper[i];
-  }
-  document.getElementById('settingsOverlay').classList.remove('open');
-}
-function closeSettingsIfBg(e) { if (e.target === e.currentTarget) closeSettings(); }
-function resetFit() {
-  fitConfig = JSON.parse(JSON.stringify(DEFAULT_FIT));
-  openSettings();
-}
-
 // Log
 function clearLog() {
   const box = document.getElementById('logBox');
@@ -500,6 +422,18 @@ function createTemplate() {
   const wsDil = XLSX.utils.aoa_to_sheet(dilData);
   wsDil['!cols'] = [{wch:42},{wch:12}];
   XLSX.utils.book_append_sheet(wb, wsDil, 'Dilutions');
+
+  // Settings sheet: 4PL fit bounds and starting values (delete the sheet to use the built-in defaults)
+  const setData = [['Parameter', 'Lower Bound', 'Initial Guess', 'Upper Bound']];
+  FIT_PARAMS.forEach((name, i) => setData.push([
+    name === 'ic50' ? 'IC50' : name[0].toUpperCase() + name.slice(1),
+    DEFAULT_FIT.lower[i], DEFAULT_FIT.p0[i], DEFAULT_FIT.upper[i]]));
+  setData.push([]);
+  setData.push(['Curve-fit settings for the 4PL. Delete this sheet to use the built-in defaults.']);
+  setData.push(['Hill: enter positive values (sample curves fall with dilution); the standard curve uses the mirrored negative range automatically.']);
+  const wsSet = XLSX.utils.aoa_to_sheet(setData);
+  wsSet['!cols'] = [{wch:14},{wch:14},{wch:14},{wch:14}];
+  XLSX.utils.book_append_sheet(wb, wsSet, 'Settings');
 
   const buf = XLSX.write(wb, {bookType:'xlsx', type:'array'});
   downloadBlob(new Blob([buf], {type:'application/octet-stream'}), 'MetaData.xlsx');
@@ -707,6 +641,29 @@ function subtractBackground(grid, numPlates) {
 }
 
 // ─── METADATA PARSING ─────────────────────────────────────────────────────────
+// "Settings" sheet: rows Bottom / Top / IC50 / Hill, columns Lower Bound / Initial Guess / Upper Bound.
+// Missing sheet, row or unusable numbers fall back to DEFAULT_FIT (per parameter).
+const FIT_PARAMS = ['bottom', 'top', 'ic50', 'hill'];
+function parseFitSettings(wb) {
+  const fit = JSON.parse(JSON.stringify(DEFAULT_FIT));
+  const warnings = [];
+  const sheet = wb.Sheets['Settings'];
+  if (!sheet) return {fit, fitSource: 'defaults (no Settings sheet)', fitWarnings: warnings};
+  const rows = XLSX.utils.sheet_to_json(sheet, {header:1});
+  let used = 0;
+  FIT_PARAMS.forEach((name, i) => {
+    const row = rows.find(r => r && String(r[0] == null ? '' : r[0]).trim().toLowerCase() === name);
+    if (!row) { warnings.push(`${name}: row missing, using default`); return; }
+    let [lo, p0, hi] = [row[1], row[2], row[3]].map(v => (v === '' || v == null) ? NaN : Number(v));
+    if (![lo, p0, hi].every(isFinite)) { warnings.push(`${name}: needs three numbers, using default`); return; }
+    if (name === 'hill') { lo = Math.abs(lo); p0 = Math.abs(p0); hi = Math.abs(hi); }  // sign is handled per curve type
+    if (lo > hi) [lo, hi] = [hi, lo];
+    fit.lower[i] = lo; fit.p0[i] = Math.min(Math.max(p0, lo), hi); fit.upper[i] = hi;
+    used++;
+  });
+  return {fit, fitSource: used ? 'Settings sheet' : 'defaults', fitWarnings: warnings};
+}
+
 function parseMetadata(bytes) {
   const wb = XLSX.read(bytes, {type:'array', cellStyles:true});
 
@@ -755,7 +712,8 @@ function parseMetadata(bytes) {
     })
   );
 
-  return {names, colors, seriesST, seriesSA, stdStart, stdDil, sampleStart, sampleDil};
+  const {fit, fitSource, fitWarnings} = parseFitSettings(wb);
+  return {names, colors, seriesST, seriesSA, stdStart, stdDil, sampleStart, sampleDil, fit, fitSource, fitWarnings};
 }
 
 // ─── PROCESSING PIPELINE ──────────────────────────────────────────────────────
@@ -2263,6 +2221,9 @@ async function runProcessing(saved) {
     log(`  ${meta.names.length} plate name row(s) found.`);
     log(`  Standard: ${meta.stdStart} ng/mL, 1:${meta.stdDil} dilution.`);
     log(`  Samples: 1:${meta.sampleStart} start, 1:${meta.sampleDil} dilution.`);
+    fitConfig = meta.fit;
+    log(`  Curve-fit settings: ${meta.fitSource}.`);
+    for (const w of meta.fitWarnings) log(`  Settings: ${w}`, 'warn');
 
     // Names must be on the grid before series are keyed by sample name.
     for (let p = 0; p < numPlates; p++) {

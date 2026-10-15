@@ -305,7 +305,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.14.0 &nbsp;·&nbsp; 15/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.14.1 &nbsp;·&nbsp; 15/10/2026</div>
 
 <script>
 'use strict';
@@ -1415,7 +1415,12 @@ const HOOK = {
   REL_RISE: 0.04,      // ...and by this fraction of the peak
   SIGMA: 2,            // ...and by this many robust SDs of the earlier points
   PLATEAU_FRAC: 0.75,  // earlier points must all be at least this fraction of the peak (a plateau)
-  DROP_AFTER: 0.15     // some later point must fall at least this far below the peak (it does descend)
+  DROP_AFTER: 0.15,    // some later point must fall at least this far below the peak (it does descend)
+  // Near-ceiling shortcut: when the series sits at the top of the OD range, a concentrated reading that
+  // is lower than a later one is almost always saturation, so no statistics are needed.
+  CEILING_OD: 2.0,     // the peak must be at least this high (the standard fit already treats OD > 2 as saturated)
+  EARLY_N: 4,          // ...and be one of the first this-many readings (the plateau end of the series)
+  CEIL_MIN_RISE: 0.03  // OD: ignore differences below the plate noise
 };
 // Returns {vals, plateau, n} with the earlier points raised to the peak, or null when there is no hunch.
 function applyHookCorrection(vals) {
@@ -1425,15 +1430,22 @@ function applyHookCorrection(vals) {
   let m = idx[0];
   for (const i of idx) if (vals[i] > vals[m]) m = i;
   const pre = idx.filter(i => i < m), post = idx.filter(i => i > m);
-  if (pre.length < HOOK.MIN_PRE || post.length < HOOK.MIN_POST) return null;
   const peak = vals[m];
+  const out = vals.slice();
+  // Near-ceiling shortcut: first dilution(s) lower than a later one while the OD is at the ceiling.
+  if (pre.length && post.length && peak >= HOOK.CEILING_OD && idx.indexOf(m) < HOOK.EARLY_N
+      && peak - Math.max(...pre.map(i => vals[i])) >= HOOK.CEIL_MIN_RISE
+      && Math.min(...pre.map(i => vals[i])) >= HOOK.PLATEAU_FRAC * peak) {
+    for (const i of pre) out[i] = peak;
+    return {vals: out, plateau: peak, n: pre.length};
+  }
+  if (pre.length < HOOK.MIN_PRE || post.length < HOOK.MIN_POST) return null;
   const med = a => { const b = a.slice().sort((x, y) => x - y), h = b.length >> 1; return b.length % 2 ? b[h] : (b[h - 1] + b[h]) / 2; };
   const preV = pre.map(i => vals[i]);
   const mid = med(preV), sd = 1.4826 * med(preV.map(v => Math.abs(v - mid)));
   if (peak - mid < Math.max(HOOK.MIN_RISE, HOOK.REL_RISE * peak, HOOK.SIGMA * sd)) return null;
   if (Math.min(...preV) < HOOK.PLATEAU_FRAC * peak) return null;
   if (Math.min(...post.map(i => vals[i])) > (1 - HOOK.DROP_AFTER) * peak) return null;
-  const out = vals.slice();
   for (const i of pre) out[i] = peak;
   return {vals: out, plateau: peak, n: pre.length};
 }

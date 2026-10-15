@@ -247,7 +247,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.4.3 &nbsp;·&nbsp; 15/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.5.0 &nbsp;·&nbsp; 15/10/2026</div>
 
 <script>
 'use strict';
@@ -643,10 +643,15 @@ function createTemplate() {
     name === 'ic50' ? 'IC50' : name[0].toUpperCase() + name.slice(1),
     DEFAULT_FIT.lower[i], DEFAULT_FIT.p0[i], DEFAULT_FIT.upper[i]]));
   setData.push([]);
+  setData.push(['Universal Standard Curve (optional)', 'Value']);
+  ['Bottom', 'Top', 'IC50 (ng/mL)', 'Hill'].forEach(n => setData.push([n, '']));
+  setData.push([]);
+  setData.push(['Fill all four values to interpolate every plate against this one standard curve; leave them empty to fit each plate\'s own standard.']);
+  setData.push([]);
   setData.push(['Curve-fit settings for the 4PL. Delete this sheet to use the built-in defaults.']);
   setData.push(['Hill: enter positive values (sample curves fall with dilution); the standard curve uses the mirrored negative range automatically.']);
   const wsSet = XLSX.utils.aoa_to_sheet(setData);
-  wsSet['!cols'] = [{wch:14},{wch:14},{wch:14},{wch:14}];
+  wsSet['!cols'] = [{wch:34},{wch:14},{wch:14},{wch:14}];
   XLSX.utils.book_append_sheet(wb, wsSet, 'Settings');
 
   const buf = XLSX.write(wb, {bookType:'xlsx', type:'array'});
@@ -875,7 +880,26 @@ function parseFitSettings(wb) {
     fit.lower[i] = lo; fit.p0[i] = Math.min(Math.max(p0, lo), hi); fit.upper[i] = hi;
     used++;
   });
-  return {fit, fitSource: used ? 'Settings sheet' : 'defaults', fitWarnings: warnings};
+  return {fit, fitSource: used ? 'Settings sheet' : 'defaults', fitWarnings: warnings,
+          universalStd: parseUniversalStd(rows, warnings)};
+}
+
+// Optional "Universal Standard Curve" block on the Settings sheet: a header row, then Bottom/Top/IC50/Hill
+// with the value in column B. All four numbers → every plate interpolates against this one curve.
+function parseUniversalStd(rows, warnings) {
+  const h = rows.findIndex(r => r && /^universal standard/i.test(String(r[0] == null ? '' : r[0]).trim()));
+  if (h < 0) return null;
+  const vals = [];
+  for (let k = 1; k <= 4; k++) {
+    const r = rows[h + k] || [];
+    const v = (r[1] === '' || r[1] == null) ? NaN : Number(r[1]);
+    vals.push(v);
+  }
+  if (vals.every(v => isNaN(v))) return null;                       // block left empty: per-plate standards
+  if (!vals.every(isFinite)) { warnings.push('universal standard curve: needs all four values, ignored'); return null; }
+  if (vals[2] <= 0) { warnings.push('universal standard curve: IC50 must be positive, ignored'); return null; }
+  vals[3] = -Math.abs(vals[3]);                                      // standard curves rise with concentration
+  return vals;
 }
 
 function parseMetadata(bytes) {
@@ -926,8 +950,8 @@ function parseMetadata(bytes) {
     })
   );
 
-  const {fit, fitSource, fitWarnings} = parseFitSettings(wb);
-  return {names, colors, seriesST, seriesSA, stdStart, stdDil, sampleStart, sampleDil, fit, fitSource, fitWarnings};
+  const {fit, fitSource, fitWarnings, universalStd} = parseFitSettings(wb);
+  return {names, colors, seriesST, seriesSA, stdStart, stdDil, sampleStart, sampleDil, fit, fitSource, fitWarnings, universalStd};
 }
 
 // ─── PROCESSING PIPELINE ──────────────────────────────────────────────────────
@@ -1055,15 +1079,19 @@ function stdFitConfig(fc) {
   return {lower: lo, upper: hi, p0};
 }
 
-function calculateConcentrations(series, seriesST, seriesSA, fc) {
+function calculateConcentrations(series, seriesST, seriesSA, fc, universalStd) {
   fc = stdFitConfig(fc);
   const stdPts = stdFitPoints(series.get('standard') || [], seriesST);
   const xST = stdPts.map(p=>p.x), stdVals = stdPts.map(p=>p.y);
   let params;
-  try {
-    params = fitBest4PL(xST, stdVals, fc);
-  } catch(_) {
-    params = fc.p0;
+  if (universalStd) {
+    params = universalStd;   // one curve for every plate; the plate's own standard points are only plotted
+  } else {
+    try {
+      params = fitBest4PL(xST, stdVals, fc);
+    } catch(_) {
+      params = fc.p0;
+    }
   }
   const [bottom, top, ic50, hill] = params;
   const STindex = stdPts.length ? stdPts[0].i : 0;
@@ -1150,14 +1178,14 @@ function suggestOutliers(pts, fit, fc) {
 }
 
 // Suggested outliers from a first, unexcluded analysis. Returns a Set of exKeys.
-async function computeSuggestions(plateCharts, fc) {
+async function computeSuggestions(plateCharts, fc, universal) {
   const found = new Set();
   for (const pc of plateCharts) {
     const series = pc.samples.map(s => [s.points, s.params]);
-    series.push([pc.std.points, pc.std.params]);
+    if (!universal) series.push([pc.std.points, pc.std.params]);
     const std = stdFitConfig(fc);
     series.forEach(([pts, params], si) => {
-      const isStd = si === series.length - 1;
+      const isStd = !universal && si === series.length - 1;
       for (const q of suggestOutliers(pts, params, isStd ? std : fc)) found.add(q.key);
     });
     await new Promise(r => setTimeout(r, 0));
@@ -1255,7 +1283,7 @@ function buildDataSheet(grid, numPlates, meta, fc, corrEnabled, logFn, excl, cac
     const {row: ec50Row, fits: ec50Fits} = calculateEC50s(series, seriesSA, fc);
     logFn(`  Plate ${p+1}: calculating concentrations...`);
     const {conRow, choValRow, choDilRow, fittedParams, STindex,
-           stdPoints, stdParams, sampleChoices} = calculateConcentrations(series, seriesST, seriesSA, fc);
+           stdPoints, stdParams, sampleChoices} = calculateConcentrations(series, seriesST, seriesSA, fc, meta.universalStd);
     allEC50Rows.push(...ec50Row);
     allConRows.push(...conRow);
     allCVRows.push(...choValRow);
@@ -1447,6 +1475,12 @@ function buildProtocolSheet(meta, plateFits, plateCharts, fit) {
   data.push([{v:'Standard curve uses the mirrored (negative) Hill range so it rises with concentration.', t:'s', s:{font:{sz:9}}}]);
   data.push([]);
 
+  if (meta.universalStd) {
+    const [bottom, top, ic50, hill] = meta.universalStd;
+    data.push([{v:'Universal Standard Curve (4PL), from the Settings sheet, used for all plates', t:'s', s:hdrS}]);
+    data.push(['','Bottom','Top','IC50 (ng/mL)','Hill'].map(v=>({v,t:'s',s:boldS})));
+    data.push([{v:'All plates', t:'s', s:lblS}, {v:r4(bottom), t:'n'}, {v:r4(top), t:'n'}, {v:r4(ic50), t:'n'}, {v:r4(hill), t:'n'}]);
+  } else {
   data.push([{v:'Fitted Standard Curve Parameters (4PL)', t:'s', s:hdrS}]);
   data.push(['Plate','Bottom','Top','IC50 (ng/mL)','Hill','Conc. Points Used'].map(v=>({v,t:'s',s:boldS})));
   plateFits.forEach(({params}, i) => {
@@ -1458,6 +1492,7 @@ function buildProtocolSheet(meta, plateFits, plateCharts, fit) {
       {v: used, t:'n'}
     ]);
   });
+  }
   data.push([]);
 
   data.push([{v:'Fitted Sample Curve Parameters (4PL)', t:'s', s:hdrS}]);
@@ -2332,6 +2367,7 @@ async function runProcessing(saved) {
     fitConfig = meta.fit;
     log(`  Curve-fit settings: ${meta.fitSource}.`);
     for (const w of meta.fitWarnings) log(`  Settings: ${w}`, 'warn');
+    if (meta.universalStd) log('  Universal standard curve from the Settings sheet is used for all plates.');
 
     // Names must be on the grid before series are keyed by sample name.
     for (let p = 0; p < numPlates; p++) {
@@ -2347,7 +2383,7 @@ async function runProcessing(saved) {
 
     log('Looking for outliers...', 'info');
     await new Promise(r => setTimeout(r, 10));
-    review.suggested = await computeSuggestions(review.analysis.plateCharts, fitConfig);
+    review.suggested = await computeSuggestions(review.analysis.plateCharts, fitConfig, !!meta.universalStd);
     if (gen !== runGen) { btn.disabled = false; btn.textContent = 'Process'; updateProcessBtn(); return; }
     log(`  ${review.suggested.size} suggested outlier(s).`);
 

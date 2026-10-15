@@ -189,7 +189,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 <!-- Per-plate visualizations (populated after processing) -->
 <div id="chartsSection" style="display:none"></div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.2.6 &nbsp;·&nbsp; 15/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.2.7 &nbsp;·&nbsp; 15/10/2026</div>
 
 <script>
 'use strict';
@@ -370,7 +370,12 @@ function loadCSVFiles(files) {
     showCSVState();
   });
 }
+// Suggested plate count for "Create MetaData.xlsx" follows the number of loaded CSV files.
+function syncTemplatePlates() {
+  document.getElementById('numPlatesInput').value = csvFiles.length ? Math.min(csvFiles.length, 40) : 6;
+}
 function showCSVState() {
+  syncTemplatePlates();
   const zone = document.getElementById('csvZone');
   zone.classList.add('has-files');
   document.getElementById('csvZoneText').textContent = `${csvFiles.length} file(s) loaded`;
@@ -386,6 +391,7 @@ function clearCSV() {
   document.getElementById('csvInput').value = '';
   storeDel('csvFiles');
   dropSession();
+  syncTemplatePlates();
   updateProcessBtn();
 }
 

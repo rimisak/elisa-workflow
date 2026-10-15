@@ -267,7 +267,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.10.1 &nbsp;·&nbsp; 15/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.11.0 &nbsp;·&nbsp; 15/10/2026</div>
 
 <script>
 'use strict';
@@ -1400,7 +1400,7 @@ function suggestOutliers(pts, fit, fc) {
 const FIT_STEPS_PER_PLATE = 13;
 async function warmCache(grid, numPlates, meta, fc, excl, cache, logFn, tick) {
   for (let p = 0; p < numPlates; p++) {
-    const sig = p + ':' + [...excl].filter(k => k.startsWith(p + '|')).sort().join(',');
+    const sig = plateSig(p, excl);
     if (cache.has(sig)) { await tick(FIT_STEPS_PER_PLATE); continue; }
     const it = plateEntryGen(grid, p, meta, fc, excl, logFn);
     let r;
@@ -1450,6 +1450,145 @@ async function computeSuggestions(plateCharts, fc, universal, tick) {
     }
   }
   return found;
+}
+
+// ─── PARALLEL FITTING (Web Workers) ───────────────────────────────────────────
+// The fitting functions above are pure, so a pool of workers runs the very same code: each worker's
+// source is built at run time from those functions (no extra files — works offline and from file://).
+// A worker gets the grid and settings once, then fits whole plates / screens whole plates for
+// outliers. If workers are unavailable or fail, callers fall back to the main-thread path.
+function plateSig(p, excl) { return p + ':' + [...excl].filter(k => k.startsWith(p + '|')).sort().join(','); }
+
+function fitWorkerSource() {
+  const fns = [model4PL, solveGaussian, levenbergMarquardt, inverse4PL, exKey, getSeries, estimateIC50,
+               fitBest4PL, ec50Gen, stdFitPoints, sampleChoicePoint, stdFitConfig, calculateConcentrations,
+               plateEntryGen, suggestOutliers];
+  return `const OUTLIER = ${JSON.stringify(OUTLIER)};
+${fns.map(f => f.toString()).join('\n')}
+let ctx = null;
+self.onmessage = e => {
+  const m = e.data, id = m.id;
+  if (m.type === 'init') { ctx = m; ctx.stdFc = stdFitConfig(m.fc); return; }
+  try {
+    if (m.type === 'plate') {
+      const it = plateEntryGen(ctx.grid, m.p, ctx.meta, ctx.fc, new Set(m.excl), msg => self.postMessage({type: 'log', id, msg}));
+      let r;
+      while (!(r = it.next()).done) self.postMessage({type: 'tick', id});
+      if (!m.screen) { self.postMessage({type: 'done', id, result: r.value}); return; }
+      // Outlier screening on the plate's fresh (unexcluded) fits, in the same job.
+      const pc = r.value.plateChart, series = pc.samples.map(s => [s.points, s.params, false]);
+      if (!ctx.meta.universalStd) series.push([pc.std.points, pc.std.params, true]);
+      const sug = [];
+      for (const [pts, params, isStd] of series) {
+        for (const q of suggestOutliers(pts, params, isStd ? ctx.stdFc : ctx.fc)) sug.push(q.key);
+        self.postMessage({type: 'tick', id});
+      }
+      for (let k = series.length; k < ${FIT_STEPS_PER_PLATE}; k++) self.postMessage({type: 'tick', id});
+      self.postMessage({type: 'done', id, result: {entry: r.value, sug}});
+    }
+  } catch (err) { self.postMessage({type: 'error', id, message: String((err && err.message) || err)}); }
+};`;
+}
+
+// Returns null when workers cannot be created. `run(job, onTick, onLog)` resolves with the job's result.
+function createFitPool(grid, meta, fc, maxWorkers) {
+  if (typeof Worker === 'undefined' || typeof Blob === 'undefined' || typeof URL.createObjectURL !== 'function') return null;
+  const size = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 4) - 1, maxWorkers || 8));
+  const workers = [], idle = [], queue = [], running = new Map();
+  let url = null, closed = false, nextId = 1;
+  const slim = {seriesST: meta.seriesST, seriesSA: meta.seriesSA, universalStd: meta.universalStd || null};
+  const pump = () => {
+    while (idle.length && queue.length) {
+      const w = idle.pop(), job = queue.shift();
+      running.set(w, job);
+      w.postMessage({...job.msg, id: job.id});
+    }
+  };
+  const failAll = err => {
+    for (const j of [...running.values(), ...queue]) j.reject(err);
+    running.clear(); queue.length = 0;
+  };
+  const pool = {
+    size,
+    run(msg, onTick, onLog) {
+      if (closed) return Promise.reject(new Error('pool closed'));
+      return new Promise((resolve, reject) => { queue.push({msg, id: nextId++, resolve, reject, onTick, onLog}); pump(); });
+    },
+    close() {
+      if (closed) return;
+      closed = true;
+      workers.forEach(w => w.terminate());
+      if (url) URL.revokeObjectURL(url);
+      failAll(new Error('pool closed'));
+    }
+  };
+  try {
+    url = URL.createObjectURL(new Blob([fitWorkerSource()], {type: 'text/javascript'}));
+    for (let i = 0; i < size; i++) {
+      const w = new Worker(url);
+      w.onmessage = e => {
+        const m = e.data, job = running.get(w);
+        if (!job) return;
+        if (m.type === 'tick') { job.onTick && job.onTick(); return; }
+        if (m.type === 'log') { job.onLog && job.onLog(m.msg); return; }
+        running.delete(w); idle.push(w);
+        if (m.type === 'done') job.resolve(m.result); else job.reject(new Error(m.message));
+        pump();
+      };
+      w.onerror = ev => { ev.preventDefault && ev.preventDefault(); const j = running.get(w); failAll(new Error('worker failed: ' + (ev.message || 'unknown error'))); pool.broken = true; };
+      w.postMessage({type: 'init', grid, meta: slim, fc});
+      workers.push(w); idle.push(w);
+    }
+  } catch (err) { pool.close(); return null; }
+  return pool;
+}
+
+// Same contract as warmCache: fits every plate that is not cached yet. Falls back to the main thread
+// when the pool is missing or breaks (already cached plates are skipped, so nothing is redone).
+async function warmCacheParallel(pool, grid, numPlates, meta, fc, excl, cache, logFn, tick) {
+  if (pool) {
+    try {
+      let chain = Promise.resolve();
+      const tickSoon = () => { chain = chain.then(() => tick(1)); chain.catch(() => {}); return chain; };
+      const jobs = [];
+      for (let p = 0; p < numPlates; p++) {
+        const sig = plateSig(p, excl);
+        if (cache.has(sig)) { chain = chain.then(() => tick(FIT_STEPS_PER_PLATE)); continue; }
+        jobs.push(pool.run({type: 'plate', p, excl: [...excl].filter(k => k.startsWith(p + '|'))}, tickSoon, logFn)
+          .then(entry => { cache.set(sig, entry); }));
+      }
+      await Promise.all([...jobs, chain.then(() => 0)]);
+      await chain;
+      return true;
+    } catch (err) {
+      if (/cancelled/.test(err.message)) throw err;
+      logFn('  Parallel fitting unavailable (' + err.message + ') — continuing on the main thread.');
+      pool.close();
+    }
+  }
+  await warmCache(grid, numPlates, meta, fc, excl, cache, logFn, tick);
+  return false;
+}
+
+// First run: fits every plate and screens it for outlier suggestions in one worker job (no barrier
+// between the two phases, so the pool stays busy). Ticks: FIT_STEPS_PER_PLATE per phase and plate.
+// Returns the Set of suggested exKeys, or null when the pool failed (nothing is cached then).
+async function fitAndScreenParallel(pool, numPlates, excl, cache, logFn, tick) {
+  try {
+    const found = new Set();
+    let chain = Promise.resolve();
+    const tickSoon = () => { chain = chain.then(() => tick()); chain.catch(() => {}); return chain; };
+    await Promise.all([...Array(numPlates).keys()].map(p =>
+      pool.run({type: 'plate', p, excl: [...excl].filter(k => k.startsWith(p + '|')), screen: true}, tickSoon, logFn)
+        .then(r => { cache.set(plateSig(p, excl), r.entry); r.sug.forEach(k => found.add(k)); })));
+    await chain;
+    return found;
+  } catch (err) {
+    if (/cancelled/.test(err.message)) throw err;
+    logFn('  Parallel fitting unavailable (' + err.message + ') — continuing on the main thread.');
+    pool.close();
+    return null;
+  }
 }
 
 // ─── XLSX SHEET BUILDER ───────────────────────────────────────────────────────
@@ -1572,7 +1711,7 @@ function buildDataSheet(grid, numPlates, meta, fc, corrEnabled, logFn, excl, cac
   // `cache` (optional Map) memoises each plate's fits by that plate's exclusions, so
   // toggling one point only refits its own plate.
   for (let p=0; p<numPlates; p++) {
-    const sig = p + ':' + [...excl].filter(k => k.startsWith(p + '|')).sort().join(',');
+    const sig = plateSig(p, excl);
     const hit = cache && cache.get(sig);
     const entry = hit || drain(plateEntryGen(grid, p, meta, fc, excl, logFn));
     if (!hit && cache) cache.set(sig, entry);
@@ -2650,6 +2789,7 @@ async function runProcessing(saved) {
   updateSections();
 
   const CANCELLED = new Error('cancelled');
+  let pool = null;
   const prog = makeProgress();
   prog.set(0, 'Starting…');
 
@@ -2702,27 +2842,48 @@ async function runProcessing(saved) {
     await new Promise(r => setTimeout(r, 10));
     review = {grid, numPlates, meta, outputName, corrEnabled,
               excl: new Set(), suggested: new Set(), hidden: new Set(), accepted: new Set(), analysis: null, cache: new Map()};
-    // Progress: 5–70 % fitting (one step per series), 70–97 % outlier screening, then assembly.
-    const fitTotal = numPlates * FIT_STEPS_PER_PLATE;
-    let fitDone = 0;
-    await warmCache(grid, numPlates, meta, fitConfig, review.excl, review.cache, msg => log(msg), async u => {
-      if (gen !== runGen) throw CANCELLED;
-      fitDone += u;
-      prog.set(5 + 65 * fitDone / fitTotal, `Fitting curves… plate ${Math.min(numPlates, Math.ceil(fitDone / FIT_STEPS_PER_PLATE))} of ${numPlates}`);
-      await prog.yieldMaybe();
-    });
+    pool = numPlates >= 2 ? createFitPool(grid, meta, fitConfig, numPlates) : null;
+    log(pool ? `  Fitting in parallel on ${pool.size} worker(s).` : '  Fitting on the main thread.');
+    const tFit = performance.now();
+    let screened = false;
+    if (pool) {
+      // One job per plate does the fits and the outlier screening; progress covers 5–97 %.
+      const total = numPlates * FIT_STEPS_PER_PLATE * 2;
+      let done = 0;
+      const sug = await fitAndScreenParallel(pool, numPlates, review.excl, review.cache, msg => log(msg), async () => {
+        if (gen !== runGen) throw CANCELLED;
+        done++;
+        prog.set(5 + 92 * Math.min(1, done / total), `Fitting and screening… ${Math.min(100, Math.round(100 * done / total))} %`);
+        await prog.yieldMaybe();
+      });
+      if (sug) { review.suggested = sug; screened = true; }
+    }
+    if (!screened) {
+      // Progress: 5–70 % fitting (one step per series), 70–97 % outlier screening.
+      const fitTotal = numPlates * FIT_STEPS_PER_PLATE;
+      let fitDone = 0;
+      await warmCache(grid, numPlates, meta, fitConfig, review.excl, review.cache, msg => log(msg), async u => {
+        if (gen !== runGen) throw CANCELLED;
+        fitDone += u;
+        prog.set(5 + 65 * fitDone / fitTotal, `Fitting curves… plate ${Math.min(numPlates, Math.ceil(fitDone / FIT_STEPS_PER_PLATE))} of ${numPlates}`);
+        await prog.yieldMaybe();
+      });
+    }
     if (corrEnabled) { prog.set(70, 'Edge-effect analysis…'); await new Promise(r => setTimeout(r, 0)); }
     review.analysis = buildDataSheet(grid, numPlates, meta, fitConfig, corrEnabled, msg => log(msg), review.excl, review.cache);
 
     log('Looking for outliers...', 'info');
-    const sugTotal = review.analysis.plateCharts.reduce((n, pc) => n + pc.samples.length + (meta.universalStd ? 0 : 1), 0) || 1;
-    let sugDone = 0;
-    review.suggested = await computeSuggestions(review.analysis.plateCharts, fitConfig, !!meta.universalStd, async u => {
-      if (gen !== runGen) throw CANCELLED;
-      sugDone += u;
-      prog.set(70 + 27 * sugDone / sugTotal, 'Screening for outliers…');
-      await prog.yieldMaybe();
-    });
+    if (!screened) {
+      const sugTotal = review.analysis.plateCharts.reduce((n, pc) => n + pc.samples.length + (meta.universalStd ? 0 : 1), 0) || 1;
+      let sugDone = 0;
+      review.suggested = await computeSuggestions(review.analysis.plateCharts, fitConfig, !!meta.universalStd, async u => {
+        if (gen !== runGen) throw CANCELLED;
+        sugDone += u;
+        prog.set(70 + 27 * sugDone / sugTotal, 'Screening for outliers…');
+        await prog.yieldMaybe();
+      });
+    }
+    log(`  Fitting and screening took ${((performance.now() - tFit) / 1000).toFixed(1)} s.`);
     log(`  ${review.suggested.size} suggested outlier(s).`);
 
     if (saved) {
@@ -2754,6 +2915,7 @@ async function runProcessing(saved) {
     }
   }
 
+  if (pool) pool.close();
   btn.disabled = false;
   btn.textContent = 'Process';
   updateProcessBtn();

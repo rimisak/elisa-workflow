@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Working rules for every change
 
-- **Update the footer on every change.** The page footer in `index.html` (`.page-footer`, near the end of the markup) reads `Kasimir Reich · v<version> · <DD/MM/YYYY>`. Set the date to today's date and bump the version in the same edit. Version scheme: `MAJOR.MINOR.PATCH` — patch for fixes and tweaks, minor for new features, major for breaking changes to the workflow or output layout. Current: v1.10.1.
+- **Update the footer on every change.** The page footer in `index.html` (`.page-footer`, near the end of the markup) reads `Kasimir Reich · v<version> · <DD/MM/YYYY>`. Set the date to today's date and bump the version in the same edit. Version scheme: `MAJOR.MINOR.PATCH` — patch for fixes and tweaks, minor for new features, major for breaking changes to the workflow or output layout. Current: v1.11.0.
 - **Commit after each edit.** When a change is finished, commit it straight away (small, focused commits; message explains the why). Don't let edits pile up uncommitted.
 
 ## What this is
@@ -45,6 +45,10 @@ Four collapsible sections (`.sec`): **1 Upload** (CSV + metadata), **2 Processin
 ## Progress bar
 
 Processing shows a progress bar with percentage and an ETA (pace so far). Fitting is written as generators (`ec50Gen`, `plateEntryGen`) that yield after every series: `buildDataSheet` drains them synchronously (`drain`), while `runProcessing` first fills the per-plate cache through `warmCache`, awaiting a tick per series (`makeProgress().yieldMaybe()` repaints every ~30 ms). `computeSuggestions` ticks per series too. Bands: 5–70 % fitting, 70–97 % outlier screening. A cancelled run (New analysis) throws `CANCELLED` from a tick.
+
+## Parallel fitting (Web Workers)
+
+`createFitPool` builds a pool of module-less workers from a Blob whose source is assembled at run time from the fitting functions via `Function.prototype.toString` (`fitWorkerSource`) — no extra files, works offline. **Any function a worker needs must be listed in `fitWorkerSource`'s `fns` array**, and must not touch the DOM or other globals (`OUTLIER` is serialised in). A job is `{type:'plate', p, excl, screen}`: it runs `plateEntryGen` for one plate and, with `screen`, the outlier screening on the fresh fits, posting a tick per series. `fitAndScreenParallel` drives the first run (progress 5–97 %); `warmCacheParallel`/`reanalyzeAsync` refit many plates after bulk exclusions. If workers are missing or fail, the main-thread path (`warmCache` + `computeSuggestions`) runs instead, so keep that path working. Workers are throttled inside the hidden preview pane, so benchmark with Node `worker_threads` or a visible browser tab. Measured: 8 Example plates, 1 → 7 workers 9.4 s → 2.6 s.
 
 ## Processing pipeline (in `runProcessing`)
 

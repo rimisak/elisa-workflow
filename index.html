@@ -154,15 +154,15 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   <div class="card-label">Plate Reader CSV Files</div>
   <div class="drop-zone" id="csvZone" onclick="browseCSV()" ondragover="onDragOver(event,'csvZone')" ondragleave="onDragLeave('csvZone')" ondrop="onDropCSV(event)">
     <div class="drop-zone-icon">📂</div>
-    <div class="drop-zone-text" id="csvZoneText">Drop CSV files here or click to browse</div>
-    <div class="drop-zone-sub">BMG Omega plate reader exports (.CSV), multiple files allowed. An Excel file with “meta” in its name is moved to the Metadata slot.</div>
+    <div class="drop-zone-text" id="csvZoneText">Drop plate files here or click to browse</div>
+    <div class="drop-zone-sub">Plate reader exports from BMG, BioTek (Gen5), Tecan (i-control / Magellan) or SpectraMax (SoftMax Pro): .csv, .txt or .xlsx, one plate per file. The metadata workbook is moved to its own slot automatically.</div>
     <div class="file-list" id="csvFileList"></div>
   </div>
   <div style="margin-top:8px;display:flex;gap:8px;justify-content:space-between">
     <button class="btn btn-secondary btn-sm" onclick="createCsvTemplate()">Create a template file</button>
     <button class="btn btn-secondary btn-sm" onclick="clearCSV()">Clear</button>
   </div>
-  <input type="file" id="csvInput" accept=".csv,.CSV,.xlsx,.XLSX,.xls,.XLS" multiple style="display:none" onchange="onCSVInputChange()">
+  <input type="file" id="csvInput" accept=".csv,.txt,.tsv,.xlsx,.xls" multiple style="display:none" onchange="onCSVInputChange()">
 </div>
 
 <!-- Metadata -->
@@ -200,7 +200,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   <div class="option-row">
     <span class="option-text">
       <span class="option-title">Subtract 570 nm background</span>
-      <span class="option-sub">Use (450 − 570) per well for EC50, concentration &amp; the 450 block</span>
+      <span class="option-sub">Use (signal − reference read, e.g. 450 − 570) per well for EC50, concentration &amp; the 450 block</span>
     </span>
     <label class="switch">
       <input type="checkbox" id="subtractBgChk" checked>
@@ -267,7 +267,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.9.0 &nbsp;·&nbsp; 15/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.10.0 &nbsp;·&nbsp; 15/10/2026</div>
 
 <script>
 'use strict';
@@ -479,9 +479,9 @@ function browseCSV() { document.getElementById('csvInput').click(); }
 // The CSV area also accepts the metadata workbook: an Excel file with "meta" in its name goes to the
 // Metadata slot, so everything can be dropped at once. Other file types are ignored.
 function routeFiles(files) {
-  const csv  = files.filter(f => /\.csv$/i.test(f.name));
   const meta = files.find(f => /\.xlsx?$/i.test(f.name) && /meta/i.test(f.name));
-  if (csv.length) loadCSVFiles(csv);
+  const plates = files.filter(f => f !== meta && /\.(csv|txt|tsv|xlsx?)$/i.test(f.name));
+  if (plates.length) loadCSVFiles(plates);
   if (meta) loadMetaFile(meta);
 }
 function onCSVInputChange() {
@@ -493,32 +493,49 @@ function onDropCSV(e) {
   onDragLeave('csvZone');
   routeFiles(Array.from(e.dataTransfer.files));
 }
-function loadCSVFiles(files) {
+// Plate files from any supported reader (BMG, BioTek, Tecan, SpectraMax) are converted to the BMG
+// layout here, so the rest of the app only ever sees one format. An Excel file that is really the
+// metadata workbook (it has a Names sheet) is moved to the Metadata slot instead.
+async function loadCSVFiles(files) {
   if (!files.length) return;
-  const readers = files.map(f => new Promise(res => {
-    const r = new FileReader();
-    r.onload = ev => res({ name: f.name, text: ev.target.result });
-    r.readAsText(f);
-  }));
-  Promise.all(readers).then(results => {
-    csvFiles = results.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
-    storeSet('csvFiles', csvFiles);
-    dropSession();
-    showCSVState();
-  });
+  const results = [], problems = [];
+  let metaFile = null;
+  for (const f of files) {
+    try {
+      let text;
+      if (/\.xlsx?$/i.test(f.name)) {
+        const bytes = new Uint8Array(await f.arrayBuffer());
+        if (XLSX.read(bytes, { type: 'array', bookSheets: true }).SheetNames.includes('Names')) { metaFile = f; continue; }
+        text = workbookToText(bytes);
+      } else {
+        text = await f.text();
+      }
+      const n = normalizePlateText(text, f.name);
+      results.push({ name: f.name, text: n.text, reader: n.reader, warnings: n.warnings });
+    } catch (err) {
+      problems.push(`${f.name}: ${err.message}`);
+    }
+  }
+  if (problems.length) alert('Could not read:\n' + problems.join('\n'));
+  if (metaFile) loadMetaFile(metaFile);
+  if (!results.length) return;
+  csvFiles = results.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+  storeSet('csvFiles', csvFiles);
+  dropSession();
+  showCSVState();
 }
 function showCSVState() {
   const zone = document.getElementById('csvZone');
   zone.classList.add('has-files');
   document.getElementById('csvZoneText').textContent = `${csvFiles.length} file(s) loaded`;
   const list = document.getElementById('csvFileList');
-  list.innerHTML = csvFiles.map(f => `<div class="file-item">${escapeXml(f.name)}</div>`).join('');
+  list.innerHTML = csvFiles.map(f => `<div class="file-item">${escapeXml(f.name)}${f.reader && f.reader !== 'BMG LABTECH' ? ` <span style="color:#8e8e93">· ${escapeXml(f.reader)}</span>` : ''}${(f.warnings || []).map(w => `<div style="color:#b26a00;font-size:11px">⚠ ${escapeXml(w)}</div>`).join('')}</div>`).join('');
   updateProcessBtn();
 }
 function clearCSV() {
   csvFiles = [];
   document.getElementById('csvZone').classList.remove('has-files');
-  document.getElementById('csvZoneText').textContent = 'Drop CSV files here or click to browse';
+  document.getElementById('csvZoneText').textContent = 'Drop plate files here or click to browse';
   document.getElementById('csvFileList').innerHTML = '';
   document.getElementById('csvInput').value = '';
   storeDel('csvFiles');
@@ -813,6 +830,151 @@ function parseCsvText(text) {
   });
 }
 
+// ─── MULTI-READER IMPORT ──────────────────────────────────────────────────────
+// Everything downstream expects the BMG Omega layout (see the data-layout invariant), so other
+// readers are converted at load time into that same 29-line text. A 96-well plate export is found
+// structurally rather than by vendor template: a header row holding the column numbers 1…12 followed
+// by eight rows of twelve values. That covers BioTek Gen5 (plate-layout CSV), Tecan i-control /
+// Magellan (CSV or XLSX), Molecular Devices SoftMax Pro (tab-delimited, rows without letters) and
+// semicolon / decimal-comma locale exports. Each block is matched to a wavelength from the lines
+// just above it; the first block becomes the signal read and the second the reference read.
+const READER_PATTERNS = [
+  ['BioTek Gen5', /Gen5|BioTek|Synergy|Epoch|ELx\d|Cytation|Agilent/i],
+  ['Tecan', /Tecan|i-control|Magellan|Infinite|Spark|Sunrise|^<>/im],
+  ['SpectraMax / SoftMax Pro', /SoftMax|SpectraMax|##BLOCKS|Molecular Devices|~End/i]
+];
+function detectReader(text) {
+  if (/Raw Data \(/.test(text)) return 'BMG LABTECH';
+  for (const [name, re] of READER_PATTERNS) if (re.test(text)) return name;
+  return 'Generic plate matrix';
+}
+
+function splitReaderLine(line, delim) {
+  return line.split(delim).map(s => s.trim().replace(/^"|"$/g, ''));
+}
+function readerNumber(s, decComma) {
+  if (s === '' || s == null) return null;
+  const n = Number(decComma ? s.replace(',', '.') : s);
+  return isNaN(n) ? null : n;
+}
+// Delimiter for the whole file: tab if tabs dominate, ';' if semicolons do (decimal comma), else ','.
+function pickDelimiter(lines) {
+  const count = ch => lines.reduce((n, l) => n + (l.split(ch).length - 1), 0);
+  const t = count('\t'), s = count(';'), c = count(',');
+  if (t > c && t > s) return '\t';
+  if (s > c) return ';';
+  return ',';
+}
+
+// Wavelength for the block whose header is at line `h`, searched in its preface (back to `from`).
+function blockWavelength(lines, from, h, delim) {
+  const pre = lines.slice(from, h).filter(l => l.replace(/[\s,;\t]/g, '') !== '');
+  const wl = m => (m && +m[1] >= 300 && +m[1] <= 900) ? +m[1] : null;
+  const scan = re => { for (let i = pre.length - 1; i >= 0; i--) { const w = wl(pre[i].match(re)); if (w) return w; } return null; };
+  let w = scan(/wavelength[^\d]*(\d{3})/i) || scan(/\((\d{3})\b/) || scan(/\b(\d{3})\s*(?:nm|\/)/i);
+  if (w) return w;
+  // SoftMax "Plate:" line: the wavelength is a bare integer cell between 300 and 900.
+  for (let i = pre.length - 1; i >= 0; i--) {
+    if (!/^Plate:/i.test(pre[i].trim())) continue;
+    const hit = splitReaderLine(pre[i], delim).find(c => /^\d{3}$/.test(c) && +c >= 300 && +c <= 900);
+    if (hit) return +hit;
+  }
+  const last = pre[pre.length - 1];
+  return last && last.length < 40 ? wl(last.match(/(?:^|\D)(\d{3})(?:\D|$)/)) : null;
+}
+
+// Parse one plate-reader export (text) into {reader, plateName, blocks:[{wl, rows[8][12]}], warnings}.
+function parseReaderText(text, fileName) {
+  const lines = text.replace(/\r\n?/g, '\n').split('\n');
+  const delim = pickDelimiter(lines);
+  const decComma = delim !== ',' && /\d,\d/.test(text) && !/\d\.\d/.test(text);
+  const blocks = [];
+  let prevEnd = 0;
+  for (let i = 0; i + 8 < lines.length; i++) {
+    const hdr = splitReaderLine(lines[i], delim);
+    let k = -1;
+    for (let s = 0; s + 12 <= hdr.length && k < 0; s++)
+      if (hdr.slice(s, s + 12).every((v, j) => v === String(j + 1))) k = s;
+    if (k < 0) continue;
+    const rows = [], tails = [];
+    for (let r = 0; r < 8; r++) {
+      const cells = splitReaderLine(lines[i + 1 + r], delim);
+      const letter = cells.slice(0, k).find(c => /^[A-Ha-h]$/.test(c));
+      if (letter && letter.toUpperCase() !== 'ABCDEFGH'[r]) break;
+      const vals = cells.slice(k, k + 12).map(v => readerNumber(v, decComma));
+      while (vals.length < 12) vals.push(null);
+      if (vals.filter(v => v !== null).length < 4) break;
+      rows.push(vals);
+      tails.push(cells[k + 12]);
+    }
+    if (rows.length !== 8) continue;
+    let wl = blockWavelength(lines, prevEnd, i, delim);
+    // BioTek-style trailing wavelength column repeated on every data row.
+    if (wl === null && tails.every(t => t === tails[0] && /^\d{3}$/.test(t || '') && +t >= 300 && +t <= 900)) wl = +tails[0];
+    blocks.push({ wl, rows });
+    prevEnd = i + 9;
+    i += 8;
+  }
+  // "Wavelengths: 450, 570" list when the blocks carry no label of their own.
+  const listLine = lines.map(l => l.match(/wavelengths?\b[^\d]*((?:\d{3}\s*[,;/ \t]*)+)/i))
+    .find(m => m && (m[1].match(/\d{3}/g) || []).length >= 2);
+  if (listLine) {
+    const list = listLine[1].match(/\d{3}/g).map(Number);
+    blocks.forEach((b, j) => { if (b.wl === null && list[j] !== undefined) b.wl = list[j]; });
+  }
+  let plateName = '';
+  for (const l of lines) {
+    const m = l.match(/^\s*Plate(?: Number)?\s*[:,\t]\s*([^,\t;]+)/i);
+    if (m) { plateName = m[1].trim(); break; }
+  }
+  if (!plateName) plateName = String(fileName || '').replace(/\.[^.]+$/, '');
+  return { reader: detectReader(text), plateName, blocks };
+}
+
+// Order the reads (signal first, reference second) and render the canonical 29-line BMG-style text.
+function readerToCanonicalText(parsed) {
+  let b = parsed.blocks.slice();
+  const warnings = [];
+  if (b.length > 2) {
+    warnings.push(`${b.length} reads found in one file (several plates or reads?); only the first two are used`);
+    b = b.slice(0, 2);
+  }
+  if (b.length === 2 && b[0].wl !== null && b[1].wl !== null && b[0].wl > b[1].wl) b.reverse();
+  if (b.length === 1) warnings.push('only one read found: background subtraction will be skipped');
+  const lab = (x, n) => `${n}. Raw Data (${x && x.wl !== null ? x.wl : 'read'} ${n})`;
+  const matrix = x => 'ABCDEFGH'.split('').map((l, r) =>
+    l + ',' + (x ? x.rows[r].map(v => v === null ? '' : v).join(',') : ','.repeat(11)));
+  const cols = ',1,2,3,4,5,6,7,8,9,10,11,12,';
+  const out = [
+    `Imported from ${parsed.reader} export`,
+    'Converted by ELISA Workflow App',
+    '',
+    `ID1: ${parsed.plateName},ID2: ${parsed.reader},`,
+    'Absorbance',
+    '',
+    lab(b[0], 1), '', cols, ...matrix(b[0]),
+    '',
+    lab(b[1], 2), '', cols, ...matrix(b[1])
+  ];
+  return { text: out.join('\r\n') + '\r\n', warnings, wavelengths: b.map(x => x.wl) };
+}
+
+// Entry point: BMG files pass through untouched; anything else is converted. Throws when no plate is found.
+function normalizePlateText(text, fileName) {
+  if (/Raw Data \(/.test(text) && /^\s*,1,2,3,4,5,6,7,8,9,10,11,12/m.test(text))
+    return { text, reader: 'BMG LABTECH', warnings: [], wavelengths: [] };
+  const parsed = parseReaderText(text, fileName);
+  if (!parsed.blocks.length)
+    throw new Error('no 96-well plate data found (expected a header row 1…12 followed by rows A–H)');
+  const r = readerToCanonicalText(parsed);
+  return { text: r.text, reader: parsed.reader, warnings: r.warnings, wavelengths: r.wavelengths };
+}
+// Excel plate exports (Tecan i-control / Magellan): flatten every sheet to CSV text first.
+function workbookToText(bytes) {
+  const wb = XLSX.read(bytes, { type: 'array' });
+  return wb.SheetNames.map(n => XLSX.utils.sheet_to_csv(wb.Sheets[n], { FS: ',' })).join('\n');
+}
+
 // Build merged grid from array of parsed CSV arrays (each 29×N)
 function mergePlates(csvArrays) {
   const numPlates = csvArrays.length;
@@ -869,9 +1031,7 @@ function subtractBackground(grid, numPlates) {
   let corrected = 0;
   for (let p = 0; p < numPlates; p++) {
     const offset = p * 14;
-    const label = grid[6][offset];
-    if (typeof label === 'string' && /Raw Data \(450/i.test(label))
-      grid[6][offset] = label.replace(/Raw Data \(450[^)]*\)/i, 'Data (450 − 570)');
+    const before = corrected;
     for (let r = 9; r <= 16; r++) {
       for (let c = 1; c <= 12; c++) {
         const col = offset + c;
@@ -882,6 +1042,11 @@ function subtractBackground(grid, numPlates) {
         }
       }
     }
+    // Relabel the signal block from the two read wavelengths, e.g. "Data (450 − 570)".
+    const label = grid[6][offset], refLabel = grid[18][offset];
+    const wl = t => (typeof t === 'string' && t.match(/Raw Data \((\S+)/i) || [])[1];
+    if (corrected > before && wl(label) && wl(refLabel))
+      grid[6][offset] = label.replace(/Raw Data \([^)]*\)/i, `Data (${wl(label)} − ${wl(refLabel)})`);
   }
   return corrected;
 }
@@ -2489,6 +2654,7 @@ async function runProcessing(saved) {
       log('Subtracting 570 nm background (450 − 570)...', 'info');
       const n = subtractBackground(grid, numPlates);
       log(`  Corrected ${n} well(s) across ${numPlates} plate(s).`);
+      if (!n) log('  No reference-wavelength read found in the loaded files; nothing was subtracted.', 'warn');
     }
 
     const corrEnabled = document.getElementById('corrEd50Chk').checked;

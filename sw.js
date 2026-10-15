@@ -1,6 +1,6 @@
 // Offline cache for the app shell and its two vendored libraries.
 // Bump CACHE whenever index.html or a vendored file changes.
-const CACHE = 'elisa-v1.9.0';
+const CACHE = 'elisa-v1.10.0';
 const ASSETS = ['./', 'index.html', 'vendor/xlsx.bundle.js', 'vendor/jszip.min.js', 'manifest.webmanifest', 'icon.svg'];
 
 self.addEventListener('install', e => {

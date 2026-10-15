@@ -119,6 +119,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .plate-charts-block.current .plate-charts-header{color:#007aff}
 .plate-charts-block.current{box-shadow:-4px 0 0 #007aff;padding-left:8px}
 .flag-banner{border:1px solid #ff9500;background:#fff6e8;border-radius:10px;padding:10px 14px;margin:6px 0 10px}
+.hook-note{font-size:12px;color:#0050b3;background:#f3f8ff;border:1px dashed #7fb3ff;border-radius:10px;padding:6px 12px;margin:0 0 10px}
 .std-bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:13px;border:1px dashed #ff9500;border-radius:10px;padding:8px 14px;margin:0 0 10px;background:#fffdf8}
 .std-bar.on{border-color:#007aff;background:#f3f8ff}
 .std-bar select{font-size:13px;padding:3px 6px;border-radius:6px;border:1px solid #c7c7cc}
@@ -236,6 +237,16 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
   <div class="option-row" style="margin-top:14px;border-top:1px solid #f0f0f0;padding-top:14px">
     <span class="option-text">
+      <span class="option-title">Correct saturation hunch</span>
+      <span class="option-sub">When the concentrated dilutions are maxed out they sit flat and slightly below a bump just before the curve falls. Those points are treated as capped at the plateau for the fit (raw values stay in the output, marked).</span>
+    </span>
+    <label class="switch">
+      <input type="checkbox" id="hookChk" checked>
+      <span class="slider"></span>
+    </label>
+  </div>
+  <div class="option-row" style="margin-top:14px;border-top:1px solid #f0f0f0;padding-top:14px">
+    <span class="option-text">
       <span class="option-title">Edge-effect ED50 (in-plate blanks)</span>
       <span class="option-sub">elisa_ed50.py method: row-wise background from blank column(s), Bottom fixed at 0, censored half-plateau ED50. Adds rows 37–41 plus "ED50 Corrected" &amp; "QC Edge Effect" sheets.</span>
     </span>
@@ -294,7 +305,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.13.0 &nbsp;·&nbsp; 15/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.14.0 &nbsp;·&nbsp; 15/10/2026</div>
 
 <script>
 'use strict';
@@ -451,6 +462,7 @@ function saveSession() {
     opts: {
       subtractBg: document.getElementById('subtractBgChk').checked,
       corrEd50: document.getElementById('corrEd50Chk').checked,
+      hookFix: document.getElementById('hookChk').checked,
       outputName: document.getElementById('outputName').value
     }
   });
@@ -472,6 +484,7 @@ async function restoreFiles() {
     const o = sess.opts || {};
     document.getElementById('subtractBgChk').checked = !!o.subtractBg;
     document.getElementById('corrEd50Chk').checked = !!o.corrEd50;
+    document.getElementById('hookChk').checked = o.hookFix !== false;
     if (o.outputName) document.getElementById('outputName').value = o.outputName;
     runProcessing(sess);
   }
@@ -1390,15 +1403,51 @@ const OUTLIER = {
   MAX_PER_SERIES: 2
 };
 
+// Saturation "hunch": the concentrated dilutions are maxed out, sit flat and slightly low, and the
+// series peaks just before it falls. A 4PL chases that bump (poor R², shifted ED50), so the points
+// before the peak are treated as capped at the peak for fitting. Heuristic, so every change is
+// shown on the graph and in the output; excluding the peak point undoes it for that series.
+const HOOK = {
+  MIN_POINTS: 5,       // readings needed in the series
+  MIN_PRE: 2,          // readings before the peak
+  MIN_POST: 2,         // readings after it, so the falling limb is actually measured
+  MIN_RISE: 0.12,      // OD: the peak must exceed the median of the earlier points by this much...
+  REL_RISE: 0.04,      // ...and by this fraction of the peak
+  SIGMA: 2,            // ...and by this many robust SDs of the earlier points
+  PLATEAU_FRAC: 0.75,  // earlier points must all be at least this fraction of the peak (a plateau)
+  DROP_AFTER: 0.15     // some later point must fall at least this far below the peak (it does descend)
+};
+// Returns {vals, plateau, n} with the earlier points raised to the peak, or null when there is no hunch.
+function applyHookCorrection(vals) {
+  const idx = [];
+  vals.forEach((v, i) => { if (v !== null && isFinite(v)) idx.push(i); });
+  if (idx.length < HOOK.MIN_POINTS) return null;
+  let m = idx[0];
+  for (const i of idx) if (vals[i] > vals[m]) m = i;
+  const pre = idx.filter(i => i < m), post = idx.filter(i => i > m);
+  if (pre.length < HOOK.MIN_PRE || post.length < HOOK.MIN_POST) return null;
+  const peak = vals[m];
+  const med = a => { const b = a.slice().sort((x, y) => x - y), h = b.length >> 1; return b.length % 2 ? b[h] : (b[h - 1] + b[h]) / 2; };
+  const preV = pre.map(i => vals[i]);
+  const mid = med(preV), sd = 1.4826 * med(preV.map(v => Math.abs(v - mid)));
+  if (peak - mid < Math.max(HOOK.MIN_RISE, HOOK.REL_RISE * peak, HOOK.SIGMA * sd)) return null;
+  if (Math.min(...preV) < HOOK.PLATEAU_FRAC * peak) return null;
+  if (Math.min(...post.map(i => vals[i])) > (1 - HOOK.DROP_AFTER) * peak) return null;
+  const out = vals.slice();
+  for (const i of pre) out[i] = peak;
+  return {vals: out, plateau: peak, n: pre.length};
+}
+
 // Leave-one-out check on the two largest residuals of an existing fit; returns the points
 // to suggest. Clean series cost nothing — refits only happen for series with a large residual.
 function suggestOutliers(pts, fit, fc) {
   const out = [];
+  const fy = p => p.fy !== undefined ? p.fy : p.y;   // value the fit saw (hunch-corrected points differ from the raw reading)
   let cur = pts.slice();
   for (let k = 0; k < OUTLIER.MAX_PER_SERIES; k++) {
     if (!fit || cur.length < OUTLIER.MIN_POINTS) break;
-    const y = cur.map(p=>p.y);
-    const res = cur.map(p=>p.y - model4PL(p.x, fit));
+    const y = cur.map(fy);
+    const res = cur.map(p=>fy(p) - model4PL(p.x, fit));
     const sse = res.reduce((s,r)=>s+r*r, 0);
     const floor = Math.max(OUTLIER.MIN_DEV, OUTLIER.REL_DEV * (Math.max(...y) - Math.min(...y)));
     if (Math.max(...res.map(Math.abs)) < 0.5 * floor) break;
@@ -1407,9 +1456,9 @@ function suggestOutliers(pts, fit, fc) {
     for (const j of cands) {
       const rest = cur.filter((_,i)=>i!==j);
       let fit2;
-      try { fit2 = fitBest4PL(rest.map(p=>p.x), rest.map(p=>p.y), fc); } catch(_) { continue; }
-      const dev = Math.abs(cur[j].y - model4PL(cur[j].x, fit2));
-      const sse2 = rest.reduce((s,p)=>s + (p.y - model4PL(p.x, fit2))**2, 0);
+      try { fit2 = fitBest4PL(rest.map(p=>p.x), rest.map(fy), fc); } catch(_) { continue; }
+      const dev = Math.abs(fy(cur[j]) - model4PL(cur[j].x, fit2));
+      const sse2 = rest.reduce((s,p)=>s + (fy(p) - model4PL(p.x, fit2))**2, 0);
       const rms2 = Math.sqrt(sse2 / rest.length);
       if (dev >= floor && dev >= OUTLIER.RMS_MULT * rms2 && sse2 <= OUTLIER.SSE_DROP * sse && (!pick || dev > pick.dev))
         pick = {j, dev, fit2};
@@ -1492,8 +1541,9 @@ function plateSig(p, excl, std) {
 function fitWorkerSource() {
   const fns = [model4PL, solveGaussian, levenbergMarquardt, inverse4PL, exKey, getSeries, estimateIC50,
                fitBest4PL, ec50Gen, stdFitPoints, sampleChoicePoint, stdFitConfig, calculateConcentrations,
-               plateEntryGen, suggestOutliers];
+               plateEntryGen, suggestOutliers, applyHookCorrection];
   return `const OUTLIER = ${JSON.stringify(OUTLIER)};
+const HOOK = ${JSON.stringify(HOOK)};
 ${fns.map(f => f.toString()).join('\n')}
 let ctx = null;
 self.onmessage = e => {
@@ -1526,7 +1576,7 @@ function createFitPool(grid, meta, fc, maxWorkers) {
   const size = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 4) - 1, maxWorkers || 8));
   const workers = [], idle = [], queue = [], running = new Map();
   let url = null, closed = false, nextId = 1;
-  const slim = {seriesST: meta.seriesST, seriesSA: meta.seriesSA, universalStd: meta.universalStd || null};
+  const slim = {seriesST: meta.seriesST, seriesSA: meta.seriesSA, universalStd: meta.universalStd || null, hookFix: !!meta.hookFix};
   const pump = () => {
     while (idle.length && queue.length) {
       const w = idle.pop(), job = queue.shift();
@@ -1678,8 +1728,21 @@ function* plateEntryGen(grid, p, meta, fc, excl, logFn, stdOverride) {
     const key = exKey(p, col, q.i);
     return {...q, key, excluded: excl.has(key), suggested: false};
   };
+  // Saturation hunch: sample curves are fitted on the corrected values; interpolation and the
+  // chart/output keep the real readings.
+  let fitSeries = series;
+  const hooks = new Map();
+  if (meta.hookFix) {
+    fitSeries = new Map(series);
+    fitSeries.colOf = series.colOf;
+    for (const [name, vals] of series) {
+      if (name === 'standard' || name.startsWith('blank')) continue;
+      const h = applyHookCorrection(vals);
+      if (h) { fitSeries.set(name, h.vals); hooks.set(name, h); }
+    }
+  }
   logFn(`  Plate ${p+1}: fitting EC50...`);
-  const {row: ec50Row, fits: ec50Fits} = yield* ec50Gen(series, seriesSA, fc);
+  const {row: ec50Row, fits: ec50Fits} = yield* ec50Gen(fitSeries, seriesSA, fc);
   logFn(`  Plate ${p+1}: calculating concentrations...`);
   const {conRow, choValRow, choDilRow, fittedParams, STindex,
          stdPoints, stdParams, sampleChoices} = calculateConcentrations(series, seriesST, seriesSA, fc, stdOverride || meta.universalStd);
@@ -1692,7 +1755,12 @@ function* plateEntryGen(grid, p, meta, fc, excl, logFn, stdOverride) {
   for (let i = 0; i < ec50Fits.length; i++) {
     const f = ec50Fits[i];
     if (!f.isSample) continue;
-    const allPts = mkPts(rawSeries.get(f.name), seriesSA).map(q => flag(q, f.col));
+    const h = hooks.get(f.name), live = series.get(f.name);
+    const allPts = mkPts(rawSeries.get(f.name), seriesSA).map(q => {
+      const o = flag(q, f.col);
+      if (h && !o.excluded && h.vals[q.i] !== live[q.i]) o.fy = h.vals[q.i];
+      return o;
+    });
     if (allPts.length === 0) continue;
     const c = sampleChoices[i] || {};
     samples.push({
@@ -1700,6 +1768,7 @@ function* plateEntryGen(grid, p, meta, fc, excl, logFn, stdOverride) {
       params: f.params,
       ed50: f.params ? f.params[2] : null,
       points: allPts,
+      hook: h ? {n: h.n, plateau: h.plateau} : null,
       chosenVal: c.chosenVal != null ? c.chosenVal : null,
       intersectionX: c.intersectionX != null ? c.intersectionX : null,
     });
@@ -1767,6 +1836,10 @@ function buildDataSheet(grid, numPlates, meta, fc, corrEnabled, logFn, excl, cac
     plateFits.push(entry.plateFit); plateCharts.push(entry.plateChart);
   }
 
+  // Wells whose value the hunch correction replaced for fitting (raw value stays in the sheet).
+  const hookKeys = new Set();
+  for (const pc of plateCharts) for (const smp of pc.samples) for (const q of smp.points) if (q.fy !== undefined) hookKeys.add(q.key);
+
   // Full grid: 29 original rows + blank + EC50 + blank + choVal + choDil + con
   const fullData = [...grid.map(r=>[...r])];
   fullData.push(new Array(numPlates*14).fill(null));   // row 29: blank
@@ -1790,6 +1863,8 @@ function buildDataSheet(grid, numPlates, meta, fc, corrEnabled, logFn, excl, cac
       // Row 7: sample names — bold, with fill color copied from MetaData Names sheet
       if (R >= 9 && R <= 16 && isDataCol && typeof v === 'number' && excl.has(exKey(plateIdx, colInPlate, R - 9)))
         return {v, t:'n', s:{font:{strike:true, color:{rgb:'FF9A9A9A'}}}};
+      if (R >= 9 && R <= 16 && isDataCol && typeof v === 'number' && hookKeys.has(exKey(plateIdx, colInPlate, R - 9)))
+        return {v, t:'n', s:{font:{italic:true, color:{rgb:'FF1F5FBF'}}}};
       if (R === 7 && isDataCol) {
         const nameColor = colors && colors[plateIdx] && colors[plateIdx][colInPlate - 1];
         if (nameColor) return styledCell(v, 'FF' + nameColor, {font:{bold:true}});
@@ -1955,6 +2030,18 @@ function buildProtocolSheet(meta, plateFits, plateCharts, fit) {
       }
     }
   });
+
+  const hookRows = [];
+  plateCharts.forEach((pc, i) => pc.samples.forEach(smp => { if (smp.hook) hookRows.push([i + 1, smp.name, smp.hook.n, smp.hook.plateau]); }));
+  if (meta.hookFix) {
+    data.push([]);
+    data.push([{v:'Saturation Hunch Correction', t:'s', s:hdrS}]);
+    data.push([{v:'Where the concentrated dilutions were flat and below a peak just before the fall, those points were raised to the peak for fitting only. Their raw values are in italic blue on the Processed Data sheet.', t:'s', s:{font:{sz:9}}}]);
+    if (hookRows.length) {
+      data.push(['Plate','Sample','Points raised','Plateau OD used'].map(v=>({v,t:'s',s:boldS})));
+      for (const [pl, nm, n, plat] of hookRows) data.push([{v:`Plate ${pl}`, t:'s', s:lblS}, {v:nm, t:'s'}, {v:n, t:'n'}, {v:r4(plat), t:'n'}]);
+    } else data.push([{v:'No series needed it.', t:'s'}]);
+  }
 
   const ws = aoaToSheet(data);
   ws['!cols'] = [{wch:34},{wch:14},{wch:16},{wch:14},{wch:20},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12}];
@@ -2476,6 +2563,13 @@ function renderSampleChart(pc) {
       body += `<path d="${curvePath(s.params, xd, S)}" fill="none" stroke="${col}" stroke-width="1.6"/>`;
     }
     for (const p of s.points) body += pointSvg(p, S, col, 2.8, `${s.name}, 1:${fmtTick(p.x)}`);
+    // Hunch-corrected points: a dashed ring where the fit treated the reading (pointer-events off).
+    for (const p of s.points) {
+      if (p.fy === undefined) continue;
+      const cx = S.X(p.x).toFixed(1), y0 = S.Y(p.y).toFixed(1), y1 = S.Y(p.fy).toFixed(1);
+      body += `<g pointer-events="none"><line x1="${cx}" y1="${y0}" x2="${cx}" y2="${y1}" stroke="${col}" stroke-width="1" stroke-dasharray="2 2" opacity=".7"/>`
+            + `<circle cx="${cx}" cy="${y1}" r="3.6" fill="none" stroke="${col}" stroke-width="1.2" stroke-dasharray="2 2"/></g>`;
+    }
   });
   return svgWrap(body);
 }
@@ -2533,12 +2627,13 @@ const FLAG = {
   BATCH: 10          // plates rendered at once
 };
 function r2Of(points, params) {
-  const y = points.map(q => q.y), n = y.length;
+  const fy = q => q.fy !== undefined ? q.fy : q.y;
+  const y = points.map(fy), n = y.length;
   if (n < 3) return null;
   const mean = y.reduce((a, b) => a + b, 0) / n;
   const tot = y.reduce((a, b) => a + (b - mean) ** 2, 0);
   if (tot < 1e-12) return null;
-  const res = points.reduce((a, q) => a + (q.y - model4PL(q.x, params)) ** 2, 0);
+  const res = points.reduce((a, q) => a + (fy(q) - model4PL(q.x, params)) ** 2, 0);
   return 1 - res / tot;
 }
 // Why a plate's own standard looks unusable (flat / absent wells), or '' when it looks fine.
@@ -2571,7 +2666,7 @@ function plateFlags(pc) {
     const open = live.filter(q => r.suggested.has(q.key)).length;
     if (open) add(s.name, 'outlier', `${open} suggested outlier${open > 1 ? 's' : ''}`, open);
     if (!s.params) { if (live.length) add(s.name, 'failed', 'fit failed'); continue; }
-    const ys = live.map(q => q.y);
+    const ys = live.map(q => q.fy !== undefined ? q.fy : q.y);
     if (ys.length < 3 || Math.max(...ys) - Math.min(...ys) < FLAG.MIN_RANGE) continue;
     if (atBound(s.params[2], fc.lower[2]) || atBound(s.params[2], fc.upper[2])) add(s.name, 'bound', 'ED50 at fit bound');
     else if (atBound(s.params[3], fc.lower[3]) || atBound(s.params[3], fc.upper[3])) add(s.name, 'bound', 'slope at fit bound');
@@ -2789,6 +2884,10 @@ function plateBlockHtml(pc) {
   } else {
     banner = `<div class="flag-banner ok"><div class="flag-head">✓ Clean — no issues found.</div></div>`;
   }
+  const hooked = pc.samples.filter(q => q.hook);
+  const hookNote = hooked.length
+    ? `<div class="hook-note">↗ <b>Saturation hunch corrected in ${hooked.length} sample${hooked.length > 1 ? 's' : ''}</b> (${hooked.slice(0, 8).map(q => escapeXml(q.name) + ' · ' + q.hook.n + ' pt' + (q.hook.n > 1 ? 's' : '') + ' → OD ' + q.hook.plateau.toFixed(2)).join(', ')}${hooked.length > 8 ? ` and ${hooked.length - 8} more` : ''}). Dashed rings on the graph show where the fit treated those points; exclude the peak point to undo it for one sample.</div>`
+    : '';
   let stdBar = '';
   if (pc.std.from != null || fl.noStd) {
     const donors = standardDonors(p);
@@ -2806,6 +2905,7 @@ function plateBlockHtml(pc) {
       <button class="btn btn-sm ${acc ? 'btn-accepted' : 'btn-secondary'}" data-accept="${p}">${acc ? '✓ Accepted' : 'Accept plate'}</button>
     </div>
     ${banner}
+    ${hookNote}
     ${stdBar}
     <div class="chart-legend">${legend}</div>
     ${chips ? `<div class="chip-row">${chips}</div>` : ''}
@@ -3264,6 +3364,7 @@ async function runProcessing(saved) {
     log('Reading metadata...', 'info');
     prog.set(4, 'Reading metadata…');
     const meta = parseMetadata(metaBytes);
+    meta.hookFix = document.getElementById('hookChk').checked;
     log(`  ${meta.names.length} plate name row(s) found.`);
     log(`  Standard: ${meta.stdStart} ng/mL, 1:${meta.stdDil} dilution.`);
     log(`  Samples: 1:${meta.sampleStart} start, 1:${meta.sampleDil} dilution.`);

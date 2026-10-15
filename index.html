@@ -124,7 +124,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 
 <!-- New analysis -->
 <div class="card">
-  <button class="btn btn-primary process-btn" id="newAnalysisBtn" onclick="newAnalysis()" title="Clear both files and the current analysis">New analysis</button>
+  <button class="btn btn-primary process-btn" id="newAnalysisBtn" onclick="newAnalysis()" title="Clear both files and the current analysis" disabled>New analysis</button>
 </div>
 
 <div class="sec open" id="secUpload">
@@ -247,7 +247,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.4.1 &nbsp;·&nbsp; 15/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.4.2 &nbsp;·&nbsp; 15/10/2026</div>
 
 <script>
 'use strict';
@@ -265,6 +265,7 @@ function setBadge(id, text, cls) {
 }
 // Badges and the download button follow the review state.
 function updateSections() {
+  updateNewAnalysisBtn();
   const r = review, btn = document.getElementById('downloadBtn'), hint = document.getElementById('downloadHint');
   const name = (document.getElementById('outputName').value.trim() || defaultOutputName()) + '.xlsx';
   document.getElementById('reviewEmpty').style.display = r ? 'none' : 'block';
@@ -430,7 +431,12 @@ async function restoreFiles() {
 }
 
 // ─── UI HELPERS ───────────────────────────────────────────────────────────────
+// "New analysis" is only useful when there is something to clear.
+function updateNewAnalysisBtn() {
+  document.getElementById('newAnalysisBtn').disabled = !(csvFiles.length || metaBytes || review);
+}
 function updateProcessBtn() {
+  updateNewAnalysisBtn();
   const ok = csvFiles.length > 0 && metaBytes !== null;
   if (!(review && review.analysis))
     setBadge('badgeUpload', ok ? `✓ ${csvFiles.length} CSV + metadata` : (csvFiles.length || metaBytes ? 'Waiting for the other file' : 'Waiting for files'), ok ? 'done' : 'idle');

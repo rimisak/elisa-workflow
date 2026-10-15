@@ -119,6 +119,9 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .plate-charts-block.current .plate-charts-header{color:#007aff}
 .plate-charts-block.current{box-shadow:-4px 0 0 #007aff;padding-left:8px}
 .flag-banner{border:1px solid #ff9500;background:#fff6e8;border-radius:10px;padding:10px 14px;margin:6px 0 10px}
+.std-bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:13px;border:1px dashed #ff9500;border-radius:10px;padding:8px 14px;margin:0 0 10px;background:#fffdf8}
+.std-bar.on{border-color:#007aff;background:#f3f8ff}
+.std-bar select{font-size:13px;padding:3px 6px;border-radius:6px;border:1px solid #c7c7cc}
 .flag-banner.ok{border-color:#34c759;background:#eefaf1}
 .flag-head{font-size:17px;font-weight:600;color:#a35c00;line-height:1.35}
 .flag-banner.ok .flag-head{color:#1d7a35;font-size:15px}
@@ -291,7 +294,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.12.3 &nbsp;·&nbsp; 15/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.13.0 &nbsp;·&nbsp; 15/10/2026</div>
 
 <script>
 'use strict';
@@ -444,7 +447,7 @@ function saveSession() {
   const r = review;
   if (!r || r.stale) return;
   storeSet('session', {
-    excl: [...r.excl], accepted: [...r.accepted], hidden: [...r.hidden],
+    excl: [...r.excl], accepted: [...r.accepted], hidden: [...r.hidden], stdFrom: r.stdFrom || {},
     opts: {
       subtractBg: document.getElementById('subtractBgChk').checked,
       corrEd50: document.getElementById('corrEd50Chk').checked,
@@ -1481,7 +1484,10 @@ async function computeSuggestions(plateCharts, fc, universal, tick) {
 // source is built at run time from those functions (no extra files — works offline and from file://).
 // A worker gets the grid and settings once, then fits whole plates / screens whole plates for
 // outliers. If workers are unavailable or fail, callers fall back to the main-thread path.
-function plateSig(p, excl) { return p + ':' + [...excl].filter(k => k.startsWith(p + '|')).sort().join(','); }
+function plateSig(p, excl, std) {
+  return p + ':' + [...excl].filter(k => k.startsWith(p + '|')).sort().join(',')
+    + (std ? '|std=' + std.map(v => +v.toFixed(8)).join(',') : '');
+}
 
 function fitWorkerSource() {
   const fns = [model4PL, solveGaussian, levenbergMarquardt, inverse4PL, exKey, getSeries, estimateIC50,
@@ -1495,7 +1501,7 @@ self.onmessage = e => {
   if (m.type === 'init') { ctx = m; ctx.stdFc = stdFitConfig(m.fc); return; }
   try {
     if (m.type === 'plate') {
-      const it = plateEntryGen(ctx.grid, m.p, ctx.meta, ctx.fc, new Set(m.excl), msg => self.postMessage({type: 'log', id, msg}));
+      const it = plateEntryGen(ctx.grid, m.p, ctx.meta, ctx.fc, new Set(m.excl), msg => self.postMessage({type: 'log', id, msg}), m.stdOverride || null);
       let r;
       while (!(r = it.next()).done) self.postMessage({type: 'tick', id});
       if (!m.screen) { self.postMessage({type: 'done', id, result: r.value}); return; }
@@ -1661,7 +1667,7 @@ function aoaToSheet(data) {
 // ─── BUILD PROCESSED DATA SHEET ───────────────────────────────────────────────
 // Everything fitted for one plate (cacheable): rows for the sheet plus chart geometry.
 // A generator so the first run can report progress; buildDataSheet drains it synchronously.
-function* plateEntryGen(grid, p, meta, fc, excl, logFn) {
+function* plateEntryGen(grid, p, meta, fc, excl, logFn, stdOverride) {
   const {seriesST, seriesSA} = meta;
   const series = getSeries(grid, p, excl);
   const rawSeries = getSeries(grid, p);   // includes excluded wells, for the charts
@@ -1676,7 +1682,7 @@ function* plateEntryGen(grid, p, meta, fc, excl, logFn) {
   const {row: ec50Row, fits: ec50Fits} = yield* ec50Gen(series, seriesSA, fc);
   logFn(`  Plate ${p+1}: calculating concentrations...`);
   const {conRow, choValRow, choDilRow, fittedParams, STindex,
-         stdPoints, stdParams, sampleChoices} = calculateConcentrations(series, seriesST, seriesSA, fc, meta.universalStd);
+         stdPoints, stdParams, sampleChoices} = calculateConcentrations(series, seriesST, seriesSA, fc, stdOverride || meta.universalStd);
   yield 1;   // standard curve + interpolation done
 
   // Merge graph-1 (ec50Fits) and graph-2 (sampleChoices) geometry by series
@@ -1699,19 +1705,19 @@ function* plateEntryGen(grid, p, meta, fc, excl, logFn) {
     });
   }
   const stdCol = rawSeries.colOf.get('standard');
-  const stdAll = stdCol == null ? [] :
+  const stdAll = (stdCol == null || stdOverride) ? [] :
     mkPts(rawSeries.get('standard'), seriesST, q => q.y <= 2).map(q => flag(q, stdCol));
   const plateChart = {
     plateIndex: p,
     samples,
-    std: {points: stdAll, params: stdParams},
+    std: {points: stdAll, params: stdParams, borrowed: !!stdOverride},
     axes: {seriesSA, seriesST},
   };
   return {ec50Row, conRow, choValRow, choDilRow, plateFit: {params: fittedParams, STindex}, plateChart};
 }
 
 // `excl`: Set of exKeys excluded from every fit (kept, struck through, in the output).
-function buildDataSheet(grid, numPlates, meta, fc, corrEnabled, logFn, excl, cache) {
+function buildDataSheet(grid, numPlates, meta, fc, corrEnabled, logFn, excl, cache, stdFrom) {
   excl = excl || new Set();
   const {names, colors, seriesST, seriesSA} = meta;
 
@@ -1734,11 +1740,28 @@ function buildDataSheet(grid, numPlates, meta, fc, corrEnabled, logFn, excl, cac
 
   // `cache` (optional Map) memoises each plate's fits by that plate's exclusions, so
   // toggling one point only refits its own plate.
-  for (let p=0; p<numPlates; p++) {
-    const sig = plateSig(p, excl);
+  // A plate may borrow another plate's fitted standard curve (`stdFrom`: plate → source plate), e.g.
+  // when its own standard was not pipetted. Plates with their own standard go first, so the source's
+  // fitted parameters are known when the borrowers are fitted.
+  const getEntry = (p, std) => {
+    const sig = plateSig(p, excl, std);
     const hit = cache && cache.get(sig);
-    const entry = hit || drain(plateEntryGen(grid, p, meta, fc, excl, logFn));
+    const entry = hit || drain(plateEntryGen(grid, p, meta, fc, excl, logFn, std));
     if (!hit && cache) cache.set(sig, entry);
+    return entry;
+  };
+  const entries = new Array(numPlates);
+  const borrows = p => stdFrom && stdFrom[p] != null && stdFrom[p] !== p && stdFrom[p] < numPlates;
+  for (let p = 0; p < numPlates; p++) if (!borrows(p)) entries[p] = getEntry(p, null);
+  for (let p = 0; p < numPlates; p++) {
+    if (!borrows(p)) continue;
+    const src = entries[stdFrom[p]];
+    if (!src) { entries[p] = getEntry(p, null); continue; }   // source itself borrows: ignore the request
+    const e = getEntry(p, src.plateChart.std.params);
+    entries[p] = {...e, plateChart: {...e.plateChart, std: {...e.plateChart.std, from: stdFrom[p]}}};
+  }
+  for (let p=0; p<numPlates; p++) {
+    const entry = entries[p];
     allEC50Rows.push(...entry.ec50Row); allConRows.push(...entry.conRow);
     allCVRows.push(...entry.choValRow); allCDRows.push(...entry.choDilRow);
     plateFits.push(entry.plateFit); plateCharts.push(entry.plateChart);
@@ -1907,11 +1930,12 @@ function buildProtocolSheet(meta, plateFits, plateCharts, fit) {
   data.push(['Plate','Bottom','Top','IC50 (ng/mL)','Hill','Conc. Points Used'].map(v=>({v,t:'s',s:boldS})));
   plateFits.forEach(({params}, i) => {
     const [bottom, top, ic50, hill] = params;
+    const from = plateCharts[i].std.from;
     const used = plateCharts[i].std.points.filter(q => !q.excluded).length;
     data.push([
-      {v:`Plate ${i+1}`, t:'s', s:lblS},
+      {v: from != null ? `Plate ${i+1} (standard borrowed from plate ${from+1})` : `Plate ${i+1}`, t:'s', s:lblS},
       {v:r4(bottom), t:'n'}, {v:r4(top), t:'n'}, {v:r4(ic50), t:'n'}, {v:r4(hill), t:'n'},
-      {v: used, t:'n'}
+      from != null ? {v:`plate ${from+1}`, t:'s'} : {v: used, t:'n'}
     ]);
   });
   }
@@ -2460,7 +2484,8 @@ function renderSampleChart(pc) {
 // (horizontal from y-axis to the curve at the chosen OD, then vertical down to the concentration).
 function renderStandardChart(pc) {
   const xs = [], ys = [];
-  for (const p of pc.std.points) { xs.push(p.x); ys.push(p.y); }
+  const donorPts = pc.std.from != null && review && review.analysis ? review.analysis.plateCharts[pc.std.from].std.points.filter(q => !q.excluded) : [];
+  for (const p of [...pc.std.points, ...donorPts]) { xs.push(p.x); ys.push(p.y); }
   if (pc.std.params) ys.push(pc.std.params[0], pc.std.params[1]);
   for (const s of pc.samples) {
     if (s.chosenVal != null) ys.push(s.chosenVal);
@@ -2474,6 +2499,7 @@ function renderStandardChart(pc) {
     body += `<path d="${curvePath(pc.std.params, xd, S)}" fill="none" stroke="#1c1c1e" stroke-width="1.8"/>`;
   }
   for (const p of pc.std.points) body += pointSvg(p, S, '#1c1c1e', 3, `Standard, ${fmtTick(p.x)}`);
+  for (const p of donorPts) body += `<circle cx="${S.X(p.x).toFixed(1)}" cy="${S.Y(p.y).toFixed(1)}" r="3" fill="#fff" stroke="#8e8e93" stroke-width="1.3"><title>Plate ${pc.std.from + 1} standard, ${fmtTick(p.x)} · OD ${p.y.toFixed(3)}</title></circle>`;
   pc.samples.forEach((s, i) => {
     if (isHidden(pc, s)) return;
     if (s.chosenVal == null || s.intersectionX == null || !(s.intersectionX > 0)) return;
@@ -2503,6 +2529,7 @@ const FLAG = {
   MIN_RANGE: 0.3,    // OD range a curve needs before its fit quality is judged
   MIN_R2: 0.95,      // sample curves
   MIN_STD_R2: 0.98,  // standard curve
+  STD_MIN_RANGE: 0.3, // OD span the standard wells need; flatter means the standard was not pipetted
   BATCH: 10          // plates rendered at once
 };
 function r2Of(points, params) {
@@ -2513,6 +2540,24 @@ function r2Of(points, params) {
   if (tot < 1e-12) return null;
   const res = points.reduce((a, q) => a + (q.y - model4PL(q.x, params)) ** 2, 0);
   return 1 - res / tot;
+}
+// Why a plate's own standard looks unusable (flat / absent wells), or '' when it looks fine.
+function standardMissing(pc) {
+  const ys = pc.std.points.map(q => q.y);
+  if (ys.length < 3) return ys.length ? `only ${ys.length} usable standard reading${ys.length > 1 ? 's' : ''}` : 'no standard readings';
+  const range = Math.max(...ys) - Math.min(...ys);
+  return range < FLAG.STD_MIN_RANGE ? `OD span only ${range.toFixed(2)} across the standard wells` : '';
+}
+// Plates whose own standard is good and which could serve as a source for another plate.
+function standardDonors(exceptPlate) {
+  const r = review, out = [];
+  for (const pc of r.analysis.plateCharts) {
+    const p = pc.plateIndex;
+    if (p === exceptPlate || pc.std.borrowed || (r.stdFrom && r.stdFrom[p] != null) || standardMissing(pc)) continue;
+    const r2 = r2Of(pc.std.points.filter(q => !q.excluded), pc.std.params);
+    out.push({p, r2});
+  }
+  return out.sort((a, b) => (b.r2 ?? -1) - (a.r2 ?? -1));   // best standard first
 }
 function atBound(v, b) { return Math.abs(v - b) <= 1e-9 * Math.max(1, Math.abs(b)); }
 function plateFlags(pc) {
@@ -2533,7 +2578,12 @@ function plateFlags(pc) {
     const r2 = r2Of(live, s.params);
     if (r2 !== null && r2 < FLAG.MIN_R2) add(s.name, 'r2', `poor fit (R² ${r2.toFixed(2)})`);
   }
-  if (!r.meta.universalStd) {
+  let noStd = false;
+  if (!r.meta.universalStd && !pc.std.borrowed) {
+    const why = standardMissing(pc);
+    if (why) { noStd = true; notes.push(`no usable standard curve — probably not pipetted (${why})`); }
+  }
+  if (!r.meta.universalStd && !pc.std.borrowed && !noStd) {
     const sp = pc.std.points.filter(q => !q.excluded), open = sp.filter(q => r.suggested.has(q.key)).length;
     const sf = stdFitConfig(fc);
     if (!pc.std.points.length) notes.push('no standard points');
@@ -2558,7 +2608,7 @@ function plateFlags(pc) {
   if (q.m) parts.push(`${pl(q.m, 'poorly fitted sample')}`);
   if (b.m) parts.push(`${pl(b.m, 'sample')} with ED50 or slope at a fit bound`);
   const headline = parts.length ? 'Flagged: ' + (parts.length > 1 ? parts.slice(0, -1).join(', ') + ' and ' + parts[parts.length - 1] : parts[0]) + '.' : '';
-  const out = {samples, notes, reasons, headline, count: samples.size + notes.length};
+  const out = {samples, notes, reasons, headline, noStd, count: samples.size + notes.length};
   if (out.count) (r.everFlagged || (r.everFlagged = new Set())).add(pc.plateIndex);
   (r.flagCache || (r.flagCache = {}))[pc.plateIndex] = out;
   return out;
@@ -2632,7 +2682,7 @@ function pointLabel(key) {
 function reanalyze() {
   const r = review;
   r.flagCache = null;
-  r.analysis = buildDataSheet(r.grid, r.numPlates, r.meta, fitConfig, r.corrEnabled, () => {}, r.excl, r.cache);
+  r.analysis = buildDataSheet(r.grid, r.numPlates, r.meta, fitConfig, r.corrEnabled, () => {}, r.excl, r.cache, r.stdFrom);
 }
 
 // Refits plates whose exclusions changed. Many plates at once (bulk exclude / restore) go through the
@@ -2645,7 +2695,7 @@ function setBusy(text) {
 }
 async function reanalyzeAsync() {
   const r = review;
-  const todo = [...Array(r.numPlates).keys()].filter(p => !r.cache.has(plateSig(p, r.excl)));
+  const todo = [...Array(r.numPlates).keys()].filter(p => !(r.stdFrom && r.stdFrom[p] != null) && !r.cache.has(plateSig(p, r.excl)));
   if (todo.length >= 3) {
     const pool = createFitPool(r.grid, r.meta, fitConfig, todo.length);
     if (pool) {
@@ -2728,7 +2778,7 @@ function plateBlockHtml(pc) {
   let banner = '';
   if (fl.count) {
     const items = [...fl.samples.entries()].map(([n, w]) => `<span class="flag-item"><b>${escapeXml(n)}</b> ${escapeXml(w.map(x => x.text).join(', '))}</span>`)
-      .concat(fl.notes.map(t => `<span class="flag-item">${escapeXml(t)}</span>`)).join('');
+      .concat(fl.notes.filter(t => !/^no usable standard/.test(t)).map(t => `<span class="flag-item">${escapeXml(t)}</span>`)).join('');
     banner = `<div class="flag-banner"><div class="flag-head">⚠ ${escapeXml(fl.headline)}</div>
       <div class="flag-list">${items}</div>
       ${focus ? `<div class="focus-note">Graphs show only the ${focusSamples(pc).size} flagged of ${pc.samples.length} samples — “Show all” reveals the rest.</div>` : ''}</div>`;
@@ -2739,16 +2789,29 @@ function plateBlockHtml(pc) {
   } else {
     banner = `<div class="flag-banner ok"><div class="flag-head">✓ Clean — no issues found.</div></div>`;
   }
+  let stdBar = '';
+  if (pc.std.from != null || fl.noStd) {
+    const donors = standardDonors(p);
+    const opts = donors.map(d => `<option value="${d.p}"${pc.std.from === d.p ? ' selected' : ''}>Plate ${d.p + 1}${d.r2 != null ? ` (standard R² ${d.r2.toFixed(3)})` : ''}</option>`).join('');
+    stdBar = `<div class="std-bar${pc.std.from != null ? ' on' : ''}">
+      ${pc.std.from != null
+        ? `<b>Standard curve borrowed from plate ${pc.std.from + 1}.</b> Concentrations on this plate are interpolated on that curve.`
+        : `<b>Use another plate's standard curve for this plate?</b>`}
+      ${donors.length ? `<select data-stdfrom="${p}"><option value="">${pc.std.from != null ? 'Change source plate…' : 'Choose a plate…'}</option>${opts}</select>` : '<span class="focus-note">No other plate has a usable standard curve.</span>'}
+      ${pc.std.from != null ? `<button class="btn btn-secondary btn-sm" data-stdown="${p}">Use this plate's own standard</button>` : ''}
+    </div>`;
+  }
   return `<div class="plate-charts-block${r.cur === p ? ' current' : ''}" id="plateBlock${p}" data-plate="${p}">
     <div class="plate-charts-header">Plate ${p + 1}
       <button class="btn btn-sm ${acc ? 'btn-accepted' : 'btn-secondary'}" data-accept="${p}">${acc ? '✓ Accepted' : 'Accept plate'}</button>
     </div>
     ${banner}
+    ${stdBar}
     <div class="chart-legend">${legend}</div>
     ${chips ? `<div class="chip-row">${chips}</div>` : ''}
     <div class="plate-charts-row">
       <div class="chart-card"><div class="chart-title">Sample dose–response &amp; ED50</div>${renderSampleChart(pc)}</div>
-      <div class="chart-card"><div class="chart-title">Standard curve &amp; interpolation</div>${renderStandardChart(pc)}</div>
+      <div class="chart-card"><div class="chart-title">Standard curve &amp; interpolation${pc.std.from != null ? ` (plate ${pc.std.from + 1}'s standard)` : ''}</div>${renderStandardChart(pc)}</div>
     </div>
     <div class="res-wrap">${resultsTableHtml(p)}</div>
   </div>`;
@@ -2818,12 +2881,17 @@ function refreshHeaders() {
 }
 
 function refreshReview(plate) {
+  // Plates that borrow this plate's standard have new results too and must be accepted again.
+  const deps = plate == null ? [] : standardDependents(plate);
+  deps.forEach(d => review.accepted.delete(d));
   saveSession();
   updateSections();
   refreshHeaders();
   if (plate == null) { renderReview(); return; }
-  const el = document.getElementById('plateBlock' + plate);
-  if (el) el.outerHTML = plateBlockHtml(review.analysis.plateCharts[plate]);
+  for (const q of [plate, ...deps]) {
+    const el = document.getElementById('plateBlock' + q);
+    if (el) el.outerHTML = plateBlockHtml(review.analysis.plateCharts[q]);
+  }
 }
 
 // Moves the current-plate marker (block outline, strip tile) and optionally scrolls to it.
@@ -2842,6 +2910,21 @@ function setCurrent(p, scroll) {
   document.querySelectorAll('#plateStrip .ptile.cur').forEach(e => e.classList.remove('cur'));
   const tile = document.querySelector(`#plateStrip .ptile[data-goto="${p}"]`);
   if (tile) { tile.classList.add('cur'); tile.scrollIntoView({block: 'nearest'}); }
+}
+
+// Borrow another plate's standard curve (src = plate index) or go back to the plate's own (src = null).
+function setStdFrom(p, src) {
+  const r = review;
+  if (!r.stdFrom) r.stdFrom = {};
+  if (src == null) delete r.stdFrom[p]; else r.stdFrom[p] = src;
+  r.accepted.delete(p);
+  r.blob = null; r.prepFailed = false; r.blobTok = (r.blobTok || 0) + 1;
+  reanalyze();
+  refreshReview(p);
+}
+// Plates that interpolate on plate p's standard curve.
+function standardDependents(p) {
+  return Object.entries(review.stdFrom || {}).filter(([d, s]) => s === p && +d !== p).map(([d]) => +d);
 }
 
 function stepPlate(dir) {
@@ -2932,6 +3015,8 @@ document.addEventListener('click', e => {
   if (!review) return;
   const sec = document.getElementById('chartsSection');
   if (!sec || !sec.contains(e.target)) return;
+  const so = e.target.closest('[data-stdown]');
+  if (so) { setStdFrom(Number(so.dataset.stdown), null); return; }
   const gt = e.target.closest('[data-goto]');
   if (gt) {
     const p = Number(gt.dataset.goto);
@@ -2996,6 +3081,12 @@ document.addEventListener('click', e => {
   }
 });
 
+document.addEventListener('change', e => {
+  const sel = e.target.closest && e.target.closest('select[data-stdfrom]');
+  if (!sel || !review || sel.value === '') return;
+  setStdFrom(Number(sel.dataset.stdfrom), Number(sel.value));
+});
+
 // Keyboard review: J/K step through the listed plates, A accepts and moves on.
 document.addEventListener('keydown', e => {
   if (!review || !review.analysis || review.busy || e.metaKey || e.ctrlKey || e.altKey) return;
@@ -3038,19 +3129,20 @@ function plateIdValue(grid, p, n) {
 function buildResultsTableSheet() {
   const r = review, {ec50Rows, conRows} = r.analysis;
   const hs = { font: { bold: true }, fill: { patternType: 'solid', fgColor: { rgb: 'FFDCE6F1' } } };
-  const data = [['ID1', 'ID2', 'ID3', 'Sample Name', 'ED50', 'Concentration (µg/mL)']
+  const data = [['ID1', 'ID2', 'ID3', 'Sample Name', 'ED50', 'Concentration (µg/mL)', 'Standard curve']
     .map(h => ({ v: h, t: 's', s: hs }))];
   for (let p = 0; p < r.numPlates; p++) {
     const ids = [1, 2, 3].map(n => plateIdValue(r.grid, p, n));
     for (let c = 1; c <= 12; c++) {
       const name = String(r.grid[7][p * 14 + c] ?? '').trim();
       if (!name || name.toLowerCase() === 'blank' || name.toLowerCase() === 'standard') continue;
-      const row = [...ids, name, ec50Rows[p * 14 + c], conRows[p * 14 + c]];
+      const from = r.analysis.plateCharts[p].std.from;
+      const row = [...ids, name, ec50Rows[p * 14 + c], conRows[p * 14 + c], from != null ? `plate ${from + 1}` : 'own plate'];
       data.push(row.map(v => ({ v: v == null ? '' : v, t: typeof v === 'number' ? 'n' : 's' })));
     }
   }
   const ws = aoaToSheet(data);
-  ws['!cols'] = [{ wch: 8 }, { wch: 12 }, { wch: 28 }, { wch: 16 }, { wch: 10 }, { wch: 20 }];
+  ws['!cols'] = [{ wch: 8 }, { wch: 12 }, { wch: 28 }, { wch: 16 }, { wch: 10 }, { wch: 20 }, { wch: 14 }];
   return ws;
 }
 
@@ -3191,7 +3283,7 @@ async function runProcessing(saved) {
     await new Promise(r => setTimeout(r, 10));
     review = {grid, numPlates, meta, outputName, corrEnabled,
               excl: new Set(), suggested: new Set(), hidden: new Set(), accepted: new Set(), analysis: null, cache: new Map(),
-              view: 'todo', cur: null, limit: FLAG.BATCH, focusOff: new Set(), flagCache: null};
+              view: 'todo', cur: null, limit: FLAG.BATCH, focusOff: new Set(), flagCache: null, stdFrom: {}};
     pool = numPlates >= 2 ? createFitPool(grid, meta, fitConfig, numPlates) : null;
     log(pool ? `  Fitting in parallel on ${pool.size} worker(s).` : '  Fitting on the main thread.');
     const tFit = performance.now();
@@ -3240,7 +3332,8 @@ async function runProcessing(saved) {
       review.excl = new Set(saved.excl || []);
       review.accepted = new Set(saved.accepted || []);
       review.hidden = new Set(saved.hidden || []);
-      if (review.excl.size) {
+      review.stdFrom = saved.stdFrom || {};
+      if (review.excl.size || Object.keys(review.stdFrom).length) {
         log('Restoring previous session...', 'info');
         prog.set(97, 'Restoring previous session…');
         await new Promise(r => setTimeout(r, 0));

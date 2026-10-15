@@ -199,8 +199,8 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   <div class="card-label">Analysis Options</div>
   <div class="option-row">
     <span class="option-text">
-      <span class="option-title">Subtract 570 nm background</span>
-      <span class="option-sub">Use (signal − reference read, e.g. 450 − 570) per well for EC50, concentration &amp; the 450 block</span>
+      <span class="option-title" id="bgTitle">Subtract reference-read background</span>
+      <span class="option-sub" id="bgSub">Use (signal − reference read) per well for EC50, concentration &amp; the signal block</span>
     </span>
     <label class="switch">
       <input type="checkbox" id="subtractBgChk" checked>
@@ -267,7 +267,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.10.0 &nbsp;·&nbsp; 15/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.10.1 &nbsp;·&nbsp; 15/10/2026</div>
 
 <script>
 'use strict';
@@ -524,7 +524,24 @@ async function loadCSVFiles(files) {
   dropSession();
   showCSVState();
 }
+// Wavelengths of the signal / reference reads, taken from the loaded plate files' block labels
+// (null when unknown, e.g. a file without wavelength information).
+function readWavelengths() {
+  const f = csvFiles[0];
+  if (!f) return { sig: null, ref: null };
+  const lines = f.text.split(/\r?\n/);
+  const wl = l => { const m = (l || '').match(/Raw Data \((\d{3})\b/); return m ? m[1] : null; };
+  return { sig: wl(lines[6]), ref: wl(lines[18]) };
+}
+function updateBgLabels() {
+  const { sig, ref } = readWavelengths();
+  document.getElementById('bgTitle').textContent = ref ? `Subtract ${ref} nm background` : 'Subtract reference-read background';
+  document.getElementById('bgSub').innerHTML = sig && ref
+    ? `Use (${sig} − ${ref}) per well for EC50, concentration &amp; the ${sig} block`
+    : 'Use (signal − reference read) per well for EC50, concentration &amp; the signal block';
+}
 function showCSVState() {
+  updateBgLabels();
   const zone = document.getElementById('csvZone');
   zone.classList.add('has-files');
   document.getElementById('csvZoneText').textContent = `${csvFiles.length} file(s) loaded`;
@@ -536,6 +553,7 @@ function clearCSV() {
   csvFiles = [];
   document.getElementById('csvZone').classList.remove('has-files');
   document.getElementById('csvZoneText').textContent = 'Drop plate files here or click to browse';
+  updateBgLabels();
   document.getElementById('csvFileList').innerHTML = '';
   document.getElementById('csvInput').value = '';
   storeDel('csvFiles');
@@ -1764,7 +1782,7 @@ function buildProtocolSheet(meta, plateFits, plateCharts, fit) {
 // the descending limb is fitted with Bottom fixed at 0 and Top fixed to the
 // observed plateau, and a curve that never leaves background is censored
 // ("n.d.") rather than fitted. Reads whatever is currently in the 450 block
-// (rows 9–16), i.e. the 570-subtracted values if that toggle is also on.
+// (rows 9–16), i.e. the background-subtracted values if that toggle is also on.
 const CORR = {
   MIN_PLATEAU_OD: 0.30,    // plateau below this → no measurable titre (censored)
   PLATEAU_BAND: 0.80,      // plateau = median of points within this frac of max
@@ -2651,7 +2669,8 @@ async function runProcessing(saved) {
     log('  Done.');
 
     if (document.getElementById('subtractBgChk').checked) {
-      log('Subtracting 570 nm background (450 − 570)...', 'info');
+      const { sig, ref } = readWavelengths();
+      log(`Subtracting ${ref ? ref + ' nm ' : 'reference-read '}background${sig && ref ? ` (${sig} − ${ref})` : ''}...`, 'info');
       const n = subtractBackground(grid, numPlates);
       log(`  Corrected ${n} well(s) across ${numPlates} plate(s).`);
       if (!n) log('  No reference-wavelength read found in the loaded files; nothing was subtracted.', 'warn');
@@ -2659,7 +2678,7 @@ async function runProcessing(saved) {
 
     const corrEnabled = document.getElementById('corrEd50Chk').checked;
     if (corrEnabled && document.getElementById('subtractBgChk').checked)
-      log('  Note: both background options on — corrected ED50 runs on the 570-subtracted values.', 'warn');
+      log('  Note: both background options on — corrected ED50 runs on the background-subtracted values.', 'warn');
 
     log('Reading metadata...', 'info');
     prog.set(4, 'Reading metadata…');

@@ -82,8 +82,6 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .switch input:checked + .slider::before{transform:translateX(18px)}
 .num-plates-row{display:flex;align-items:center;gap:8px;margin-top:8px}
 .checkmark{color:#34c759;font-size:18px}
-.curve-hit{stroke-opacity:0;pointer-events:stroke;cursor:help}.curve-hit:hover{stroke-opacity:.2}
-#chartTip{position:fixed;z-index:50;pointer-events:none;background:#1c1c1e;color:#fff;font-size:12px;padding:5px 8px;border-radius:6px;display:none;white-space:nowrap}
 .page-footer{text-align:center;font-size:11px;color:#aeaeb2;padding:12px 0 4px;letter-spacing:.2px}
 /* Per-plate charts */
 .plate-charts-block{margin-bottom:18px}
@@ -259,7 +257,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.7.0 &nbsp;·&nbsp; 15/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.6.1 &nbsp;·&nbsp; 15/10/2026</div>
 
 <script>
 'use strict';
@@ -2055,7 +2053,7 @@ function pointSvg(p, S, col, r, label) {
   const cx = S.X(p.x).toFixed(1), cy = S.Y(p.y).toFixed(1);
   const state = p.excluded ? 'excluded — click to restore'
               : p.suggested ? 'suggested outlier — click to exclude' : 'click to exclude';
-  let g = `<g class="pt" data-k="${p.key}" data-tip="${escapeXml(label + ' · OD ' + p.y.toFixed(3) + ' (' + state + ')')}">`;
+  let g = `<g class="pt" data-k="${p.key}"><title>${escapeXml(label)} · OD ${p.y.toFixed(3)} (${state})</title>`;
   if (p.excluded) {
     g += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#fff" stroke="#8e8e93" stroke-width="1.3"/>`;
     const d = r * 0.65;
@@ -2089,10 +2087,7 @@ function renderSampleChart(pc) {
       body += `<line x1="${px.toFixed(1)}" y1="${CPAD.t}" x2="${px.toFixed(1)}" y2="${CHART_H-CPAD.b}" stroke="${col}" stroke-width="1" stroke-dasharray="4 3" opacity="0.65"/>`;
     }
     if (s.params) {
-      const d = curvePath(s.params, xd, S);
-      body += `<path d="${d}" fill="none" stroke="${col}" stroke-width="1.6"/>`;
-      const tip = s.ed50 > 0 ? `${s.name} · ED50 ≈ ${Math.max(10, Math.round(s.ed50))}` : `${s.name} · ED50 n/a`;
-      body += `<path class="curve-hit" d="${d}" fill="none" stroke="${col}" stroke-width="12" data-tip="${escapeXml(tip)}"/>`;
+      body += `<path d="${curvePath(s.params, xd, S)}" fill="none" stroke="${col}" stroke-width="1.6"/>`;
     }
     for (const p of s.points) body += pointSvg(p, S, col, 2.8, `${s.name}, 1:${fmtTick(p.x)}`);
   });
@@ -2116,7 +2111,7 @@ function renderStandardChart(pc) {
   if (pc.std.params) {
     body += `<path d="${curvePath(pc.std.params, xd, S)}" fill="none" stroke="#1c1c1e" stroke-width="1.8"/>`;
   }
-  for (const p of pc.std.points) body += pointSvg(p, S, '#1c1c1e', 3, `Standard, concentration ${fmtTick(p.x)}`);
+  for (const p of pc.std.points) body += pointSvg(p, S, '#1c1c1e', 3, `Standard, ${fmtTick(p.x)}`);
   pc.samples.forEach((s, i) => {
     if (isHidden(pc, s)) return;
     if (s.chosenVal == null || s.intersectionX == null || !(s.intersectionX > 0)) return;
@@ -2240,20 +2235,6 @@ function setAllExclusions(mutate) {
   reanalyze();
   renderReview();
 }
-
-// Instant custom tooltip for chart elements carrying data-tip (curves and points).
-(function () {
-  const tip = document.createElement('div');
-  tip.id = 'chartTip';
-  document.body.appendChild(tip);
-  const place = e => { tip.style.left = (e.clientX + 12) + 'px'; tip.style.top = (e.clientY + 14) + 'px'; };
-  document.addEventListener('mouseover', e => {
-    const el = e.target.closest && e.target.closest('#chartsSection [data-tip]');
-    if (!el) { tip.style.display = 'none'; return; }
-    tip.textContent = el.dataset.tip; tip.style.display = 'block'; place(e);
-  });
-  document.addEventListener('mousemove', e => { if (tip.style.display === 'block') place(e); });
-})();
 
 document.addEventListener('click', e => {
   if (!review) return;

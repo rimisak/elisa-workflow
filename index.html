@@ -90,8 +90,16 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .review-info{font-size:13px;color:#3a3a3c;flex:1;min-width:260px}
 .review-actions{display:flex;gap:8px;flex-wrap:wrap}
 .btn:disabled{opacity:.5;cursor:not-allowed}
+.legend-btn{background:none;border:none;padding:2px 4px;border-radius:6px;cursor:pointer;font-family:inherit}
+.legend-btn:hover{background:#f2f2f7}
+.legend-btn .cb{width:14px;height:14px;border:1.5px solid #8e8e93;border-radius:4px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;line-height:1;color:#fff;background:#fff;flex-shrink:0}
+.legend-btn:not(.off) .cb{background:#007aff;border-color:#007aff}
+.legend-btn.off .legend-swatch,.legend-btn.off .cb{opacity:.6}
+.legend-btn.off{color:#8e8e93}
+.legend-all{display:inline-flex;gap:6px;margin-left:auto}
 .chip-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
 .chip{border:1px solid;border-radius:999px;padding:3px 10px;font-size:12px;cursor:pointer;background:#fff}
+.chip-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:baseline}
 .chip.suggested{border-color:#ff9500;color:#a35c00;background:#fff6e8}
 .chip.excluded{border-color:#8e8e93;color:#636366;background:#f2f2f7;text-decoration:line-through}
 .pt:hover circle:last-child{fill:rgba(0,0,0,.08)}
@@ -190,7 +198,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 <!-- Per-plate visualizations (populated after processing) -->
 <div id="chartsSection" style="display:none"></div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; 29/05/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.1.0 &nbsp;·&nbsp; 15/10/2026</div>
 
 <!-- Settings overlay -->
 <div class="settings-overlay" id="settingsOverlay" onclick="closeSettingsIfBg(event)">
@@ -243,6 +251,72 @@ let metaBytes  = null;
 let metaName   = '';
 let fitConfig  = JSON.parse(JSON.stringify(DEFAULT_FIT));
 
+// ─── PERSISTENCE (IndexedDB) ──────────────────────────────────────────────────
+// Loaded CSV/metadata files survive a page reload. Every call fails soft: if storage is
+// unavailable (private mode, blocked) the app just behaves as before.
+function storeOpen() {
+  return new Promise((res, rej) => {
+    try {
+      const req = indexedDB.open('elisa-app', 1);
+      req.onupgradeneeded = () => req.result.createObjectStore('kv');
+      req.onsuccess = () => res(req.result);
+      req.onerror = () => rej(req.error);
+    } catch (e) { rej(e); }
+  });
+}
+async function storeOp(mode, fn) {
+  try {
+    const db = await storeOpen();
+    return await new Promise((res, rej) => {
+      const tx = db.transaction('kv', mode);
+      const req = fn(tx.objectStore('kv'));
+      tx.oncomplete = () => { db.close(); res(req && req.result); };
+      tx.onerror = tx.onabort = () => { db.close(); rej(tx.error); };
+    });
+  } catch (e) { return undefined; }
+}
+function storeSet(k, v) { return storeOp('readwrite', st => st.put(v, k)); }
+function storeDel(k)    { return storeOp('readwrite', st => st.delete(k)); }
+function storeGet(k)    { return storeOp('readonly',  st => st.get(k)); }
+
+// The review state (exclusions, accepted plates, hidden samples) and the options used are saved
+// on every change. After a reload the files come back and the run is redone with that state.
+function saveSession() {
+  const r = review;
+  if (!r || r.stale) return;
+  storeSet('session', {
+    excl: [...r.excl], accepted: [...r.accepted], hidden: [...r.hidden],
+    opts: {
+      subtractBg: document.getElementById('subtractBgChk').checked,
+      corrEd50: document.getElementById('corrEd50Chk').checked,
+      outputName: document.getElementById('outputName').value
+    },
+    fitConfig
+  });
+}
+// New or removed input files make any saved review (and the one on screen) obsolete.
+function dropSession() {
+  if (review) review.stale = true;
+  storeDel('session');
+}
+
+async function restoreFiles() {
+  const csv = await storeGet('csvFiles');
+  if (Array.isArray(csv) && csv.length && !csvFiles.length) { csvFiles = csv; showCSVState(); }
+  const meta = await storeGet('meta');
+  if (meta && meta.bytes && !metaBytes) { metaBytes = meta.bytes; metaName = meta.name; showMetaState(); }
+
+  const sess = await storeGet('session');
+  if (sess && csvFiles.length && metaBytes && !review) {
+    const o = sess.opts || {};
+    document.getElementById('subtractBgChk').checked = !!o.subtractBg;
+    document.getElementById('corrEd50Chk').checked = !!o.corrEd50;
+    if (o.outputName) document.getElementById('outputName').value = o.outputName;
+    if (sess.fitConfig) fitConfig = sess.fitConfig;
+    runProcessing(sess);
+  }
+}
+
 // ─── UI HELPERS ───────────────────────────────────────────────────────────────
 function updateProcessBtn() {
   const ok = csvFiles.length > 0 && metaBytes !== null;
@@ -281,13 +355,18 @@ function loadCSVFiles(files) {
   }));
   Promise.all(readers).then(results => {
     csvFiles = results.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
-    const zone = document.getElementById('csvZone');
-    zone.classList.add('has-files');
-    document.getElementById('csvZoneText').textContent = `${csvFiles.length} file(s) loaded`;
-    const list = document.getElementById('csvFileList');
-    list.innerHTML = csvFiles.map(f => `<div class="file-item">${f.name}</div>`).join('');
-    updateProcessBtn();
+    storeSet('csvFiles', csvFiles);
+    dropSession();
+    showCSVState();
   });
+}
+function showCSVState() {
+  const zone = document.getElementById('csvZone');
+  zone.classList.add('has-files');
+  document.getElementById('csvZoneText').textContent = `${csvFiles.length} file(s) loaded`;
+  const list = document.getElementById('csvFileList');
+  list.innerHTML = csvFiles.map(f => `<div class="file-item">${escapeXml(f.name)}</div>`).join('');
+  updateProcessBtn();
 }
 function clearCSV() {
   csvFiles = [];
@@ -295,6 +374,8 @@ function clearCSV() {
   document.getElementById('csvZoneText').textContent = 'Drop CSV files here or click to browse';
   document.getElementById('csvFileList').innerHTML = '';
   document.getElementById('csvInput').value = '';
+  storeDel('csvFiles');
+  dropSession();
   updateProcessBtn();
 }
 
@@ -315,18 +396,24 @@ function loadMetaFile(f) {
   r.onload = ev => {
     metaBytes = new Uint8Array(ev.target.result);
     metaName  = f.name;
-    const zone = document.getElementById('metaZone');
-    zone.classList.add('has-files');
-    document.getElementById('metaZoneText').textContent = `✅ ${f.name}`;
-    updateProcessBtn();
+    storeSet('meta', {name: metaName, bytes: metaBytes});
+    dropSession();
+    showMetaState();
   };
   r.readAsArrayBuffer(f);
+}
+function showMetaState() {
+  document.getElementById('metaZone').classList.add('has-files');
+  document.getElementById('metaZoneText').textContent = `✅ ${metaName}`;
+  updateProcessBtn();
 }
 function clearMeta() {
   metaBytes = null; metaName = '';
   document.getElementById('metaZone').classList.remove('has-files');
   document.getElementById('metaZoneText').textContent = 'Drop MetaData.xlsx here or click to browse';
   document.getElementById('metaInput').value = '';
+  storeDel('meta');
+  dropSession();
   updateProcessBtn();
 }
 
@@ -1091,7 +1178,7 @@ function buildDataSheet(grid, numPlates, meta, fc, corrEnabled, logFn, excl, cac
   // Build conditional formatting spec — injected into XLSX XML via JSZip after write.
   const condfmt = buildCondfmtRanges(numPlates);
 
-  return {ws, condfmt, plateFits, plateCharts, corrected};
+  return {ws, condfmt, plateFits, plateCharts, corrected, ec50Rows: allEC50Rows, conRows: allConRows};
 }
 
 // ─── CONDITIONAL FORMATTING RANGE BUILDER ─────────────────────────────────────
@@ -1816,6 +1903,9 @@ function pointSvg(p, S, col, r, label) {
 }
 
 // Left graph: each sample's measured points, its fitted 4PL curve, and a vertical line at its ED50.
+// Display-only: hidden samples drop out of both graphs but stay in the results; axes stay as for all samples.
+function isHidden(pc, s) { return !!(review && review.hidden.has(pc.plateIndex + '|' + s.name)); }
+
 function renderSampleChart(pc) {
   const xs = [], ys = [];
   for (const s of pc.samples) {
@@ -1827,6 +1917,7 @@ function renderSampleChart(pc) {
   const S = makeScales(xd, yd);
   let body = axisSvg(xd, yd, S, 'Sample dilution factor (log)', 'OD');
   pc.samples.forEach((s, i) => {
+    if (isHidden(pc, s)) return;
     const col = sampleColor(i);
     if (s.params && s.ed50 > 0) {
       const px = S.X(clampTo(s.ed50, xd.min, xd.max));
@@ -1859,6 +1950,7 @@ function renderStandardChart(pc) {
   }
   for (const p of pc.std.points) body += pointSvg(p, S, '#1c1c1e', 3, `Standard, ${fmtTick(p.x)}`);
   pc.samples.forEach((s, i) => {
+    if (isHidden(pc, s)) return;
     if (s.chosenVal == null || s.intersectionX == null || !(s.intersectionX > 0)) return;
     const col = sampleColor(i);
     const px = S.X(clampTo(s.intersectionX, xd.min, xd.max));
@@ -1894,17 +1986,25 @@ function plateBlockHtml(pc) {
   let legend = '';
   pc.samples.forEach((s, i) => {
     const ed = s.params && s.ed50 > 0 ? ` · ED50 ≈ ${Math.max(10, Math.round(s.ed50))}` : '';
-    legend += `<span class="legend-item"><span class="legend-swatch" style="background:${sampleColor(i)}"></span>${escapeXml(s.name)}${ed}</span>`;
+    const off = isHidden(pc, s);
+    legend += `<button class="legend-item legend-btn${off ? ' off' : ''}" role="checkbox" aria-checked="${!off}" data-hide="${p}|${escapeXml(s.name)}" title="Click to ${off ? 'show' : 'hide'}; shift-click to show only this sample"><span class="cb">${off ? '' : '✓'}</span><span class="legend-swatch" style="background:${sampleColor(i)}"></span>${escapeXml(s.name)}${ed}</button>`;
   });
+  const nHid = pc.samples.filter(s => isHidden(pc, s)).length;
+  if (pc.samples.length) legend += `<span class="legend-all">
+    <button class="btn btn-secondary btn-sm" data-showall="${p}" ${nHid ? '' : 'disabled'}>Show all</button>
+    <button class="btn btn-secondary btn-sm" data-hideall="${p}" ${nHid === pc.samples.length ? 'disabled' : ''}>Hide all</button></span>`;
   if (!legend) legend = '<span class="legend-item" style="color:#aeaeb2">No sample curves for this plate</span>';
 
-  // Chips: every excluded or suggested point on this plate, toggleable.
+  // Chips directly under the legend: every excluded or suggested point, labelled by dilution step.
+  // The dot carries the sample colour; the tooltip has the details.
   let chips = '';
-  const allPts = [...pc.samples.map(s => [s.name, s.points]), ['Standard', pc.std.points]];
-  for (const [name, pts] of allPts) for (const q of pts) {
+  const allPts = [...pc.samples.map((s, i) => [s.name, s.points, sampleColor(i), 'Dilution']),
+                  ['Standard', pc.std.points, '#1c1c1e', 'Conc.']];
+  for (const [name, pts, col, word] of allPts) for (const q of pts) {
     if (!q.excluded && !q.suggested) continue;
     const cls = q.excluded ? 'excluded' : 'suggested';
-    chips += `<button class="chip ${cls}" data-k="${q.key}">${escapeXml(name)} · ${'ABCDEFGH'[q.i]} · OD ${q.y.toFixed(3)} — ${q.excluded ? (q.suggested ? 'excluded (suggested), restore' : 'excluded, restore') : 'suggested, exclude'}</button>`;
+    const tip = `${name} · ${'ABCDEFGH'[q.i]} · OD ${q.y.toFixed(3)} — click to ${q.excluded ? 'restore' : 'exclude'}`;
+    chips += `<button class="chip ${cls}" data-k="${q.key}" title="${escapeXml(tip)}"><span class="chip-dot" style="background:${col}"></span>${word} ${Math.round(q.x * 100) / 100}</button>`;
   }
   const acc = r.accepted.has(p);
   return `<div class="plate-charts-block" id="plateBlock${p}">
@@ -1944,9 +2044,11 @@ function renderReview() {
   sec.innerHTML = `<div id="reviewHeader" class="card">${reviewHeaderHtml()}</div>`
     + review.analysis.plateCharts.map(plateBlockHtml).join('');
   sec.style.display = 'block';
+  saveSession();
 }
 
 function refreshReview(plate) {
+  saveSession();
   document.getElementById('reviewHeader').innerHTML = reviewHeaderHtml();
   if (plate == null) { renderReview(); return; }
   document.getElementById('plateBlock' + plate).outerHTML = plateBlockHtml(review.analysis.plateCharts[plate]);
@@ -1974,6 +2076,33 @@ document.addEventListener('click', e => {
   if (!review) return;
   const sec = document.getElementById('chartsSection');
   if (!sec || !sec.contains(e.target)) return;
+  const hb = e.target.closest('[data-hide]');
+  if (hb) {
+    const key = hb.dataset.hide, p = Number(key.split('|')[0]);
+    const pc = review.analysis.plateCharts[p];
+    if (e.shiftKey) {
+      review.hidden = new Set([...review.hidden].filter(k => !k.startsWith(p + '|')));
+      for (const s of pc.samples) if (p + '|' + s.name !== key) review.hidden.add(p + '|' + s.name);
+    } else if (review.hidden.has(key)) review.hidden.delete(key); else review.hidden.add(key);
+    refreshReview(p);
+    return;
+  }
+  const sa = e.target.closest('[data-showall]');
+  if (sa) {
+    if (sa.disabled) return;
+    const p = Number(sa.dataset.showall);
+    review.hidden = new Set([...review.hidden].filter(k => !k.startsWith(p + '|')));
+    refreshReview(p);
+    return;
+  }
+  const ha = e.target.closest('[data-hideall]');
+  if (ha) {
+    if (ha.disabled) return;
+    const p = Number(ha.dataset.hideall);
+    for (const s of review.analysis.plateCharts[p].samples) review.hidden.add(p + '|' + s.name);
+    refreshReview(p);
+    return;
+  }
   const pt = e.target.closest('[data-k]');
   if (pt) { toggleExclusion(pt.dataset.k); return; }
   const acc = e.target.closest('[data-accept]');
@@ -1994,6 +2123,38 @@ document.addEventListener('click', e => {
     case 'download': downloadResults(); break;
   }
 });
+
+// Value of "ID<n>: ..." from a plate's ID row (grid[3]); '' when absent.
+function plateIdValue(grid, p, n) {
+  const off = p * 14;
+  for (let c = 0; c < 14; c++) {
+    const v = grid[3] && grid[3][off + c];
+    if (typeof v !== 'string') continue;
+    const m = v.match(new RegExp('^ID' + n + ':\\s*(.*)$'));
+    if (m) return m[1].trim();
+  }
+  return '';
+}
+
+// One row per sample column: ID1-3, sample name, ED50 and interpolated concentration.
+function buildResultsTableSheet() {
+  const r = review, {ec50Rows, conRows} = r.analysis;
+  const hs = { font: { bold: true }, fill: { patternType: 'solid', fgColor: { rgb: 'FFDCE6F1' } } };
+  const data = [['ID1', 'ID2', 'ID3', 'Sample Name', 'ED50', 'Concentration (µg/mL)']
+    .map(h => ({ v: h, t: 's', s: hs }))];
+  for (let p = 0; p < r.numPlates; p++) {
+    const ids = [1, 2, 3].map(n => plateIdValue(r.grid, p, n));
+    for (let c = 1; c <= 12; c++) {
+      const name = String(r.grid[7][p * 14 + c] ?? '').trim();
+      if (!name || name.toLowerCase() === 'blank' || name.toLowerCase() === 'standard') continue;
+      const row = [...ids, name, ec50Rows[p * 14 + c], conRows[p * 14 + c]];
+      data.push(row.map(v => ({ v: v == null ? '' : v, t: typeof v === 'number' ? 'n' : 's' })));
+    }
+  }
+  const ws = aoaToSheet(data);
+  ws['!cols'] = [{ wch: 8 }, { wch: 12 }, { wch: 28 }, { wch: 16 }, { wch: 10 }, { wch: 20 }];
+  return ws;
+}
 
 function buildExcludedSheet() {
   const r = review, off = p => p * 14;
@@ -2023,6 +2184,7 @@ async function buildResultsBlob() {
   const {ws: wsData, condfmt, plateFits, corrected} = r.analysis;
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, wsData, 'Processed Data');
+  XLSX.utils.book_append_sheet(wb, buildResultsTableSheet(), 'Results Table');
   XLSX.utils.book_append_sheet(wb, buildProtocolSheet(r.meta, plateFits), 'Protocol Parameters');
   XLSX.utils.book_append_sheet(wb, buildSOPSheet(), 'SOP');
   if (corrected) {
@@ -2061,7 +2223,7 @@ function downloadResults() {
   log(`✅ Downloaded ${r.outputName}.xlsx (${r.excl.size} point(s) excluded).`, 'success');
 }
 
-async function runProcessing() {
+async function runProcessing(saved) {
   const btn = document.getElementById('processBtn');
   btn.disabled = true;
   btn.textContent = 'Processing...';
@@ -2111,13 +2273,20 @@ async function runProcessing() {
     log('Fitting curves and calculating results...', 'info');
     await new Promise(r => setTimeout(r, 10));
     review = {grid, numPlates, meta, outputName, corrEnabled,
-              excl: new Set(), suggested: new Set(), accepted: new Set(), analysis: null, cache: new Map()};
+              excl: new Set(), suggested: new Set(), hidden: new Set(), accepted: new Set(), analysis: null, cache: new Map()};
     review.analysis = buildDataSheet(grid, numPlates, meta, fitConfig, corrEnabled, msg => log(msg), review.excl, review.cache);
 
     log('Looking for outliers...', 'info');
     await new Promise(r => setTimeout(r, 10));
     review.suggested = await computeSuggestions(review.analysis.plateCharts, fitConfig);
     log(`  ${review.suggested.size} suggested outlier(s).`);
+
+    if (saved) {
+      review.excl = new Set(saved.excl || []);
+      review.accepted = new Set(saved.accepted || []);
+      review.hidden = new Set(saved.hidden || []);
+      if (review.excl.size) { log('Restoring previous session...', 'info'); reanalyze(); }
+    }
 
     renderReview();
     log('Review the graphs, exclude outliers if needed, accept each plate, then download.', 'success');
@@ -2130,6 +2299,7 @@ async function runProcessing() {
   btn.textContent = 'Process';
   updateProcessBtn();
 }
+restoreFiles();
 </script>
 </body>
 </html>

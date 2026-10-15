@@ -12,7 +12,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,san
 h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
 .toolbar-title{display:flex;align-items:center;gap:10px}
-.app-icon{width:56px;height:39px;flex-shrink:0;line-height:0}
+.app-icon{width:40px;height:40px;flex-shrink:0;line-height:0}
 .card{background:#fff;border-radius:14px;padding:20px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .card-label{font-size:13px;font-weight:600;color:#6e6e73;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
 .drop-zone{border:2px dashed #c7c7cc;border-radius:10px;padding:24px;text-align:center;cursor:pointer;transition:all .2s;user-select:none;min-height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
@@ -184,20 +184,18 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 <!-- Per-plate visualizations (populated after processing) -->
 <div id="chartsSection" style="display:none"></div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.2.3 &nbsp;·&nbsp; 15/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.2.4 &nbsp;·&nbsp; 15/10/2026</div>
 
 <script>
 'use strict';
 
-// ─── LOGO: 96-well plate ──────────────────────────────────────────────────────
+// ─── LOGO: 96-well plate in a blue square (header logo + favicon) ────────────
 // Dark grey plate, 12×8 wells. Each column has one yellow→light-grey gradient running down all
 // 8 wells together (like a dilution series); the gradients differ per column, column 1 is plain light grey.
-function drawPlateLogo() {
-  const el = document.getElementById('appIcon');
-  if (!el) return;
+function plateLogoSvg(px) {
   const rnd = (i, k) => { const x = Math.sin(i * 127.1 + k * 311.7) * 43758.5453; return x - Math.floor(x); };
   const LIGHT = '#d1d1d6', YEL = '#ffd60a', CELL = 9, M = 6, R = 3.5;
-  const W = M * 2 + CELL * 12, H = M * 2 + CELL * 8;
+  const W = M * 2 + CELL * 12, H = M * 2 + CELL * 8;   // plate viewBox 120×84
   const top = M, bottom = M + CELL * 8;
   let defs = '', wells = '';
   for (let c = 0; c < 12; c++) {
@@ -211,8 +209,30 @@ function drawPlateLogo() {
     }
     for (let r = 0; r < 8; r++) wells += `<circle cx="${cx}" cy="${M + CELL / 2 + r * CELL}" r="${R}" fill="${fill}"/>`;
   }
-  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="56" height="39" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="96-well plate"><defs>${defs}</defs>`
-               + `<rect width="${W}" height="${H}" rx="8" fill="#48484a"/>${wells}</svg>`;
+  return `<svg viewBox="0 0 120 120" width="${px}" height="${px}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="96-well plate">`
+    + `<defs><linearGradient id="lgBlue" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#007aff"/><stop offset="1" stop-color="#5ac8fa"/></linearGradient>${defs}</defs>`
+    + `<rect width="120" height="120" rx="26" fill="url(#lgBlue)"/>`
+    + `<svg x="12" y="22.8" width="96" height="67.2" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" rx="8" fill="#48484a"/>${wells}</svg></svg>`;
+}
+function drawPlateLogo() {
+  const el = document.getElementById('appIcon');
+  if (el) el.innerHTML = plateLogoSvg(40);
+
+  // Favicon: SVG right away, then a PNG (Safari ignores SVG favicons).
+  let link = document.querySelector('link[rel="icon"]');
+  if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link); }
+  const svg = plateLogoSvg(64);
+  link.type = 'image/svg+xml';
+  link.href = 'data:image/svg+xml,' + encodeURIComponent(svg);
+  const img = new Image();
+  img.onload = () => {
+    try {
+      const cv = document.createElement('canvas'); cv.width = cv.height = 64;
+      cv.getContext('2d').drawImage(img, 0, 0, 64, 64);
+      link.type = 'image/png'; link.href = cv.toDataURL('image/png');
+    } catch (_) { /* keep the SVG favicon */ }
+  };
+  img.src = link.href;
 }
 drawPlateLogo();
 

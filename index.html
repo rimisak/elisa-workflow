@@ -15,6 +15,9 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
 .toolbar-title{display:flex;align-items:center;gap:10px}
 .app-icon{width:40px;height:40px;flex-shrink:0;line-height:0}
+.progress-track{height:10px;background:#e5e5ea;border-radius:999px;overflow:hidden}
+.progress-fill{height:100%;width:0;background:linear-gradient(90deg,#007aff,#5ac8fa);border-radius:999px;transition:width .12s linear}
+.progress-meta{display:flex;justify-content:space-between;gap:12px;margin-top:6px;font-size:12px;color:#6e6e73}
 .sec{margin-bottom:14px}
 .sec-head{display:flex;align-items:center;gap:10px;background:#fff;border-radius:14px;padding:14px 20px;box-shadow:0 1px 3px rgba(0,0,0,.08);cursor:pointer;user-select:none}
 .sec-head:hover{background:#fafafc}
@@ -212,6 +215,10 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   <div class="status-row" id="statusRow">
     <span id="statusText">Load CSV files and a metadata file to begin.</span>
   </div>
+  <div id="progressWrap" style="display:none;margin-top:12px">
+    <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="progress-meta"><span id="progressLabel"></span><span><b id="progressPct">0%</b> · <span id="progressEta"></span></span></div>
+  </div>
   <div class="log-box" id="logBox" style="margin-top:12px;display:none"></div>
 </div>
 
@@ -250,7 +257,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.5.5 &nbsp;·&nbsp; 15/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.6.0 &nbsp;·&nbsp; 15/10/2026</div>
 
 <script>
 'use strict';
@@ -1037,7 +1044,8 @@ function fitBest4PL(xdata, ydata, fc) {
   return bestParams;
 }
 
-function calculateEC50s(series, seriesSA, fc) {
+// Generator: yields after every series so callers can report progress / stay responsive.
+function* ec50Gen(series, seriesSA, fc) {
   const row = ['Est. ED50'];
   const fits = [];  // per-series geometry for on-page charts (series order)
   for (const [name, vals] of series) {
@@ -1048,6 +1056,7 @@ function calculateEC50s(series, seriesSA, fc) {
     if (!isSample) {
       row.push('/');
       fits.push({name, isSample:false, params:null, points});
+      yield 1;
       continue;
     }
     let params = null;
@@ -1059,10 +1068,15 @@ function calculateEC50s(series, seriesSA, fc) {
       row.push(ic50 < 10 ? 10 : ic50);
     } catch(_) { row.push('/'); params = null; }
     fits.push({name, isSample:true, params, points, col: series.colOf.get(name)});
+    yield 1;
   }
   row.push('');
   return {row, fits};
 }
+
+// Runs a generator to completion synchronously and returns its value.
+function drain(gen) { let r; while (!(r = gen.next()).done); return r.value; }
+function calculateEC50s(series, seriesSA, fc) { return drain(ec50Gen(series, seriesSA, fc)); }
 
 // Points the standard-curve fit uses: readings above OD 2 are saturated and dropped.
 function stdFitPoints(vals, seriesST) {
@@ -1187,18 +1201,59 @@ function suggestOutliers(pts, fit, fc) {
   return out;
 }
 
+// Fits every plate that is not cached yet, reporting one step per fitted series (12 + the standard per plate).
+// `tick(units)` is awaited after each step and may update the UI / yield to the browser.
+const FIT_STEPS_PER_PLATE = 13;
+async function warmCache(grid, numPlates, meta, fc, excl, cache, logFn, tick) {
+  for (let p = 0; p < numPlates; p++) {
+    const sig = p + ':' + [...excl].filter(k => k.startsWith(p + '|')).sort().join(',');
+    if (cache.has(sig)) { await tick(FIT_STEPS_PER_PLATE); continue; }
+    const it = plateEntryGen(grid, p, meta, fc, excl, logFn);
+    let r;
+    while (!(r = it.next()).done) await tick(1);
+    cache.set(sig, r.value);
+  }
+}
+
+// Progress bar in the Processing section: percentage, elapsed and an ETA from the pace so far.
+function makeProgress() {
+  const wrap = document.getElementById('progressWrap'), fill = document.getElementById('progressFill');
+  const pctEl = document.getElementById('progressPct'), etaEl = document.getElementById('progressEta'), lblEl = document.getElementById('progressLabel');
+  const t0 = performance.now();
+  let lastYield = t0;
+  wrap.style.display = 'block';
+  const fmt = sec => sec < 90 ? `${Math.max(1, Math.round(sec))} s` : `${Math.floor(sec / 60)} min ${Math.round(sec % 60)} s`;
+  return {
+    set(pct, label) {
+      pct = Math.max(0, Math.min(100, pct));
+      const el = (performance.now() - t0) / 1000;
+      fill.style.width = pct.toFixed(1) + '%';
+      pctEl.textContent = pct.toFixed(1) + '%';
+      if (label) lblEl.textContent = label;
+      etaEl.textContent = pct >= 100 ? `done in ${fmt(el)}`
+        : (pct >= 3 && el >= 1.5) ? `≈ ${fmt(el * (100 - pct) / pct)} left` : 'estimating…';
+    },
+    // Repaint at most every ~30 ms so the bar moves smoothly without slowing the work.
+    async yieldMaybe() {
+      const now = performance.now();
+      if (now - lastYield > 30) { await new Promise(r => setTimeout(r, 0)); lastYield = performance.now(); }
+    }
+  };
+}
+
 // Suggested outliers from a first, unexcluded analysis. Returns a Set of exKeys.
-async function computeSuggestions(plateCharts, fc, universal) {
+async function computeSuggestions(plateCharts, fc, universal, tick) {
   const found = new Set();
   for (const pc of plateCharts) {
     const series = pc.samples.map(s => [s.points, s.params]);
     if (!universal) series.push([pc.std.points, pc.std.params]);
     const std = stdFitConfig(fc);
-    series.forEach(([pts, params], si) => {
+    for (let si = 0; si < series.length; si++) {
+      const [pts, params] = series[si];
       const isStd = !universal && si === series.length - 1;
       for (const q of suggestOutliers(pts, params, isStd ? std : fc)) found.add(q.key);
-    });
-    await new Promise(r => setTimeout(r, 0));
+      if (tick) await tick(1);
+    }
   }
   return found;
 }
@@ -1247,6 +1302,57 @@ function aoaToSheet(data) {
 }
 
 // ─── BUILD PROCESSED DATA SHEET ───────────────────────────────────────────────
+// Everything fitted for one plate (cacheable): rows for the sheet plus chart geometry.
+// A generator so the first run can report progress; buildDataSheet drains it synchronously.
+function* plateEntryGen(grid, p, meta, fc, excl, logFn) {
+  const {seriesST, seriesSA} = meta;
+  const series = getSeries(grid, p, excl);
+  const rawSeries = getSeries(grid, p);   // includes excluded wells, for the charts
+  const mkPts = (vals, xs, pred) => vals
+    .map((v,i)=>({x:xs[i], y:v, i}))
+    .filter(q=>q.y!==null&&isFinite(q.y)&&(!pred||pred(q)));
+  const flag = (q, col) => {
+    const key = exKey(p, col, q.i);
+    return {...q, key, excluded: excl.has(key), suggested: false};
+  };
+  logFn(`  Plate ${p+1}: fitting EC50...`);
+  const {row: ec50Row, fits: ec50Fits} = yield* ec50Gen(series, seriesSA, fc);
+  logFn(`  Plate ${p+1}: calculating concentrations...`);
+  const {conRow, choValRow, choDilRow, fittedParams, STindex,
+         stdPoints, stdParams, sampleChoices} = calculateConcentrations(series, seriesST, seriesSA, fc, meta.universalStd);
+  yield 1;   // standard curve + interpolation done
+
+  // Merge graph-1 (ec50Fits) and graph-2 (sampleChoices) geometry by series
+  // order — both iterate `series` identically — keeping only real samples
+  // that actually have data points (skips empty/over-range-only columns).
+  const samples = [];
+  for (let i = 0; i < ec50Fits.length; i++) {
+    const f = ec50Fits[i];
+    if (!f.isSample) continue;
+    const allPts = mkPts(rawSeries.get(f.name), seriesSA).map(q => flag(q, f.col));
+    if (allPts.length === 0) continue;
+    const c = sampleChoices[i] || {};
+    samples.push({
+      name: f.name,
+      params: f.params,
+      ed50: f.params ? f.params[2] : null,
+      points: allPts,
+      chosenVal: c.chosenVal != null ? c.chosenVal : null,
+      intersectionX: c.intersectionX != null ? c.intersectionX : null,
+    });
+  }
+  const stdCol = rawSeries.colOf.get('standard');
+  const stdAll = stdCol == null ? [] :
+    mkPts(rawSeries.get('standard'), seriesST, q => q.y <= 2).map(q => flag(q, stdCol));
+  const plateChart = {
+    plateIndex: p,
+    samples,
+    std: {points: stdAll, params: stdParams},
+    axes: {seriesSA, seriesST},
+  };
+  return {ec50Row, conRow, choValRow, choDilRow, plateFit: {params: fittedParams, STindex}, plateChart};
+}
+
 // `excl`: Set of exKeys excluded from every fit (kept, struck through, in the output).
 function buildDataSheet(grid, numPlates, meta, fc, corrEnabled, logFn, excl, cache) {
   excl = excl || new Set();
@@ -1274,62 +1380,11 @@ function buildDataSheet(grid, numPlates, meta, fc, corrEnabled, logFn, excl, cac
   for (let p=0; p<numPlates; p++) {
     const sig = p + ':' + [...excl].filter(k => k.startsWith(p + '|')).sort().join(',');
     const hit = cache && cache.get(sig);
-    if (hit) {
-      allEC50Rows.push(...hit.ec50Row); allConRows.push(...hit.conRow);
-      allCVRows.push(...hit.choValRow); allCDRows.push(...hit.choDilRow);
-      plateFits.push(hit.plateFit); plateCharts.push(hit.plateChart);
-      continue;
-    }
-    const series = getSeries(grid, p, excl);
-    const rawSeries = getSeries(grid, p);   // includes excluded wells, for the charts
-    const mkPts = (vals, xs, pred) => vals
-      .map((v,i)=>({x:xs[i], y:v, i}))
-      .filter(q=>q.y!==null&&isFinite(q.y)&&(!pred||pred(q)));
-    const flag = (q, col) => {
-      const key = exKey(p, col, q.i);
-      return {...q, key, excluded: excl.has(key), suggested: false};
-    };
-    logFn(`  Plate ${p+1}: fitting EC50...`);
-    const {row: ec50Row, fits: ec50Fits} = calculateEC50s(series, seriesSA, fc);
-    logFn(`  Plate ${p+1}: calculating concentrations...`);
-    const {conRow, choValRow, choDilRow, fittedParams, STindex,
-           stdPoints, stdParams, sampleChoices} = calculateConcentrations(series, seriesST, seriesSA, fc, meta.universalStd);
-    allEC50Rows.push(...ec50Row);
-    allConRows.push(...conRow);
-    allCVRows.push(...choValRow);
-    allCDRows.push(...choDilRow);
-    plateFits.push({params: fittedParams, STindex});
-
-    // Merge graph-1 (ec50Fits) and graph-2 (sampleChoices) geometry by series
-    // order — both iterate `series` identically — keeping only real samples
-    // that actually have data points (skips empty/over-range-only columns).
-    const samples = [];
-    for (let i = 0; i < ec50Fits.length; i++) {
-      const f = ec50Fits[i];
-      if (!f.isSample) continue;
-      const allPts = mkPts(rawSeries.get(f.name), seriesSA).map(q => flag(q, f.col));
-      if (allPts.length === 0) continue;
-      const c = sampleChoices[i] || {};
-      samples.push({
-        name: f.name,
-        params: f.params,
-        ed50: f.params ? f.params[2] : null,
-        points: allPts,
-        chosenVal: c.chosenVal != null ? c.chosenVal : null,
-        intersectionX: c.intersectionX != null ? c.intersectionX : null,
-      });
-    }
-    const stdCol = rawSeries.colOf.get('standard');
-    const stdAll = stdCol == null ? [] :
-      mkPts(rawSeries.get('standard'), seriesST, q => q.y <= 2).map(q => flag(q, stdCol));
-    const plateChart = {
-      plateIndex: p,
-      samples,
-      std: {points: stdAll, params: stdParams},
-      axes: {seriesSA, seriesST},
-    };
-    plateCharts.push(plateChart);
-    if (cache) cache.set(sig, {ec50Row, conRow, choValRow, choDilRow, plateFit: plateFits[plateFits.length-1], plateChart});
+    const entry = hit || drain(plateEntryGen(grid, p, meta, fc, excl, logFn));
+    if (!hit && cache) cache.set(sig, entry);
+    allEC50Rows.push(...entry.ec50Row); allConRows.push(...entry.conRow);
+    allCVRows.push(...entry.choValRow); allCDRows.push(...entry.choDilRow);
+    plateFits.push(entry.plateFit); plateCharts.push(entry.plateChart);
   }
 
   // Full grid: 29 original rows + blank + EC50 + blank + choVal + choDil + con
@@ -2347,16 +2402,22 @@ async function runProcessing(saved) {
   setSection('secReview', false); setSection('secDownload', false);
   updateSections();
 
+  const CANCELLED = new Error('cancelled');
+  const prog = makeProgress();
+  prog.set(0, 'Starting…');
+
   // Yield to browser to render log before heavy work
   await new Promise(r => setTimeout(r, 50));
 
   try {
     log('Parsing CSV files...', 'info');
+    prog.set(1, 'Parsing files…');
     const csvArrays = csvFiles.map(f => parseCsvText(f.text));
     const numPlates = csvArrays.length;
     log(`  ${numPlates} plate(s) parsed.`);
 
     log('Merging plates...', 'info');
+    prog.set(2, 'Merging plates…');
     const grid = mergePlates(csvArrays);
     log('  Done.');
 
@@ -2371,6 +2432,7 @@ async function runProcessing(saved) {
       log('  Note: both background options on — corrected ED50 runs on the 570-subtracted values.', 'warn');
 
     log('Reading metadata...', 'info');
+    prog.set(4, 'Reading metadata…');
     const meta = parseMetadata(metaBytes);
     log(`  ${meta.names.length} plate name row(s) found.`);
     log(`  Standard: ${meta.stdStart} ng/mL, 1:${meta.stdDil} dilution.`);
@@ -2387,34 +2449,60 @@ async function runProcessing(saved) {
     }
 
     log('Fitting curves and calculating results...', 'info');
+    prog.set(5, 'Fitting curves…');
     await new Promise(r => setTimeout(r, 10));
     review = {grid, numPlates, meta, outputName, corrEnabled,
               excl: new Set(), suggested: new Set(), hidden: new Set(), accepted: new Set(), analysis: null, cache: new Map()};
+    // Progress: 5–70 % fitting (one step per series), 70–97 % outlier screening, then assembly.
+    const fitTotal = numPlates * FIT_STEPS_PER_PLATE;
+    let fitDone = 0;
+    await warmCache(grid, numPlates, meta, fitConfig, review.excl, review.cache, msg => log(msg), async u => {
+      if (gen !== runGen) throw CANCELLED;
+      fitDone += u;
+      prog.set(5 + 65 * fitDone / fitTotal, `Fitting curves… plate ${Math.min(numPlates, Math.ceil(fitDone / FIT_STEPS_PER_PLATE))} of ${numPlates}`);
+      await prog.yieldMaybe();
+    });
+    if (corrEnabled) { prog.set(70, 'Edge-effect analysis…'); await new Promise(r => setTimeout(r, 0)); }
     review.analysis = buildDataSheet(grid, numPlates, meta, fitConfig, corrEnabled, msg => log(msg), review.excl, review.cache);
 
     log('Looking for outliers...', 'info');
-    await new Promise(r => setTimeout(r, 10));
-    review.suggested = await computeSuggestions(review.analysis.plateCharts, fitConfig, !!meta.universalStd);
-    if (gen !== runGen) { btn.disabled = false; btn.textContent = 'Process'; updateProcessBtn(); return; }
+    const sugTotal = review.analysis.plateCharts.reduce((n, pc) => n + pc.samples.length + (meta.universalStd ? 0 : 1), 0) || 1;
+    let sugDone = 0;
+    review.suggested = await computeSuggestions(review.analysis.plateCharts, fitConfig, !!meta.universalStd, async u => {
+      if (gen !== runGen) throw CANCELLED;
+      sugDone += u;
+      prog.set(70 + 27 * sugDone / sugTotal, 'Screening for outliers…');
+      await prog.yieldMaybe();
+    });
     log(`  ${review.suggested.size} suggested outlier(s).`);
 
     if (saved) {
       review.excl = new Set(saved.excl || []);
       review.accepted = new Set(saved.accepted || []);
       review.hidden = new Set(saved.hidden || []);
-      if (review.excl.size) { log('Restoring previous session...', 'info'); reanalyze(); }
+      if (review.excl.size) {
+        log('Restoring previous session...', 'info');
+        prog.set(97, 'Restoring previous session…');
+        await new Promise(r => setTimeout(r, 0));
+        reanalyze();
+      }
     }
+    prog.set(99, 'Preparing the review…');
 
     renderReview();
+    prog.set(100, 'Done');
     setBadge('badgeProcessing', '✓ Done', 'done');
     setSection('secProcessing', false);
     setSection('secReview', true);
     log('Review the graphs, exclude outliers if needed, accept each plate, then download.', 'success');
   } catch (err) {
-    log(`❌ Error: ${err.message}`, 'error');
-    console.error(err);
-    setBadge('badgeProcessing', 'Error', 'err');
-    setSection('secProcessing', true); setSection('secUpload', true);
+    if (err !== CANCELLED) {
+      log(`❌ Error: ${err.message}`, 'error');
+      console.error(err);
+      setBadge('badgeProcessing', 'Error', 'err');
+      setSection('secProcessing', true); setSection('secUpload', true);
+      document.getElementById('progressLabel').textContent = 'Stopped by an error';
+    }
   }
 
   btn.disabled = false;

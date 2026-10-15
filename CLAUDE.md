@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Working rules for every change
 
-- **Update the footer on every change.** The page footer in `index.html` (`.page-footer`, near the end of the markup) reads `Kasimir Reich · v<version> · <DD/MM/YYYY>`. Set the date to today's date and bump the version in the same edit. Version scheme: `MAJOR.MINOR.PATCH` — patch for fixes and tweaks, minor for new features, major for breaking changes to the workflow or output layout. Current: v1.5.5.
+- **Update the footer on every change.** The page footer in `index.html` (`.page-footer`, near the end of the markup) reads `Kasimir Reich · v<version> · <DD/MM/YYYY>`. Set the date to today's date and bump the version in the same edit. Version scheme: `MAJOR.MINOR.PATCH` — patch for fixes and tweaks, minor for new features, major for breaking changes to the workflow or output layout. Current: v1.6.0.
 - **Commit after each edit.** When a change is finished, commit it straight away (small, focused commits; message explains the why). Don't let edits pile up uncommitted.
 
 ## What this is
@@ -41,6 +41,10 @@ These row/col numbers are hard-coded in `getSeries`, `subtractBackground`, and `
 ## Page layout
 
 Four collapsible sections (`.sec`): **1 Upload** (CSV + metadata), **2 Processing** (analysis options, Process, log), **3 Reviewing** (`#chartsSection`), **4 Download** (filename + button). `setSection`/`toggleSection`/`setBadge` drive them; `updateSections()` keeps the Review/Download badges and the download button in sync with `review`. `runProcessing` collapses Upload when it starts and Processing when it finishes successfully, then opens Reviewing; Download opens once every plate is accepted. `newAnalysis` resets all four.
+
+## Progress bar
+
+Processing shows a progress bar with percentage and an ETA (pace so far). Fitting is written as generators (`ec50Gen`, `plateEntryGen`) that yield after every series: `buildDataSheet` drains them synchronously (`drain`), while `runProcessing` first fills the per-plate cache through `warmCache`, awaiting a tick per series (`makeProgress().yieldMaybe()` repaints every ~30 ms). `computeSuggestions` ticks per series too. Bands: 5–70 % fitting, 70–97 % outlier screening. A cancelled run (New analysis) throws `CANCELLED` from a tick.
 
 ## Processing pipeline (in `runProcessing`)
 

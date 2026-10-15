@@ -82,6 +82,8 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .switch input:checked + .slider::before{transform:translateX(18px)}
 .num-plates-row{display:flex;align-items:center;gap:8px;margin-top:8px}
 .checkmark{color:#34c759;font-size:18px}
+.dash-hit{stroke-opacity:0;pointer-events:stroke;cursor:help}.dash-hit:hover{stroke-opacity:.2}
+#chartTip{position:fixed;z-index:50;pointer-events:none;background:#1c1c1e;color:#fff;font-size:12px;padding:5px 8px;border-radius:6px;display:none;white-space:nowrap}
 .page-footer{text-align:center;font-size:11px;color:#aeaeb2;padding:12px 0 4px;letter-spacing:.2px}
 /* Per-plate charts */
 .plate-charts-block{margin-bottom:18px}
@@ -257,7 +259,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.6.1 &nbsp;·&nbsp; 15/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.7.0 &nbsp;·&nbsp; 15/10/2026</div>
 
 <script>
 'use strict';
@@ -2085,6 +2087,7 @@ function renderSampleChart(pc) {
     if (s.params && s.ed50 > 0) {
       const px = S.X(clampTo(s.ed50, xd.min, xd.max));
       body += `<line x1="${px.toFixed(1)}" y1="${CPAD.t}" x2="${px.toFixed(1)}" y2="${CHART_H-CPAD.b}" stroke="${col}" stroke-width="1" stroke-dasharray="4 3" opacity="0.65"/>`;
+      body += `<line class="dash-hit" x1="${px.toFixed(1)}" y1="${CPAD.t}" x2="${px.toFixed(1)}" y2="${CHART_H-CPAD.b}" stroke="${col}" stroke-width="12" data-tip="${escapeXml(`${s.name} · ED50 ≈ ${Math.max(10, Math.round(s.ed50))}`)}"/>`;
     }
     if (s.params) {
       body += `<path d="${curvePath(s.params, xd, S)}" fill="none" stroke="${col}" stroke-width="1.6"/>`;
@@ -2122,6 +2125,9 @@ function renderStandardChart(pc) {
     body += `<line x1="${xLeft.toFixed(1)}" y1="${py.toFixed(1)}" x2="${px.toFixed(1)}" y2="${py.toFixed(1)}" stroke="${col}" stroke-width="1.2" stroke-dasharray="4 3"/>`;
     body += `<line x1="${px.toFixed(1)}" y1="${py.toFixed(1)}" x2="${px.toFixed(1)}" y2="${yBot.toFixed(1)}" stroke="${col}" stroke-width="1.2" stroke-dasharray="4 3"/>`;
     body += `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="3" fill="none" stroke="${col}" stroke-width="1.6"/>`;
+    const tip = escapeXml(`${s.name} · concentration ≈ ${Math.round(s.intersectionX * 100) / 100} (OD ${s.chosenVal.toFixed(3)})`);
+    body += `<line class="dash-hit" x1="${xLeft.toFixed(1)}" y1="${py.toFixed(1)}" x2="${px.toFixed(1)}" y2="${py.toFixed(1)}" stroke="${col}" stroke-width="12" data-tip="${tip}"/>`;
+    body += `<line class="dash-hit" x1="${px.toFixed(1)}" y1="${py.toFixed(1)}" x2="${px.toFixed(1)}" y2="${yBot.toFixed(1)}" stroke="${col}" stroke-width="12" data-tip="${tip}"/>`;
   });
   return svgWrap(body);
 }
@@ -2235,6 +2241,20 @@ function setAllExclusions(mutate) {
   reanalyze();
   renderReview();
 }
+
+// Instant tooltip for the dotted guide lines (data-tip).
+(function () {
+  const tip = document.createElement('div');
+  tip.id = 'chartTip';
+  document.body.appendChild(tip);
+  const place = e => { tip.style.left = (e.clientX + 12) + 'px'; tip.style.top = (e.clientY + 14) + 'px'; };
+  document.addEventListener('mouseover', e => {
+    const el = e.target.closest && e.target.closest('#chartsSection [data-tip]');
+    if (!el) { tip.style.display = 'none'; return; }
+    tip.textContent = el.dataset.tip; tip.style.display = 'block'; place(e);
+  });
+  document.addEventListener('mousemove', e => { if (tip.style.display === 'block') place(e); });
+})();
 
 document.addEventListener('click', e => {
   if (!review) return;

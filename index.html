@@ -12,7 +12,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,san
 h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
 .toolbar-title{display:flex;align-items:center;gap:10px}
-.app-icon{width:36px;height:36px;background:linear-gradient(135deg,#007aff,#5ac8fa);border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;font-weight:700}
+.app-icon{width:56px;height:39px;flex-shrink:0;line-height:0}
 .card{background:#fff;border-radius:14px;padding:20px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .card-label{font-size:13px;font-weight:600;color:#6e6e73;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
 .drop-zone{border:2px dashed #c7c7cc;border-radius:10px;padding:24px;text-align:center;cursor:pointer;transition:all .2s;user-select:none;min-height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
@@ -97,7 +97,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 
 <div class="toolbar">
   <div class="toolbar-title">
-    <div class="app-icon">E</div>
+    <div class="app-icon" id="appIcon"></div>
     <h1>ELISA Workflow</h1>
   </div>
 </div>
@@ -184,10 +184,34 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 <!-- Per-plate visualizations (populated after processing) -->
 <div id="chartsSection" style="display:none"></div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.2.1 &nbsp;·&nbsp; 15/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.2.2 &nbsp;·&nbsp; 15/10/2026</div>
 
 <script>
 'use strict';
+
+// ─── LOGO: 96-well plate ──────────────────────────────────────────────────────
+// Dark grey plate, 12×8 wells. Each well has its own yellow→light-grey gradient (angle and
+// yellow share vary per well, fading down the rows like a dilution series); column 1 is plain light grey.
+function drawPlateLogo() {
+  const el = document.getElementById('appIcon');
+  if (!el) return;
+  const rnd = (i, k) => { const x = Math.sin(i * 127.1 + k * 311.7) * 43758.5453; return x - Math.floor(x); };
+  const LIGHT = '#d1d1d6', YEL = '#ffd60a', CELL = 9, M = 6;
+  let defs = '', wells = '';
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 12; c++) {
+    const i = r * 12 + c, cx = M + CELL / 2 + c * CELL, cy = M + CELL / 2 + r * CELL;
+    if (c === 0) { wells += `<circle cx="${cx}" cy="${cy}" r="3.5" fill="${LIGHT}"/>`; continue; }
+    const strength = Math.min(1, (1 - r / 9) * (0.55 + 0.45 * rnd(i, 1)) + 0.1);   // how far the yellow reaches
+    const ang = rnd(i, 2) * Math.PI * 2;
+    const x1 = 0.5 + 0.5 * Math.cos(ang), y1 = 0.5 + 0.5 * Math.sin(ang);
+    defs += `<linearGradient id="pw${i}" x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${(1 - x1).toFixed(2)}" y2="${(1 - y1).toFixed(2)}">`
+          + `<stop offset="0" stop-color="${YEL}"/><stop offset="${(0.25 + 0.75 * strength).toFixed(2)}" stop-color="${LIGHT}"/></linearGradient>`;
+    wells += `<circle cx="${cx}" cy="${cy}" r="3.5" fill="url(#pw${i})"/>`;
+  }
+  el.innerHTML = `<svg viewBox="0 0 ${M * 2 + CELL * 12} ${M * 2 + CELL * 8}" width="56" height="39" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="96-well plate"><defs>${defs}</defs>`
+               + `<rect width="${M * 2 + CELL * 12}" height="${M * 2 + CELL * 8}" rx="8" fill="#48484a"/>${wells}</svg>`;
+}
+drawPlateLogo();
 
 // ─── DEFAULTS ─────────────────────────────────────────────────────────────────
 const DEFAULT_FIT = {

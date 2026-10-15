@@ -184,7 +184,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 <!-- Per-plate visualizations (populated after processing) -->
 <div id="chartsSection" style="display:none"></div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.2.0 &nbsp;·&nbsp; 15/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.2.1 &nbsp;·&nbsp; 15/10/2026</div>
 
 <script>
 'use strict';
@@ -1195,7 +1195,7 @@ async function injectConditionalFormatting(xlsxArray, condfmt) {
 }
 
 // ─── PROTOCOL PARAMETERS SHEET ────────────────────────────────────────────────
-function buildProtocolSheet(meta, plateFits) {
+function buildProtocolSheet(meta, plateFits, plateCharts, fit) {
   const {seriesST, seriesSA, stdStart, stdDil, sampleStart, sampleDil} = meta;
   const GREY  = 'FFD9D9D9';
   const LBLUE = 'FFEEF2FF';
@@ -1222,19 +1222,47 @@ function buildProtocolSheet(meta, plateFits) {
   data[10]= [{v:'Dilution Series', t:'s', s:lblS},
              ...seriesSA.map(v=>({v:Math.round(v*100)/100, t:'n'}))];
   data[11]= [];
-  data[12]= [{v:'Fitted Standard Curve Parameters (4PL)', t:'s', s:hdrS}];
-  data[13]= ['Plate','Bottom','Top','IC50 (ng/mL)','Hill','Conc. Points Used'].map(v=>({v,t:'s',s:boldS}));
-  plateFits.forEach(({params, STindex}, i) => {
+  // Bounds used by the fits (source: Settings sheet of the metadata workbook, or the built-in defaults)
+  const std = stdFitConfig(fit);
+  data[12]= [{v:'Fit Bounds Used (4PL)', t:'s', s:hdrS}, {v:`Source: ${meta.fitSource}`, t:'s'}];
+  data[13]= ['Parameter','Lower Bound','Initial Guess','Upper Bound'].map(v=>({v,t:'s',s:boldS}));
+  const nameOf = ['Bottom', 'Top', 'IC50', 'Hill (samples)'];
+  const bnd = (label, lo, p0, hi) => [{v:label, t:'s', s:lblS}, {v:r4(lo), t:'n'}, {v:r4(p0), t:'n'}, {v:r4(hi), t:'n'}];
+  for (let i = 0; i < 4; i++) data.push(bnd(nameOf[i], fit.lower[i], fit.p0[i], fit.upper[i]));
+  data.push(bnd('Hill (standard)', std.lower[3], std.p0[3], std.upper[3]));
+  data.push([{v:'Standard curve uses the mirrored (negative) Hill range so it rises with concentration.', t:'s', s:{font:{sz:9}}}]);
+  data.push([]);
+
+  data.push([{v:'Fitted Standard Curve Parameters (4PL)', t:'s', s:hdrS}]);
+  data.push(['Plate','Bottom','Top','IC50 (ng/mL)','Hill','Conc. Points Used'].map(v=>({v,t:'s',s:boldS})));
+  plateFits.forEach(({params}, i) => {
     const [bottom, top, ic50, hill] = params;
-    data[14+i] = [
+    const used = plateCharts[i].std.points.filter(q => !q.excluded).length;
+    data.push([
       {v:`Plate ${i+1}`, t:'s', s:lblS},
       {v:r4(bottom), t:'n'}, {v:r4(top), t:'n'}, {v:r4(ic50), t:'n'}, {v:r4(hill), t:'n'},
-      {v: 8 - STindex, t:'n'}
-    ];
+      {v: used, t:'n'}
+    ]);
+  });
+  data.push([]);
+
+  data.push([{v:'Fitted Sample Curve Parameters (4PL)', t:'s', s:hdrS}]);
+  data.push(['Plate','Sample','Bottom','Top','IC50 (dilution factor)','Hill','Points Used'].map(v=>({v,t:'s',s:boldS})));
+  plateCharts.forEach((pc, i) => {
+    for (const smp of pc.samples) {
+      const used = smp.points.filter(q => !q.excluded).length;
+      const head = [{v:`Plate ${i+1}`, t:'s', s:lblS}, {v:smp.name, t:'s'}];
+      if (smp.params) {
+        const [bottom, top, ic50, hill] = smp.params;
+        data.push([...head, {v:r4(bottom), t:'n'}, {v:r4(top), t:'n'}, {v:r4(ic50), t:'n'}, {v:r4(hill), t:'n'}, {v:used, t:'n'}]);
+      } else {
+        data.push([...head, {v:'fit failed', t:'s'}, {v:'', t:'s'}, {v:'', t:'s'}, {v:'', t:'s'}, {v:used, t:'n'}]);
+      }
+    }
   });
 
   const ws = aoaToSheet(data);
-  ws['!cols'] = [{wch:34},{wch:14},{wch:16},{wch:14},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12}];
+  ws['!cols'] = [{wch:34},{wch:14},{wch:16},{wch:14},{wch:20},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12}];
   return ws;
 }
 
@@ -2143,7 +2171,7 @@ async function buildResultsBlob() {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, wsData, 'Processed Data');
   XLSX.utils.book_append_sheet(wb, buildResultsTableSheet(), 'Results Table');
-  XLSX.utils.book_append_sheet(wb, buildProtocolSheet(r.meta, plateFits), 'Protocol Parameters');
+  XLSX.utils.book_append_sheet(wb, buildProtocolSheet(r.meta, plateFits, r.analysis.plateCharts, fitConfig), 'Protocol Parameters');
   XLSX.utils.book_append_sheet(wb, buildSOPSheet(), 'SOP');
   if (corrected) {
     XLSX.utils.book_append_sheet(wb, buildCorrectedSummarySheet(corrected), 'ED50 Corrected');

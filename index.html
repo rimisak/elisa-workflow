@@ -247,7 +247,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.5.0 &nbsp;·&nbsp; 15/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.5.1 &nbsp;·&nbsp; 15/10/2026</div>
 
 <script>
 'use strict';
@@ -2118,14 +2118,13 @@ function plateBlockHtml(pc) {
   </div>`;
 }
 
-function reviewHeaderHtml() {
+function reviewHeaderHtml(bottom) {
   const r = review, n = r.numPlates;
   const nSug = [...r.suggested].filter(k => !r.excl.has(k)).length;
   const nAcc = r.accepted.size;
-  return `<div class="card-label" style="margin-bottom:10px">Review &amp; accept</div>
+  return `${bottom ? '' : '<div class="card-label" style="margin-bottom:10px">Review &amp; accept</div>'}
     <div class="review-bar">
-      <div class="review-info">Click a point on any graph to exclude or restore it. Orange rings are suggested outliers.
-        <b>${r.excl.size}</b> excluded · <b>${nSug}</b> suggested not yet excluded · <b>${nAcc}/${n}</b> plates accepted.</div>
+      <div class="review-info">${bottom ? '' : 'Click a point on any graph to exclude or restore it. Orange rings are suggested outliers. '}<b>${r.excl.size}</b> excluded · <b>${nSug}</b> suggested not yet excluded · <b>${nAcc}/${n}</b> plates accepted.</div>
       <div class="review-actions">
         <button class="btn btn-secondary btn-sm" data-act="excludeSuggested" ${nSug ? '' : 'disabled'}>Exclude suggested (${nSug})</button>
         <button class="btn btn-secondary btn-sm" data-act="clearExcl" ${r.excl.size ? '' : 'disabled'}>Clear exclusions</button>
@@ -2138,7 +2137,8 @@ function renderReview() {
   const sec = document.getElementById('chartsSection');
   if (!sec || !review) return;
   sec.innerHTML = `<div id="reviewHeader" class="card">${reviewHeaderHtml()}</div>`
-    + review.analysis.plateCharts.map(plateBlockHtml).join('');
+    + review.analysis.plateCharts.map(plateBlockHtml).join('')
+    + `<div id="reviewFooter" class="card">${reviewHeaderHtml(true)}</div>`;
   sec.style.display = 'block';
   saveSession();
   updateSections();
@@ -2148,6 +2148,7 @@ function refreshReview(plate) {
   saveSession();
   updateSections();
   document.getElementById('reviewHeader').innerHTML = reviewHeaderHtml();
+  document.getElementById('reviewFooter').innerHTML = reviewHeaderHtml(true);
   if (plate == null) { renderReview(); return; }
   document.getElementById('plateBlock' + plate).outerHTML = plateBlockHtml(review.analysis.plateCharts[plate]);
 }

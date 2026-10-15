@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Working rules for every change
 
-- **Update the footer on every change.** The page footer in `index.html` (`.page-footer`, near the end of the markup) reads `Kasimir Reich · v<version> · <DD/MM/YYYY>`. Set the date to today's date and bump the version in the same edit. Version scheme: `MAJOR.MINOR.PATCH` — patch for fixes and tweaks, minor for new features, major for breaking changes to the workflow or output layout. Current: v1.8.0.
+- **Update the footer on every change.** The page footer in `index.html` (`.page-footer`, near the end of the markup) reads `Kasimir Reich · v<version> · <DD/MM/YYYY>`. Set the date to today's date and bump the version in the same edit. Version scheme: `MAJOR.MINOR.PATCH` — patch for fixes and tweaks, minor for new features, major for breaking changes to the workflow or output layout. Current: v1.8.1.
 - **Commit after each edit.** When a change is finished, commit it straight away (small, focused commits; message explains the why). Don't let edits pile up uncommitted.
 
 ## What this is
@@ -54,7 +54,7 @@ Processing shows a progress bar with percentage and an ETA (pace so far). Fittin
 4. `buildDataSheet` → per plate: `getSeries` slices each column's 8-point dilution series, then `calculateEC50s` and `calculateConcentrations` fit a 4PL curve and interpolate. Returns the worksheet, a conditional-formatting spec, fitted params, and chart geometry.
 5. `buildProtocolSheet` (run parameters, fit bounds, fitted standard and sample curve parameters).
 6. **Review step, then download.** Process no longer downloads. It stores state in `review` (grid, meta, `excl` Set, `suggested` Set, `accepted` Set, per-plate fit `cache`) and renders interactive SVG charts (`renderReview`). Clicking a point toggles its exclusion (`toggleExclusion` → `reanalyze`, which refits only the touched plate via the cache). Exclusion keys are `"plate|col(1-12)|doseIndex(0-7)"` (`exKey`); `getSeries(grid, p, excl)` blanks excluded wells so they drop out of every fit, while the output sheet keeps the raw value, struck through, and adds an "Excluded Points" sheet. Suggested outliers come from `suggestOutliers` (leave-one-out refit of the two largest residuals; thresholds in `OUTLIER`) and are only suggestions until excluded. Download (`downloadResults`: `XLSX.write` → `injectConditionalFormatting` → `downloadBlob`) is enabled once every plate is accepted; any change to a plate un-accepts it.
-   - Standard fit uses wells with OD ≤ 2; sample interpolation uses the highest OD ≤ 1.5, preferring the least-diluted reading within noise of it (`stdFitPoints`, `sampleChoicePoint`), each with its own true dilution index.
+   - Standard fit uses wells with OD ≤ 2; sample interpolation uses the least-diluted reading with OD ≤ 1.5 (`stdFitPoints`, `sampleChoicePoint`), each with its own true dilution index.
 
 ### Optional "Edge-effect ED50" stage (toggle, default off)
 

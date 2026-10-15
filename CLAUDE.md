@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Working rules for every change
 
-- **Update the footer on every change.** The page footer in `index.html` (`.page-footer`, near the end of the markup) reads `Kasimir Reich · v<version> · <DD/MM/YYYY>`. Set the date to today's date and bump the version in the same edit. Version scheme: `MAJOR.MINOR.PATCH` — patch for fixes and tweaks, minor for new features, major for breaking changes to the workflow or output layout. Current: v1.3.3.
+- **Update the footer on every change.** The page footer in `index.html` (`.page-footer`, near the end of the markup) reads `Kasimir Reich · v<version> · <DD/MM/YYYY>`. Set the date to today's date and bump the version in the same edit. Version scheme: `MAJOR.MINOR.PATCH` — patch for fixes and tweaks, minor for new features, major for breaking changes to the workflow or output layout. Current: v1.4.0.
 - **Commit after each edit.** When a change is finished, commit it straight away (small, focused commits; message explains the why). Don't let edits pile up uncommitted.
 
 ## What this is
@@ -37,6 +37,10 @@ Almost every function depends on one fixed grid convention — understand this b
 - Rows `21–28` → the **570 nm** block ("Raw Data (570 2)"). A given well's 570 read is exactly **12 rows below** its 450 read.
 
 These row/col numbers are hard-coded in `getSeries`, `subtractBackground`, and `buildCondfmtRanges` (the latter uses Excel 1-indexed rows, i.e. 450 nm = rows 10–17, 570 nm = rows 22–29). Changing the layout means updating all of them in lockstep.
+
+## Page layout
+
+Four collapsible sections (`.sec`): **1 Upload** (CSV + metadata), **2 Processing** (analysis options, Process, log), **3 Reviewing** (`#chartsSection`), **4 Download** (filename + button). `setSection`/`toggleSection`/`setBadge` drive them; `updateSections()` keeps the Review/Download badges and the download button in sync with `review`. `runProcessing` collapses Upload when it starts and Processing when it finishes successfully, then opens Reviewing; Download opens once every plate is accepted. `newAnalysis` resets all four.
 
 ## Processing pipeline (in `runProcessing`)
 

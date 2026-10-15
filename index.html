@@ -13,6 +13,21 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
 .toolbar-title{display:flex;align-items:center;gap:10px}
 .app-icon{width:40px;height:40px;flex-shrink:0;line-height:0}
+.sec{margin-bottom:14px}
+.sec-head{display:flex;align-items:center;gap:10px;background:#fff;border-radius:14px;padding:14px 20px;box-shadow:0 1px 3px rgba(0,0,0,.08);cursor:pointer;user-select:none}
+.sec-head:hover{background:#fafafc}
+.sec-num{width:24px;height:24px;border-radius:50%;background:#007aff;color:#fff;font-size:13px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.sec-title{font-size:16px;font-weight:600;flex:1}
+.sec-badge{font-size:12px;font-weight:500;padding:3px 10px;border-radius:999px}
+.sec-badge.idle{background:#f2f2f7;color:#8e8e93}
+.sec-badge.busy{background:#e5f0ff;color:#0062cc}
+.sec-badge.done{background:#e3f8e9;color:#1e8e3e}
+.sec-badge.err{background:#ffe5e3;color:#c4261d}
+.sec-chev{color:#8e8e93;transition:transform .2s}
+.sec:not(.open) .sec-chev{transform:rotate(-90deg)}
+.sec-body{display:none;margin-top:14px}
+.sec.open .sec-body{display:block}
+.sec-empty{background:#fff;border-radius:14px;padding:20px;color:#8e8e93;font-size:14px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .card{background:#fff;border-radius:14px;padding:20px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .card-label{font-size:13px;font-weight:600;color:#6e6e73;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
 .drop-zone{border:2px dashed #c7c7cc;border-radius:10px;padding:24px;text-align:center;cursor:pointer;transition:all .2s;user-select:none;min-height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
@@ -105,6 +120,12 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   <button class="btn btn-primary process-btn" id="newAnalysisBtn" onclick="newAnalysis()" title="Clear both files and the current analysis">New analysis</button>
 </div>
 
+<div class="sec open" id="secUpload">
+  <div class="sec-head" onclick="toggleSection('secUpload')">
+    <span class="sec-num">1</span><span class="sec-title">Upload</span>
+    <span class="sec-badge idle" id="badgeUpload">Waiting for files</span><span class="sec-chev">▾</span>
+  </div>
+  <div class="sec-body">
 <!-- CSV Drop Zone -->
 <div class="card">
   <div class="card-label">Plate Reader CSV Files</div>
@@ -140,15 +161,16 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   <input type="file" id="metaInput" accept=".xlsx,.XLSX" style="display:none" onchange="onMetaInputChange()">
 </div>
 
-<!-- Output -->
-<div class="card">
-  <div class="card-label">Output</div>
-  <div class="output-row">
-    <span style="font-size:14px;color:#6e6e73;white-space:nowrap">Filename:</span>
-    <input class="text-input" type="text" id="outputName" value="" placeholder="Output filename (without .xlsx)">
+
   </div>
 </div>
 
+<div class="sec open" id="secProcessing">
+  <div class="sec-head" onclick="toggleSection('secProcessing')">
+    <span class="sec-num">2</span><span class="sec-title">Processing</span>
+    <span class="sec-badge idle" id="badgeProcessing">Not started</span><span class="sec-chev">▾</span>
+  </div>
+  <div class="sec-body">
 <!-- Analysis options -->
 <div class="card">
   <div class="card-label">Analysis Options</div>
@@ -183,13 +205,85 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   <div class="log-box" id="logBox" style="margin-top:12px;display:none"></div>
 </div>
 
+
+  </div>
+</div>
+
+<div class="sec" id="secReview">
+  <div class="sec-head" onclick="toggleSection('secReview')">
+    <span class="sec-num">3</span><span class="sec-title">Reviewing</span>
+    <span class="sec-badge idle" id="badgeReview">Not started</span><span class="sec-chev">▾</span>
+  </div>
+  <div class="sec-body">
+<div class="sec-empty" id="reviewEmpty">Process your data to review the curves here.</div>
 <!-- Per-plate visualizations (populated after processing) -->
 <div id="chartsSection" style="display:none"></div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.3.3 &nbsp;·&nbsp; 15/10/2026</div>
+
+  </div>
+</div>
+
+<div class="sec" id="secDownload">
+  <div class="sec-head" onclick="toggleSection('secDownload')">
+    <span class="sec-num">4</span><span class="sec-title">Download</span>
+    <span class="sec-badge idle" id="badgeDownload">Not started</span><span class="sec-chev">▾</span>
+  </div>
+  <div class="sec-body">
+<div class="card">
+  <div class="output-row">
+    <span style="font-size:14px;color:#6e6e73;white-space:nowrap">Filename:</span>
+    <input class="text-input" type="text" id="outputName" value="" placeholder="Output filename (without .xlsx)" oninput="updateSections()">
+  </div>
+  <button class="btn btn-primary process-btn" id="downloadBtn" style="margin-top:12px" onclick="downloadResults()" disabled>Download</button>
+  <div class="status-row"><span id="downloadHint">Accept all plates in the review step to enable the download.</span></div>
+</div>
+  </div>
+</div>
+
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.4.0 &nbsp;·&nbsp; 15/10/2026</div>
 
 <script>
 'use strict';
+
+// ─── COLLAPSIBLE SECTIONS ─────────────────────────────────────────────────────
+function setSection(id, open) { document.getElementById(id).classList.toggle('open', !!open); }
+function toggleSection(id) { document.getElementById(id).classList.toggle('open'); }
+function setBadge(id, text, cls) {
+  const el = document.getElementById(id);
+  el.textContent = text; el.className = 'sec-badge ' + cls;
+}
+// Badges and the download button follow the review state.
+function updateSections() {
+  const r = review, btn = document.getElementById('downloadBtn'), hint = document.getElementById('downloadHint');
+  const name = (document.getElementById('outputName').value.trim() || defaultOutputName()) + '.xlsx';
+  document.getElementById('reviewEmpty').style.display = r ? 'none' : 'block';
+  if (!r || !r.analysis) {
+    setBadge('badgeReview', 'Not started', 'idle'); setBadge('badgeDownload', 'Not started', 'idle');
+    btn.disabled = true; btn.textContent = 'Download';
+    hint.textContent = 'Accept all plates in the review step to enable the download.';
+    return;
+  }
+  const n = r.numPlates, acc = r.accepted.size, all = acc === n;
+  setBadge('badgeReview', all ? '✓ All plates accepted' : `${acc}/${n} plates accepted`, all ? 'done' : 'busy');
+  if (!all) {
+    r.dlOpened = false;
+    setBadge('badgeDownload', 'Waiting for review', 'idle');
+    btn.disabled = true; btn.textContent = 'Download';
+    hint.textContent = `Accept all plates in the review step to enable the download (${acc}/${n} accepted).`;
+    return;
+  }
+  if (!r.dlOpened) { r.dlOpened = true; setSection('secDownload', true); }
+  prepareDownload();
+  if (r.blob) {
+    setBadge('badgeDownload', 'Ready', 'done');
+    btn.disabled = false; btn.textContent = 'Download ' + name;
+    hint.textContent = r.excl.size ? `${r.excl.size} excluded point(s) will be listed on the "Excluded Points" sheet.` : 'No points excluded.';
+  } else {
+    setBadge('badgeDownload', 'Preparing…', 'busy');
+    btn.disabled = true; btn.textContent = 'Preparing…';
+    hint.textContent = 'Building the workbook…';
+  }
+}
 
 // Default output name: today's date as YYMMDD + _ELISA_Analysis
 function defaultOutputName() {
@@ -327,6 +421,8 @@ async function restoreFiles() {
 // ─── UI HELPERS ───────────────────────────────────────────────────────────────
 function updateProcessBtn() {
   const ok = csvFiles.length > 0 && metaBytes !== null;
+  if (!(review && review.analysis))
+    setBadge('badgeUpload', ok ? `✓ ${csvFiles.length} CSV + metadata` : (csvFiles.length || metaBytes ? 'Waiting for the other file' : 'Waiting for files'), ok ? 'done' : 'idle');
   document.getElementById('processBtn').disabled = !ok;
   document.getElementById('statusText').textContent = ok
     ? `Ready: ${csvFiles.length} CSV file(s) + metadata loaded.`
@@ -439,6 +535,10 @@ function newAnalysis() {
   sec.style.display = 'none'; sec.innerHTML = '';
   const box = document.getElementById('logBox');
   box.innerHTML = ''; box.style.display = 'none';
+  setSection('secUpload', true); setSection('secProcessing', true);
+  setSection('secReview', false); setSection('secDownload', false);
+  setBadge('badgeProcessing', 'Not started', 'idle');
+  updateProcessBtn(); updateSections();
   window.scrollTo({top: 0, behavior: 'smooth'});
 }
 
@@ -1968,7 +2068,6 @@ function plateBlockHtml(pc) {
 
 function reviewHeaderHtml() {
   const r = review, n = r.numPlates;
-  if (r.accepted.size === n) prepareDownload();
   const nSug = [...r.suggested].filter(k => !r.excl.has(k)).length;
   const nAcc = r.accepted.size;
   return `<div class="card-label" style="margin-bottom:10px">Review &amp; accept</div>
@@ -1979,7 +2078,6 @@ function reviewHeaderHtml() {
         <button class="btn btn-secondary btn-sm" data-act="excludeSuggested" ${nSug ? '' : 'disabled'}>Exclude suggested (${nSug})</button>
         <button class="btn btn-secondary btn-sm" data-act="clearExcl" ${r.excl.size ? '' : 'disabled'}>Clear exclusions</button>
         <button class="btn btn-secondary btn-sm" data-act="acceptAll" ${nAcc === n ? 'disabled' : ''}>Accept all</button>
-        <button class="btn btn-primary btn-sm" data-act="download" ${nAcc === n && r.blob ? '' : 'disabled'}>${nAcc === n && !r.blob ? 'Preparing…' : 'Download ' + escapeXml(r.outputName) + '.xlsx'}</button>
       </div>
     </div>`;
 }
@@ -1991,10 +2089,12 @@ function renderReview() {
     + review.analysis.plateCharts.map(plateBlockHtml).join('');
   sec.style.display = 'block';
   saveSession();
+  updateSections();
 }
 
 function refreshReview(plate) {
   saveSession();
+  updateSections();
   document.getElementById('reviewHeader').innerHTML = reviewHeaderHtml();
   if (plate == null) { renderReview(); return; }
   document.getElementById('plateBlock' + plate).outerHTML = plateBlockHtml(review.analysis.plateCharts[plate]);
@@ -2005,7 +2105,7 @@ function toggleExclusion(key) {
   if (r.excl.has(key)) r.excl.delete(key); else r.excl.add(key);
   const p = Number(key.split('|')[0]);
   r.accepted.delete(p);   // data changed — plate must be re-accepted
-  r.blob = null; r.blobTok = (r.blobTok || 0) + 1;
+  r.blob = null; r.prepFailed = false; r.blobTok = (r.blobTok || 0) + 1;
   reanalyze();
   refreshReview(p);
 }
@@ -2013,7 +2113,7 @@ function toggleExclusion(key) {
 function setAllExclusions(mutate) {
   review.excl = mutate(review.excl);
   review.accepted.clear();
-  review.blob = null; review.blobTok = (review.blobTok || 0) + 1;
+  review.blob = null; review.prepFailed = false; review.blobTok = (review.blobTok || 0) + 1;
   reanalyze();
   renderReview();
 }
@@ -2066,7 +2166,6 @@ document.addEventListener('click', e => {
     case 'acceptAll':
       for (let p = 0; p < review.numPlates; p++) review.accepted.add(p);
       renderReview(); break;
-    case 'download': downloadResults(); break;
   }
 });
 
@@ -2144,28 +2243,27 @@ async function buildResultsBlob() {
 
 async function prepareDownload() {
   const r = review;
-  if (r.blob || r.preparing) return;
+  if (r.blob || r.preparing || r.prepFailed) return;
   r.preparing = true;
   const tok = r.blobTok || 0;
   try {
     const blob = await buildResultsBlob();
     if (review === r && (r.blobTok || 0) === tok && r.accepted.size === r.numPlates) r.blob = blob;
   } catch (err) {
+    r.prepFailed = true;
     log(`❌ Error: ${err.message}`, 'error');
     console.error(err);
   }
   r.preparing = false;
-  if (review === r) {
-    const h = document.getElementById('reviewHeader');
-    if (h) h.innerHTML = reviewHeaderHtml();
-  }
+  if (review === r) updateSections();
 }
 
 function downloadResults() {
   const r = review;
   if (!r || !r.blob) return;
-  downloadBlob(r.blob, r.outputName + '.xlsx');
-  log(`✅ Downloaded ${r.outputName}.xlsx (${r.excl.size} point(s) excluded).`, 'success');
+  const name = document.getElementById('outputName').value.trim() || defaultOutputName();
+  downloadBlob(r.blob, name + '.xlsx');
+  log(`✅ Downloaded ${name}.xlsx (${r.excl.size} point(s) excluded).`, 'success');
 }
 
 let runGen = 0;   // bumped by newAnalysis() so an in-flight run can tell it was cancelled
@@ -2181,6 +2279,10 @@ async function runProcessing(saved) {
   if (chartsSec) { chartsSec.style.display = 'none'; chartsSec.innerHTML = ''; }
 
   const outputName = document.getElementById('outputName').value.trim() || defaultOutputName();
+  setSection('secUpload', false); setBadge('badgeUpload', '✓ Done', 'done');
+  setSection('secProcessing', true); setBadge('badgeProcessing', 'Running…', 'busy');
+  setSection('secReview', false); setSection('secDownload', false);
+  updateSections();
 
   // Yield to browser to render log before heavy work
   await new Promise(r => setTimeout(r, 50));
@@ -2240,10 +2342,15 @@ async function runProcessing(saved) {
     }
 
     renderReview();
+    setBadge('badgeProcessing', '✓ Done', 'done');
+    setSection('secProcessing', false);
+    setSection('secReview', true);
     log('Review the graphs, exclude outliers if needed, accept each plate, then download.', 'success');
   } catch (err) {
     log(`❌ Error: ${err.message}`, 'error');
     console.error(err);
+    setBadge('badgeProcessing', 'Error', 'err');
+    setSection('secProcessing', true); setSection('secUpload', true);
   }
 
   btn.disabled = false;

@@ -100,7 +100,11 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
     <div class="app-icon" id="appIcon"></div>
     <h1>ELISA Workflow</h1>
   </div>
-  <button class="btn btn-secondary btn-sm" id="newAnalysisBtn" onclick="newAnalysis()" title="Clear both files and the current analysis">New analysis</button>
+</div>
+
+<!-- New analysis -->
+<div class="card">
+  <button class="btn btn-primary process-btn" id="newAnalysisBtn" onclick="newAnalysis()" title="Clear both files and the current analysis">New analysis</button>
 </div>
 
 <!-- CSV Drop Zone -->
@@ -144,7 +148,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   <div class="card-label">Output</div>
   <div class="output-row">
     <span style="font-size:14px;color:#6e6e73;white-space:nowrap">Filename:</span>
-    <input class="text-input" type="text" id="outputName" value="ELISA_Output" placeholder="Output filename (without .xlsx)">
+    <input class="text-input" type="text" id="outputName" value="" placeholder="Output filename (without .xlsx)">
   </div>
 </div>
 
@@ -185,10 +189,17 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 <!-- Per-plate visualizations (populated after processing) -->
 <div id="chartsSection" style="display:none"></div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.2.5 &nbsp;·&nbsp; 15/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.2.6 &nbsp;·&nbsp; 15/10/2026</div>
 
 <script>
 'use strict';
+
+// Default output name: today's date as YYMMDD + _ELISA_Analysis
+function defaultOutputName() {
+  const d = new Date(), p = n => String(n).padStart(2, '0');
+  return `${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}_ELISA_Analysis`;
+}
+document.getElementById('outputName').value = defaultOutputName();
 
 // ─── LOGO: 96-well plate in a blue square (header logo + favicon) ────────────
 // Dark grey plate, 12×8 wells. Each column has one yellow→light-grey gradient running down all
@@ -422,6 +433,7 @@ function newAnalysis() {
   if ((csvFiles.length || metaBytes || review) &&
       !confirm('Start a new analysis? This clears both files and the current analysis, including any exclusions.')) return;
   runGen++;
+  document.getElementById('outputName').value = defaultOutputName();
   dropSession();
   review = null;
   clearCSV();
@@ -2285,7 +2297,7 @@ async function runProcessing(saved) {
   const chartsSec = document.getElementById('chartsSection');
   if (chartsSec) { chartsSec.style.display = 'none'; chartsSec.innerHTML = ''; }
 
-  const outputName = document.getElementById('outputName').value.trim() || 'ELISA_Output';
+  const outputName = document.getElementById('outputName').value.trim() || defaultOutputName();
 
   // Yield to browser to render log before heavy work
   await new Promise(r => setTimeout(r, 50));

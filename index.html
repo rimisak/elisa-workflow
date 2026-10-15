@@ -142,14 +142,14 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   <div class="drop-zone" id="csvZone" onclick="browseCSV()" ondragover="onDragOver(event,'csvZone')" ondragleave="onDragLeave('csvZone')" ondrop="onDropCSV(event)">
     <div class="drop-zone-icon">📂</div>
     <div class="drop-zone-text" id="csvZoneText">Drop CSV files here or click to browse</div>
-    <div class="drop-zone-sub">BMG Omega plate reader exports (.CSV), multiple files allowed</div>
+    <div class="drop-zone-sub">BMG Omega plate reader exports (.CSV), multiple files allowed. An Excel file with “meta” in its name is moved to the Metadata slot.</div>
     <div class="file-list" id="csvFileList"></div>
   </div>
   <div style="margin-top:8px;display:flex;gap:8px;justify-content:space-between">
     <button class="btn btn-secondary btn-sm" onclick="createCsvTemplate()">Create a template file</button>
     <button class="btn btn-secondary btn-sm" onclick="clearCSV()">Clear</button>
   </div>
-  <input type="file" id="csvInput" accept=".csv,.CSV" multiple style="display:none" onchange="onCSVInputChange()">
+  <input type="file" id="csvInput" accept=".csv,.CSV,.xlsx,.XLSX,.xls,.XLS" multiple style="display:none" onchange="onCSVInputChange()">
 </div>
 
 <!-- Metadata -->
@@ -250,7 +250,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.5.4 &nbsp;·&nbsp; 15/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.5.5 &nbsp;·&nbsp; 15/10/2026</div>
 
 <script>
 'use strict';
@@ -459,15 +459,22 @@ function onDragLeave(id) {
 
 // CSV zone
 function browseCSV() { document.getElementById('csvInput').click(); }
+// The CSV area also accepts the metadata workbook: an Excel file with "meta" in its name goes to the
+// Metadata slot, so everything can be dropped at once. Other file types are ignored.
+function routeFiles(files) {
+  const csv  = files.filter(f => /\.csv$/i.test(f.name));
+  const meta = files.find(f => /\.xlsx?$/i.test(f.name) && /meta/i.test(f.name));
+  if (csv.length) loadCSVFiles(csv);
+  if (meta) loadMetaFile(meta);
+}
 function onCSVInputChange() {
-  const files = Array.from(document.getElementById('csvInput').files);
-  loadCSVFiles(files);
+  routeFiles(Array.from(document.getElementById('csvInput').files));
+  document.getElementById('csvInput').value = '';
 }
 function onDropCSV(e) {
   e.preventDefault();
   onDragLeave('csvZone');
-  const files = Array.from(e.dataTransfer.files).filter(f => f.name.match(/\.csv$/i));
-  loadCSVFiles(files);
+  routeFiles(Array.from(e.dataTransfer.files));
 }
 function loadCSVFiles(files) {
   if (!files.length) return;

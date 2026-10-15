@@ -113,6 +113,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .ptile{min-width:30px;height:24px;padding:0 4px;border-radius:5px;border:1px solid #d1d1d6;background:#f2f2f7;font-size:11px;cursor:pointer;color:#636366}
 .ptile.flag{background:#fff0d6;border-color:#ff9500;color:#a35c00}
 .ptile.edit{background:#e4f0ff;border-color:#007aff;color:#0050b3}
+.ptile.res{background:#eefaf1;border:1px dashed #34c759;color:#1d7a35}
 .ptile.acc{background:#dff6e5;border-color:#34c759;color:#1d7a35}
 .ptile.cur{outline:2px solid #1c1c1e;outline-offset:1px}
 .plate-charts-block.current .plate-charts-header{color:#007aff}
@@ -290,7 +291,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.12.1 &nbsp;·&nbsp; 15/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.12.2 &nbsp;·&nbsp; 15/10/2026</div>
 
 <script>
 'use strict';
@@ -2558,6 +2559,7 @@ function plateFlags(pc) {
   if (b.m) parts.push(`${pl(b.m, 'sample')} with ED50 or slope at a fit bound`);
   const headline = parts.length ? 'Flagged: ' + (parts.length > 1 ? parts.slice(0, -1).join(', ') + ' and ' + parts[parts.length - 1] : parts[0]) + '.' : '';
   const out = {samples, notes, reasons, headline, count: samples.size + notes.length};
+  if (out.count) (r.everFlagged || (r.everFlagged = new Set())).add(pc.plateIndex);
   (r.flagCache || (r.flagCache = {}))[pc.plateIndex] = out;
   return out;
 }
@@ -2565,6 +2567,15 @@ function plateExclCount(p) {
   let n = 0;
   for (const k of review.excl) if (k.startsWith(p + '|')) n++;
   return n;
+}
+// Flagged earlier (or has suggested outliers that were excluded), now free of flags thanks to the
+// user's exclusions.
+function plateResolved(p) {
+  const r = review;
+  if (plateFlags(r.analysis.plateCharts[p]).count || !plateExclCount(p)) return false;
+  if (r.everFlagged && r.everFlagged.has(p)) return true;
+  for (const k of r.excl) if (k.startsWith(p + '|') && r.suggested.has(k)) return true;
+  return false;
 }
 // Needs a human look: not accepted yet, and flagged or already edited by the user.
 function needsReview(p) {
@@ -2711,6 +2722,8 @@ function plateBlockHtml(pc) {
     banner = `<div class="flag-banner"><div class="flag-head">⚠ ${escapeXml(fl.headline)}</div>
       <div class="flag-list">${items}</div>
       ${focus ? `<div class="focus-note">Graphs show only the ${fl.samples.size} flagged of ${pc.samples.length} samples — “Show all” reveals the rest.</div>` : ''}</div>`;
+  } else if (plateResolved(p)) {
+    banner = `<div class="flag-banner ok"><div class="flag-head">✓ Resolved — ${nEx} point${nEx > 1 ? 's' : ''} excluded, no issues remain.</div></div>`;
   } else if (nEx) {
     banner = `<div class="flag-banner ok"><div class="flag-head">✎ No issues flagged — ${nEx} point${nEx > 1 ? 's' : ''} excluded by you.</div></div>`;
   } else {
@@ -2735,8 +2748,9 @@ function plateTilesHtml() {
   const r = review;
   return [...Array(r.numPlates).keys()].map(p => {
     const f = plateFlags(r.analysis.plateCharts[p]), ex = plateExclCount(p);
-    const cls = r.accepted.has(p) ? 'acc' : f.count ? 'flag' : ex ? 'edit' : '';
-    const tip = `Plate ${p + 1}` + (r.accepted.has(p) ? ' — accepted' : f.count ? ' — ' + f.reasons.slice(0, 4).join('; ') : ex ? ' — edited' : ' — clean');
+    const res = !r.accepted.has(p) && plateResolved(p);
+    const cls = r.accepted.has(p) ? 'acc' : f.count ? 'flag' : res ? 'res' : ex ? 'edit' : '';
+    const tip = `Plate ${p + 1}` + (r.accepted.has(p) ? ' — accepted' : f.count ? ' — ' + f.reasons.slice(0, 4).join('; ') : res ? ' — resolved by exclusion' : ex ? ' — edited' : ' — clean');
     return `<button class="ptile ${cls}${r.cur === p ? ' cur' : ''}" data-goto="${p}" title="${escapeXml(tip)}">${p + 1}${r.accepted.has(p) ? '✓' : f.count ? '·' + f.count : ''}</button>`;
   }).join('');
 }

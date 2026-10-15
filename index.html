@@ -259,7 +259,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.7.0 &nbsp;·&nbsp; 15/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.7.1 &nbsp;·&nbsp; 15/10/2026</div>
 
 <script>
 'use strict';
@@ -1087,7 +1087,10 @@ function stdFitPoints(vals, seriesST) {
 }
 
 // Reading used to interpolate a sample: the highest OD at or below 1.5 (the curve's
-// reliable range). If everything is saturated, assume 1.49 at the last populated dilution.
+// reliable range). If several readings are within noise of that maximum (typical when the
+// whole series is low and flat), take the least-diluted one so noise at a high dilution
+// can't inflate the result by the dilution factor. If everything is saturated, assume 1.49
+// at the last populated dilution.
 function sampleChoicePoint(vals) {
   let best = null, last = 0;
   vals.forEach((v,i) => {
@@ -1095,7 +1098,13 @@ function sampleChoicePoint(vals) {
     last = i;
     if (v <= 1.5 && (best === null || v > best.y)) best = {y:v, i};
   });
-  return best || {y:1.49, i:last};
+  if (!best) return {y:1.49, i:last};
+  const tol = Math.max(0.05, 0.1 * best.y);
+  for (let i = 0; i < best.i; i++) {
+    const v = vals[i];
+    if (v !== null && isFinite(v) && v <= 1.5 && v >= best.y - tol) return {y:v, i};
+  }
+  return best;
 }
 
 // Standard-curve config: same Bottom/Top/IC50, Hill mirrored to negative so the curve rises.

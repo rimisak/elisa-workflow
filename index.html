@@ -104,6 +104,23 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .plate-charts-header{display:flex;align-items:center;gap:10px}
 .btn-accepted{background:#34c759;color:#fff}
 .btn-accepted:hover{background:#2aa84a}
+.rv-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 8px}
+.rv-tab{border:1px solid #d1d1d6;background:#fff;border-radius:999px;padding:4px 12px;font-size:12px;cursor:pointer;color:#3a3a3c}
+.rv-tab.on{background:#007aff;border-color:#007aff;color:#fff}
+.rv-keys{font-size:11px;color:#8e8e93;margin-top:8px;line-height:1.7}
+.rv-keys kbd{font:inherit;font-size:10px;border:1px solid #c7c7cc;border-bottom-width:2px;border-radius:4px;padding:0 4px;background:#fff;color:#3a3a3c}
+.pt-strip{display:flex;flex-wrap:wrap;gap:3px;margin-top:8px;max-height:132px;overflow-y:auto}
+.ptile{min-width:30px;height:24px;padding:0 4px;border-radius:5px;border:1px solid #d1d1d6;background:#f2f2f7;font-size:11px;cursor:pointer;color:#636366}
+.ptile.flag{background:#fff0d6;border-color:#ff9500;color:#a35c00}
+.ptile.edit{background:#e4f0ff;border-color:#007aff;color:#0050b3}
+.ptile.acc{background:#dff6e5;border-color:#34c759;color:#1d7a35}
+.ptile.cur{outline:2px solid #1c1c1e;outline-offset:1px}
+.plate-charts-block.current .plate-charts-header{color:#007aff}
+.plate-charts-block.current{box-shadow:-4px 0 0 #007aff;padding-left:8px}
+.flag-badge{font-size:11px;font-weight:500;border-radius:999px;padding:2px 9px;background:#fff0d6;color:#a35c00;border:1px solid #ff9500}
+.focus-note{font-size:12px;color:#8e8e93;margin:2px 0 6px}
+.rv-empty{padding:18px;text-align:center;color:#636366;font-size:13px}
+#reviewBusy{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#1c1c1e;color:#fff;border-radius:999px;padding:8px 18px;font-size:13px;z-index:50;display:none;box-shadow:0 4px 16px rgba(0,0,0,.25)}
 .review-bar{display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:space-between}
 .review-info{font-size:13px;color:#3a3a3c;flex:1;min-width:260px}
 .review-actions{display:flex;gap:8px;flex-wrap:wrap}
@@ -267,7 +284,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.11.0 &nbsp;·&nbsp; 15/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.12.0 &nbsp;·&nbsp; 15/10/2026</div>
 
 <script>
 'use strict';
@@ -2400,7 +2417,11 @@ function pointSvg(p, S, col, r, label) {
 
 // Left graph: each sample's measured points, its fitted 4PL curve, and a vertical line at its ED50.
 // Display-only: hidden samples drop out of both graphs but stay in the results; axes stay as for all samples.
-function isHidden(pc, s) { return !!(review && review.hidden.has(pc.plateIndex + '|' + s.name)); }
+function isHidden(pc, s) {
+  if (!review) return false;
+  if (review.hidden.has(pc.plateIndex + '|' + s.name)) return true;
+  return focusActive(pc) && !plateFlags(pc).samples.has(s.name);
+}
 
 function renderSampleChart(pc) {
   const xs = [], ys = [];
@@ -2465,7 +2486,103 @@ function renderStandardChart(pc) {
 
 // ─── REVIEW STATE ─────────────────────────────────────────────────────────────
 // Set after Process; the workbook is only written when every plate is accepted.
-let review = null;  // {grid, numPlates, meta, outputName, corrEnabled, excl, suggested, accepted, analysis}
+let review = null;  // {grid, numPlates, meta, outputName, corrEnabled, excl, suggested, accepted, analysis, view, cur, limit, focusOff}
+
+// ─── REVIEW TRIAGE ────────────────────────────────────────────────────────────
+// A plate is "flagged" when something in it deserves a look: unresolved suggested outliers, a failed
+// or poorly fitting curve, ED50 / Hill pinned at a fit bound, or a bad standard curve. Fit-quality
+// flags only apply to curves with a real OD range, so flat negative controls do not raise them.
+const FLAG = {
+  MIN_RANGE: 0.3,    // OD range a curve needs before its fit quality is judged
+  MIN_R2: 0.95,      // sample curves
+  MIN_STD_R2: 0.98,  // standard curve
+  BATCH: 10          // plates rendered at once
+};
+function r2Of(points, params) {
+  const y = points.map(q => q.y), n = y.length;
+  if (n < 3) return null;
+  const mean = y.reduce((a, b) => a + b, 0) / n;
+  const tot = y.reduce((a, b) => a + (b - mean) ** 2, 0);
+  if (tot < 1e-12) return null;
+  const res = points.reduce((a, q) => a + (q.y - model4PL(q.x, params)) ** 2, 0);
+  return 1 - res / tot;
+}
+function atBound(v, b) { return Math.abs(v - b) <= 1e-9 * Math.max(1, Math.abs(b)); }
+function plateFlags(pc) {
+  const r = review;
+  if (r.flagCache && r.flagCache[pc.plateIndex]) return r.flagCache[pc.plateIndex];
+  const samples = new Map(), notes = [];
+  const add = (name, why) => { if (!samples.has(name)) samples.set(name, []); samples.get(name).push(why); };
+  const fc = fitConfig;
+  for (const s of pc.samples) {
+    const live = s.points.filter(q => !q.excluded);
+    const open = live.filter(q => r.suggested.has(q.key)).length;
+    if (open) add(s.name, `${open} suggested outlier${open > 1 ? 's' : ''}`);
+    if (!s.params) { if (live.length) add(s.name, 'fit failed'); continue; }
+    const ys = live.map(q => q.y);
+    if (ys.length < 3 || Math.max(...ys) - Math.min(...ys) < FLAG.MIN_RANGE) continue;
+    if (atBound(s.params[2], fc.lower[2]) || atBound(s.params[2], fc.upper[2])) add(s.name, 'ED50 at fit bound');
+    else if (atBound(s.params[3], fc.lower[3]) || atBound(s.params[3], fc.upper[3])) add(s.name, 'slope at fit bound');
+    const r2 = r2Of(live, s.params);
+    if (r2 !== null && r2 < FLAG.MIN_R2) add(s.name, `poor fit (R² ${r2.toFixed(2)})`);
+  }
+  if (!r.meta.universalStd) {
+    const sp = pc.std.points.filter(q => !q.excluded), open = sp.filter(q => r.suggested.has(q.key)).length;
+    const sf = stdFitConfig(fc);
+    if (!pc.std.points.length) notes.push('no standard points');
+    else {
+      if (open) notes.push(`${open} suggested standard outlier${open > 1 ? 's' : ''}`);
+      if (pc.std.params.every((v, i) => v === sf.p0[i])) notes.push('standard fit failed');
+      else {
+        const r2 = r2Of(sp, pc.std.params);
+        if (r2 !== null && r2 < FLAG.MIN_STD_R2) notes.push(`standard R² ${r2.toFixed(3)}`);
+      }
+    }
+  }
+  const reasons = [...notes];
+  for (const [n, w] of samples) reasons.push(`${n}: ${w.join(', ')}`);
+  const out = {samples, notes, reasons, count: samples.size + notes.length};
+  (r.flagCache || (r.flagCache = {}))[pc.plateIndex] = out;
+  return out;
+}
+function plateExclCount(p) {
+  let n = 0;
+  for (const k of review.excl) if (k.startsWith(p + '|')) n++;
+  return n;
+}
+// Needs a human look: not accepted yet, and flagged or already edited by the user.
+function needsReview(p) {
+  return !review.accepted.has(p) && (plateFlags(review.analysis.plateCharts[p]).count > 0 || plateExclCount(p) > 0);
+}
+function visiblePlates() {
+  const r = review, all = [...Array(r.numPlates).keys()];
+  if (r.view === 'all') return all;
+  if (r.view === 'accepted') return all.filter(p => r.accepted.has(p));
+  return all.filter(needsReview);
+}
+function triageCounts() {
+  const r = review;
+  let todo = 0, clean = 0;
+  for (let p = 0; p < r.numPlates; p++) {
+    if (r.accepted.has(p)) continue;
+    if (needsReview(p)) todo++; else clean++;
+  }
+  return {todo, clean, acc: r.accepted.size};
+}
+// With flagged samples present, the plate's graphs show only those until "Show all" is used.
+function focusActive(pc) {
+  const r = review;
+  if (!r || r.view !== 'todo' || r.focusOff.has(pc.plateIndex)) return false;
+  const n = plateFlags(pc).samples.size;
+  return n > 0 && n < pc.samples.length;
+}
+function materializeFocus(p) {
+  const pc = review.analysis.plateCharts[p];
+  if (!focusActive(pc)) return;
+  const f = plateFlags(pc);
+  for (const s of pc.samples) if (!f.samples.has(s.name)) review.hidden.add(p + '|' + s.name);
+  review.focusOff.add(p);
+}
 
 function pointLabel(key) {
   const [p, c, i] = key.split('|').map(Number);
@@ -2477,7 +2594,35 @@ function pointLabel(key) {
 
 function reanalyze() {
   const r = review;
+  r.flagCache = null;
   r.analysis = buildDataSheet(r.grid, r.numPlates, r.meta, fitConfig, r.corrEnabled, () => {}, r.excl, r.cache);
+}
+
+// Refits plates whose exclusions changed. Many plates at once (bulk exclude / restore) go through the
+// worker pool behind a busy banner; the rest is rebuilt from the cache on the main thread.
+function setBusy(text) {
+  let el = document.getElementById('reviewBusy');
+  if (!el) { el = document.createElement('div'); el.id = 'reviewBusy'; document.body.appendChild(el); }
+  el.textContent = text || '';
+  el.style.display = text ? 'block' : 'none';
+}
+async function reanalyzeAsync() {
+  const r = review;
+  const todo = [...Array(r.numPlates).keys()].filter(p => !r.cache.has(plateSig(p, r.excl)));
+  if (todo.length >= 3) {
+    const pool = createFitPool(r.grid, r.meta, fitConfig, todo.length);
+    if (pool) {
+      let done = 0;
+      setBusy(`Refitting ${todo.length} plates…`);
+      try {
+        await Promise.all(todo.map(p => pool.run({type: 'plate', p, excl: [...r.excl].filter(k => k.startsWith(p + '|'))})
+          .then(entry => { r.cache.set(plateSig(p, r.excl), entry); setBusy(`Refitting ${todo.length} plates… ${++done}/${todo.length}`); })));
+      } catch (_) { /* fall back to the main thread below */ }
+      pool.close();
+      setBusy('');
+    }
+  }
+  reanalyze();
 }
 
 // Small per-plate results table (ED50 and concentration per sample), coloured with the same
@@ -2524,6 +2669,7 @@ function plateBlockHtml(pc) {
     legend += `<button class="legend-item legend-btn${off ? ' off' : ''}" role="checkbox" aria-checked="${!off}" data-hide="${p}|${escapeXml(s.name)}" title="Click to ${off ? 'show' : 'hide'}; shift-click to show only this sample"><span class="cb">${off ? '' : '✓'}</span><span class="legend-swatch" style="background:${sampleColor(i)}"></span>${escapeXml(s.name)}${ed}</button>`;
   });
   const nHid = pc.samples.filter(s => isHidden(pc, s)).length;
+  const fl = plateFlags(pc), focus = focusActive(pc);
   if (pc.samples.length) legend += `<span class="legend-all">
     <button class="btn btn-secondary btn-sm" data-showall="${p}" ${nHid ? '' : 'disabled'}>Show all</button>
     <button class="btn btn-secondary btn-sm" data-hideall="${p}" ${nHid === pc.samples.length ? 'disabled' : ''}>Hide all</button></span>`;
@@ -2541,10 +2687,16 @@ function plateBlockHtml(pc) {
     chips += `<button class="chip ${cls}" data-k="${q.key}" title="${escapeXml(tip)}"><span class="chip-dot" style="background:${col}"></span>${word} ${Math.round(q.x * 100) / 100}</button>`;
   }
   const acc = r.accepted.has(p);
-  return `<div class="plate-charts-block" id="plateBlock${p}">
+  const badges = [...fl.notes, ...(fl.samples.size ? [`${fl.samples.size} flagged sample${fl.samples.size > 1 ? 's' : ''}`] : [])]
+    .map(t => `<span class="flag-badge">${escapeXml(t)}</span>`).join('');
+  const focusNote = focus
+    ? `<div class="focus-note">Showing the ${fl.samples.size} flagged of ${pc.samples.length} samples (${[...fl.samples.entries()].map(([n, w]) => escapeXml(n) + ': ' + escapeXml(w.join(', '))).join(' · ')}). “Show all” reveals the rest.</div>` : '';
+  return `<div class="plate-charts-block${r.cur === p ? ' current' : ''}" id="plateBlock${p}" data-plate="${p}">
     <div class="plate-charts-header">Plate ${p + 1}
       <button class="btn btn-sm ${acc ? 'btn-accepted' : 'btn-secondary'}" data-accept="${p}">${acc ? '✓ Accepted' : 'Accept plate'}</button>
+      ${badges}
     </div>
+    ${focusNote}
     <div class="chart-legend">${legend}</div>
     ${chips ? `<div class="chip-row">${chips}</div>` : ''}
     <div class="plate-charts-row">
@@ -2555,39 +2707,122 @@ function plateBlockHtml(pc) {
   </div>`;
 }
 
+function plateTilesHtml() {
+  const r = review;
+  return [...Array(r.numPlates).keys()].map(p => {
+    const f = plateFlags(r.analysis.plateCharts[p]), ex = plateExclCount(p);
+    const cls = r.accepted.has(p) ? 'acc' : f.count ? 'flag' : ex ? 'edit' : '';
+    const tip = `Plate ${p + 1}` + (r.accepted.has(p) ? ' — accepted' : f.count ? ' — ' + f.reasons.slice(0, 4).join('; ') : ex ? ' — edited' : ' — clean');
+    return `<button class="ptile ${cls}${r.cur === p ? ' cur' : ''}" data-goto="${p}" title="${escapeXml(tip)}">${p + 1}${r.accepted.has(p) ? '✓' : f.count ? '·' + f.count : ''}</button>`;
+  }).join('');
+}
+
 function reviewHeaderHtml(bottom) {
   const r = review, n = r.numPlates;
   const nSug = [...r.suggested].filter(k => !r.excl.has(k)).length;
-  const nAcc = r.accepted.size;
+  const {todo, clean, acc} = triageCounts();
+  const tab = (v, label) => `<button class="rv-tab${r.view === v ? ' on' : ''}" data-view="${v}">${label}</button>`;
   return `${bottom ? '' : '<div class="card-label" style="margin-bottom:10px">Review &amp; accept</div>'}
     <div class="review-bar">
-      <div class="review-info">${bottom ? '' : 'Click a point on any graph to exclude or restore it. Orange rings are suggested outliers. '}<b>${r.excl.size}</b> excluded · <b>${nSug}</b> suggested not yet excluded · <b>${nAcc}/${n}</b> plates accepted.</div>
+      <div class="review-info">${bottom ? '' : 'Only plates that need a look are shown first; flagged plates show just their flagged samples. Click a point to exclude or restore it. Orange rings are suggested outliers. '}<b>${todo}</b> need review · <b>${clean}</b> clean · <b>${acc}/${n}</b> accepted · <b>${r.excl.size}</b> points excluded · <b>${nSug}</b> suggested not yet excluded.</div>
       <div class="review-actions">
+        <button class="btn btn-sm btn-primary" data-act="acceptClean" ${clean ? '' : 'disabled'}>Accept clean plates (${clean})</button>
         <button class="btn btn-secondary btn-sm" data-act="excludeSuggested" ${nSug ? '' : 'disabled'}>Exclude suggested (${nSug})</button>
         <button class="btn btn-secondary btn-sm" data-act="clearExcl" ${r.excl.size ? '' : 'disabled'}>Clear exclusions</button>
-        <button class="btn btn-secondary btn-sm" data-act="acceptAll" ${nAcc === n ? 'disabled' : ''}>Accept all</button>
+        <button class="btn btn-secondary btn-sm" data-act="acceptAll" ${acc === n ? 'disabled' : ''}>Accept all</button>
       </div>
-    </div>`;
+    </div>
+    ${bottom ? '' : `<div class="rv-tabs">${tab('todo', `Needs review (${todo})`)}${tab('all', `All plates (${n})`)}${tab('accepted', `Accepted (${acc})`)}</div>
+    <div class="pt-strip" id="plateStrip">${plateTilesHtml()}</div>
+    <div class="rv-keys"><kbd>J</kbd>/<kbd>→</kbd> next plate · <kbd>K</kbd>/<kbd>←</kbd> previous · <kbd>A</kbd> accept &amp; go to next · <kbd>X</kbd> exclude suggested here · <kbd>C</kbd> clear exclusions here · <kbd>F</kbd> needs review ⇄ all · <kbd>Shift</kbd>+<kbd>A</kbd> accept clean plates</div>`}`;
+}
+
+function reviewListHtml() {
+  const r = review, list = visiblePlates();
+  if (!list.length) {
+    const {clean} = triageCounts();
+    return `<div class="card rv-empty">${r.view === 'todo'
+      ? (clean ? `Nothing needs review. ${clean} clean plate(s) are ready — use “Accept clean plates”.` : 'Nothing left to review.')
+      : 'No plates in this view.'}</div>`;
+  }
+  if (r.cur == null || !list.includes(r.cur)) r.cur = list[0];
+  const shown = list.slice(0, Math.max(r.limit, list.indexOf(r.cur) + 1));
+  return shown.map(p => plateBlockHtml(r.analysis.plateCharts[p])).join('')
+    + (shown.length < list.length ? `<div class="card rv-empty"><button class="btn btn-secondary btn-sm" data-act="more">Show ${Math.min(FLAG.BATCH, list.length - shown.length)} more (${list.length - shown.length} not shown)</button></div>` : '');
 }
 
 function renderReview() {
   const sec = document.getElementById('chartsSection');
   if (!sec || !review) return;
   sec.innerHTML = `<div id="reviewHeader" class="card">${reviewHeaderHtml()}</div>`
-    + review.analysis.plateCharts.map(plateBlockHtml).join('')
+    + `<div id="reviewList">${reviewListHtml()}</div>`
     + `<div id="reviewFooter" class="card">${reviewHeaderHtml(true)}</div>`;
   sec.style.display = 'block';
   saveSession();
   updateSections();
 }
 
+// Header, strip and footer only (counts / tile colours), leaving the plate list untouched.
+function refreshHeaders() {
+  const h = document.getElementById('reviewHeader'), f = document.getElementById('reviewFooter');
+  if (h) h.innerHTML = reviewHeaderHtml();
+  if (f) f.innerHTML = reviewHeaderHtml(true);
+}
+
 function refreshReview(plate) {
   saveSession();
   updateSections();
-  document.getElementById('reviewHeader').innerHTML = reviewHeaderHtml();
-  document.getElementById('reviewFooter').innerHTML = reviewHeaderHtml(true);
+  refreshHeaders();
   if (plate == null) { renderReview(); return; }
-  document.getElementById('plateBlock' + plate).outerHTML = plateBlockHtml(review.analysis.plateCharts[plate]);
+  const el = document.getElementById('plateBlock' + plate);
+  if (el) el.outerHTML = plateBlockHtml(review.analysis.plateCharts[plate]);
+}
+
+// Moves the current-plate marker (block outline, strip tile) and optionally scrolls to it.
+function setCurrent(p, scroll) {
+  const r = review;
+  if (p == null) return;
+  const list = visiblePlates(), shownBlock = document.getElementById('plateBlock' + p);
+  if (!shownBlock && list.includes(p)) {   // beyond the rendered batch: render further
+    r.cur = p; r.limit = Math.max(r.limit, list.indexOf(p) + 1);
+    document.getElementById('reviewList').innerHTML = reviewListHtml();
+  }
+  r.cur = p;
+  document.querySelectorAll('.plate-charts-block.current').forEach(e => e.classList.remove('current'));
+  const el = document.getElementById('plateBlock' + p);
+  if (el) { el.classList.add('current'); if (scroll) el.scrollIntoView({block: 'start', behavior: 'smooth'}); }
+  document.querySelectorAll('#plateStrip .ptile.cur').forEach(e => e.classList.remove('cur'));
+  const tile = document.querySelector(`#plateStrip .ptile[data-goto="${p}"]`);
+  if (tile) { tile.classList.add('cur'); tile.scrollIntoView({block: 'nearest'}); }
+}
+
+function stepPlate(dir) {
+  const list = visiblePlates();
+  if (!list.length) return;
+  const i = list.indexOf(review.cur);
+  setCurrent(list[Math.max(0, Math.min(list.length - 1, i < 0 ? 0 : i + dir))], true);
+}
+
+// Accept / un-accept; in the needs-review and accepted views the plate leaves the list, so the
+// marker moves to the plate that takes its place and the page keeps its scroll position.
+function acceptPlate(p) {
+  const r = review, before = visiblePlates(), idx = before.indexOf(p);
+  if (r.accepted.has(p)) r.accepted.delete(p); else r.accepted.add(p);
+  saveSession(); updateSections();
+  const after = visiblePlates();
+  if (r.view !== 'all' && !after.includes(p)) {
+    const el = document.getElementById('plateBlock' + p);
+    if (el) el.remove();
+    refreshHeaders();
+    if (!after.length) { renderReview(); return; }
+    const next = after[Math.min(idx, after.length - 1)];
+    if (!document.getElementById('plateBlock' + next)) { r.limit = Math.max(r.limit, after.indexOf(next) + 1); document.getElementById('reviewList').innerHTML = reviewListHtml(); }
+    setCurrent(next, true);
+  } else {
+    refreshHeaders();
+    const el = document.getElementById('plateBlock' + p);
+    if (el) el.outerHTML = plateBlockHtml(r.analysis.plateCharts[p]);
+  }
 }
 
 function toggleExclusion(key) {
@@ -2600,12 +2835,35 @@ function toggleExclusion(key) {
   refreshReview(p);
 }
 
-function setAllExclusions(mutate) {
-  review.excl = mutate(review.excl);
-  review.accepted.clear();
+async function setAllExclusions(mutate) {
+  const r = review;
+  if (r.busy) return;
+  r.busy = true;
+  r.excl = mutate(r.excl);
+  r.accepted.clear();
+  r.blob = null; r.prepFailed = false; r.blobTok = (r.blobTok || 0) + 1;
+  try { await reanalyzeAsync(); } finally { r.busy = false; }
+  renderReview();
+}
+
+// Plate-level actions used by the keyboard shortcuts.
+function excludeSuggestedInPlate(p) {
+  const keys = [...review.suggested].filter(k => k.startsWith(p + '|') && !review.excl.has(k));
+  if (!keys.length) return;
+  keys.forEach(k => review.excl.add(k));
+  review.accepted.delete(p);
   review.blob = null; review.prepFailed = false; review.blobTok = (review.blobTok || 0) + 1;
   reanalyze();
-  renderReview();
+  refreshReview(p);
+}
+function clearPlateExclusions(p) {
+  const keys = [...review.excl].filter(k => k.startsWith(p + '|'));
+  if (!keys.length) return;
+  keys.forEach(k => review.excl.delete(k));
+  review.accepted.delete(p);
+  review.blob = null; review.prepFailed = false; review.blobTok = (review.blobTok || 0) + 1;
+  reanalyze();
+  refreshReview(p);
 }
 
 // Instant tooltip for the dotted guide lines (data-tip).
@@ -2626,9 +2884,19 @@ document.addEventListener('click', e => {
   if (!review) return;
   const sec = document.getElementById('chartsSection');
   if (!sec || !sec.contains(e.target)) return;
+  const gt = e.target.closest('[data-goto]');
+  if (gt) {
+    const p = Number(gt.dataset.goto);
+    if (!visiblePlates().includes(p)) { review.view = 'all'; review.cur = p; renderReview(); }
+    setCurrent(p, true);
+    return;
+  }
+  const vw = e.target.closest('[data-view]');
+  if (vw) { review.view = vw.dataset.view; review.limit = FLAG.BATCH; review.cur = null; renderReview(); return; }
   const hb = e.target.closest('[data-hide]');
   if (hb) {
     const key = hb.dataset.hide, p = Number(key.split('|')[0]);
+    materializeFocus(p);
     const pc = review.analysis.plateCharts[p];
     if (e.shiftKey) {
       review.hidden = new Set([...review.hidden].filter(k => !k.startsWith(p + '|')));
@@ -2641,6 +2909,7 @@ document.addEventListener('click', e => {
   if (sa) {
     if (sa.disabled) return;
     const p = Number(sa.dataset.showall);
+    review.focusOff.add(p);
     review.hidden = new Set([...review.hidden].filter(k => !k.startsWith(p + '|')));
     refreshReview(p);
     return;
@@ -2649,6 +2918,7 @@ document.addEventListener('click', e => {
   if (ha) {
     if (ha.disabled) return;
     const p = Number(ha.dataset.hideall);
+    review.focusOff.add(p);
     for (const s of review.analysis.plateCharts[p].samples) review.hidden.add(p + '|' + s.name);
     refreshReview(p);
     return;
@@ -2657,9 +2927,7 @@ document.addEventListener('click', e => {
   if (pt) { toggleExclusion(pt.dataset.k); return; }
   const acc = e.target.closest('[data-accept]');
   if (acc) {
-    const p = Number(acc.dataset.accept);
-    if (review.accepted.has(p)) review.accepted.delete(p); else review.accepted.add(p);
-    refreshReview(p);
+    acceptPlate(Number(acc.dataset.accept));
     return;
   }
   const act = e.target.closest('[data-act]');
@@ -2670,6 +2938,39 @@ document.addEventListener('click', e => {
     case 'acceptAll':
       for (let p = 0; p < review.numPlates; p++) review.accepted.add(p);
       renderReview(); break;
+    case 'acceptClean':
+      for (let p = 0; p < review.numPlates; p++) if (!review.accepted.has(p) && !needsReview(p)) review.accepted.add(p);
+      renderReview(); break;
+    case 'more':
+      review.limit += FLAG.BATCH;
+      document.getElementById('reviewList').innerHTML = reviewListHtml();
+      break;
+  }
+});
+
+// Keyboard review: J/K step through the listed plates, A accepts and moves on.
+document.addEventListener('keydown', e => {
+  if (!review || !review.analysis || review.busy || e.metaKey || e.ctrlKey || e.altKey) return;
+  const t = e.target, tag = t && t.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;
+  const sec = document.getElementById('secReview');
+  if (!sec || !sec.classList.contains('open')) return;
+  const key = e.key.toLowerCase();
+  const cur = review.cur;
+  if (e.shiftKey && key === 'a') {
+    e.preventDefault();
+    for (let p = 0; p < review.numPlates; p++) if (!review.accepted.has(p) && !needsReview(p)) review.accepted.add(p);
+    renderReview();
+    return;
+  }
+  if (e.shiftKey) return;
+  switch (key) {
+    case 'j': case 'arrowright': case 'n': e.preventDefault(); stepPlate(1); break;
+    case 'k': case 'arrowleft': case 'p': e.preventDefault(); stepPlate(-1); break;
+    case 'a': if (cur != null) { e.preventDefault(); acceptPlate(cur); } break;
+    case 'x': if (cur != null) { e.preventDefault(); excludeSuggestedInPlate(cur); } break;
+    case 'c': if (cur != null) { e.preventDefault(); clearPlateExclusions(cur); } break;
+    case 'f': e.preventDefault(); review.view = review.view === 'todo' ? 'all' : 'todo'; review.limit = FLAG.BATCH; review.cur = null; renderReview(); break;
   }
 });
 
@@ -2841,7 +3142,8 @@ async function runProcessing(saved) {
     prog.set(5, 'Fitting curves…');
     await new Promise(r => setTimeout(r, 10));
     review = {grid, numPlates, meta, outputName, corrEnabled,
-              excl: new Set(), suggested: new Set(), hidden: new Set(), accepted: new Set(), analysis: null, cache: new Map()};
+              excl: new Set(), suggested: new Set(), hidden: new Set(), accepted: new Set(), analysis: null, cache: new Map(),
+              view: 'todo', cur: null, limit: FLAG.BATCH, focusOff: new Set(), flagCache: null};
     pool = numPlates >= 2 ? createFitPool(grid, meta, fitConfig, numPlates) : null;
     log(pool ? `  Fitting in parallel on ${pool.size} worker(s).` : '  Fitting on the main thread.');
     const tFit = performance.now();
@@ -2894,7 +3196,7 @@ async function runProcessing(saved) {
         log('Restoring previous session...', 'info');
         prog.set(97, 'Restoring previous session…');
         await new Promise(r => setTimeout(r, 0));
-        reanalyze();
+        await reanalyzeAsync();
       }
     }
     prog.set(99, 'Preparing the review…');

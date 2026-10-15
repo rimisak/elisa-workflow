@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Working rules for every change
 
-- **Update the footer on every change.** The page footer in `index.html` (`.page-footer`, near the end of the markup) reads `Kasimir Reich · v<version> · <DD/MM/YYYY>`. Set the date to today's date and bump the version in the same edit. Version scheme: `MAJOR.MINOR.PATCH` — patch for fixes and tweaks, minor for new features, major for breaking changes to the workflow or output layout. Current: v1.2.7.
+- **Update the footer on every change.** The page footer in `index.html` (`.page-footer`, near the end of the markup) reads `Kasimir Reich · v<version> · <DD/MM/YYYY>`. Set the date to today's date and bump the version in the same edit. Version scheme: `MAJOR.MINOR.PATCH` — patch for fixes and tweaks, minor for new features, major for breaking changes to the workflow or output layout. Current: v1.2.8.
 - **Commit after each edit.** When a change is finished, commit it straight away (small, focused commits; message explains the why). Don't let edits pile up uncommitted.
 
 ## What this is
@@ -60,7 +60,7 @@ What it does differently from the main pipeline: background is subtracted **per 
 - **Curve fitting is hand-rolled.** `model4PL` + `levenbergMarquardt` (with `solveGaussian`) + `fitBest4PL` (multi-start over IC50 seeds, keeps best SSE). Fit bounds/initial guesses come from an optional **`Settings` sheet** in the metadata workbook (rows Bottom/Top/IC50/Hill × Lower/Initial/Upper; read by `parseFitSettings`, written by `createTemplate`). A missing sheet, row or unusable number falls back to the matching `DEFAULT_FIT` value. There is no settings UI. Hill is entered positive (samples fall); `stdFitConfig` mirrors it negative for the rising standard curve. With background subtraction on, corrected baselines approach 0 while the default Bottom bound is ~0.03 — relevant if low-end interpolation looks off.
 - **`parseCsvText` uses `Number()`, not `parseFloat()`** — deliberately, so labels like `"1. Raw Data (450 1)"` stay strings instead of becoming `1`.
 - **Reading vs writing styles differ in `xlsx-js-style`.** When reading the metadata Names sheet, fill info is on `cell.s` directly (`s.patternType`, `s.fgColor`); when writing, it's nested under `s.fill`. `parseMetadata` handles both forms.
-- **Metadata format is positional.** `Dilutions` sheet reads fixed cells `B2/B3` (standard start/dilution) and `B6/B7` (sample start/dilution). `Settings` sheet (optional) holds the 4PL bounds. `Names` sheet has one row per plate; header row is detected by `A1 === 'Plate'`. `createTemplate` generates a matching blank workbook.
+- **Metadata format is positional.** `Dilutions` sheet reads fixed cells `B2/B3` (standard start/dilution) and `B6/B7` (sample start/dilution). `Settings` sheet (optional) holds the 4PL bounds. `Names` sheet has one row per plate; header row is detected by `A1 === 'Plate'`. `createTemplate` generates a matching blank workbook (one Names row per loaded CSV, 6 if none).
 
 ## Example data
 

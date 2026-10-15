@@ -291,7 +291,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.12.2 &nbsp;·&nbsp; 15/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.12.3 &nbsp;·&nbsp; 15/10/2026</div>
 
 <script>
 'use strict';
@@ -2427,7 +2427,7 @@ function pointSvg(p, S, col, r, label) {
 function isHidden(pc, s) {
   if (!review) return false;
   if (review.hidden.has(pc.plateIndex + '|' + s.name)) return true;
-  return focusActive(pc) && !plateFlags(pc).samples.has(s.name);
+  return focusActive(pc) && !focusSamples(pc).has(s.name);
 }
 
 function renderSampleChart(pc) {
@@ -2597,17 +2597,27 @@ function triageCounts() {
   return {todo, clean, acc: r.accepted.size};
 }
 // With flagged samples present, the plate's graphs show only those until "Show all" is used.
+// The samples a plate's graphs focus on. Sticky: a sample stays in the set once flagged (or once one
+// of its suggested outliers was excluded), so fixing it by exclusion does not make its curve vanish
+// or the other curves suddenly appear.
+function focusSamples(pc) {
+  const r = review, p = pc.plateIndex;
+  const set = (r.focusSet || (r.focusSet = {}))[p] || (r.focusSet[p] = new Set());
+  for (const n of plateFlags(pc).samples.keys()) set.add(n);
+  for (const s of pc.samples) if (s.points.some(q => q.excluded && r.suggested.has(q.key))) set.add(s.name);
+  return set;
+}
 function focusActive(pc) {
   const r = review;
   if (!r || r.view !== 'todo' || r.focusOff.has(pc.plateIndex)) return false;
-  const n = plateFlags(pc).samples.size;
+  const n = focusSamples(pc).size;
   return n > 0 && n < pc.samples.length;
 }
 function materializeFocus(p) {
   const pc = review.analysis.plateCharts[p];
   if (!focusActive(pc)) return;
-  const f = plateFlags(pc);
-  for (const s of pc.samples) if (!f.samples.has(s.name)) review.hidden.add(p + '|' + s.name);
+  const f = focusSamples(pc);
+  for (const s of pc.samples) if (!f.has(s.name)) review.hidden.add(p + '|' + s.name);
   review.focusOff.add(p);
 }
 
@@ -2721,9 +2731,9 @@ function plateBlockHtml(pc) {
       .concat(fl.notes.map(t => `<span class="flag-item">${escapeXml(t)}</span>`)).join('');
     banner = `<div class="flag-banner"><div class="flag-head">⚠ ${escapeXml(fl.headline)}</div>
       <div class="flag-list">${items}</div>
-      ${focus ? `<div class="focus-note">Graphs show only the ${fl.samples.size} flagged of ${pc.samples.length} samples — “Show all” reveals the rest.</div>` : ''}</div>`;
+      ${focus ? `<div class="focus-note">Graphs show only the ${focusSamples(pc).size} flagged of ${pc.samples.length} samples — “Show all” reveals the rest.</div>` : ''}</div>`;
   } else if (plateResolved(p)) {
-    banner = `<div class="flag-banner ok"><div class="flag-head">✓ Resolved — ${nEx} point${nEx > 1 ? 's' : ''} excluded, no issues remain.</div></div>`;
+    banner = `<div class="flag-banner ok"><div class="flag-head">✓ Resolved — ${nEx} point${nEx > 1 ? 's' : ''} excluded, no issues remain.</div>${focus ? `<div class="focus-note">Graphs still show only the ${focusSamples(pc).size} sample${focusSamples(pc).size > 1 ? "s" : ""} that ${focusSamples(pc).size > 1 ? "were" : "was"} flagged — “Show all” reveals the rest.</div>` : ''}</div>`;
   } else if (nEx) {
     banner = `<div class="flag-banner ok"><div class="flag-head">✎ No issues flagged — ${nEx} point${nEx > 1 ? 's' : ''} excluded by you.</div></div>`;
   } else {

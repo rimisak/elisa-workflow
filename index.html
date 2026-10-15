@@ -84,6 +84,11 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .checkmark{color:#34c759;font-size:18px}
 .dash-hit{stroke-opacity:0;pointer-events:stroke;cursor:help}.dash-hit:hover{stroke-opacity:.2}
 #chartTip{position:fixed;z-index:50;pointer-events:none;background:#1c1c1e;color:#fff;font-size:12px;padding:5px 8px;border-radius:6px;display:none;white-space:nowrap}
+.res-wrap{overflow-x:auto;margin-top:10px}
+.res-table{border-collapse:collapse;font-size:12px;margin:0 auto}
+.res-table th,.res-table td{border:1px solid #e5e5ea;padding:4px 10px;text-align:center;white-space:nowrap}
+.res-table thead th{background:#dce6f1;font-weight:600}
+.res-table tbody th{background:#eef2ff;text-align:left;font-weight:600}
 .page-footer{text-align:center;font-size:11px;color:#aeaeb2;padding:12px 0 4px;letter-spacing:.2px}
 /* Per-plate charts */
 .plate-charts-block{margin-bottom:18px}
@@ -259,7 +264,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.7.1 &nbsp;·&nbsp; 15/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.8.0 &nbsp;·&nbsp; 15/10/2026</div>
 
 <script>
 'use strict';
@@ -2158,6 +2163,40 @@ function reanalyze() {
   r.analysis = buildDataSheet(r.grid, r.numPlates, r.meta, fitConfig, r.corrEnabled, () => {}, r.excl, r.cache);
 }
 
+// Small per-plate results table (ED50 and concentration per sample), coloured with the same
+// green–yellow–red 1/50/99-percentile scale the Excel output applies to those rows.
+function scaleColor(vals, v) {
+  if (typeof v !== 'number' || !isFinite(v)) return '';
+  const a = vals.filter(x => typeof x === 'number' && isFinite(x)).sort((x, y) => x - y);
+  if (!a.length) return '';
+  const pct = q => { const k = (a.length - 1) * q, f = Math.floor(k), c = Math.min(f + 1, a.length - 1); return a[f] + (a[c] - a[f]) * (k - f); };
+  const lo = pct(0.01), mid = pct(0.5), hi = pct(0.99);
+  const G = [0x63, 0xBE, 0x7B], Y = [0xFF, 0xEB, 0x84], R = [0xF8, 0x69, 0x6B];
+  const mix = (A, B, t) => A.map((x, i) => Math.round(x + (B[i] - x) * t));
+  let c;
+  if (v <= lo) c = G;
+  else if (v >= hi) c = R;
+  else if (v <= mid) c = mix(G, Y, mid > lo ? (v - lo) / (mid - lo) : 1);
+  else c = mix(Y, R, hi > mid ? (v - mid) / (hi - mid) : 0);
+  return `background:rgb(${c.join(',')})`;
+}
+
+function resultsTableHtml(p) {
+  const {ec50Rows, conRows} = review.analysis, grid = review.grid;
+  const cols = [];
+  for (let c = 1; c <= 12; c++) {
+    const name = String(grid[7][p * 14 + c] ?? '').trim();
+    if (!name || /^(blank|standard)$/i.test(name)) continue;
+    cols.push({name, ed: ec50Rows[p * 14 + c], con: conRows[p * 14 + c]});
+  }
+  if (!cols.length) return '';
+  const eds = cols.map(x => x.ed), cons = cols.map(x => x.con);
+  const td = (v, all) => `<td style="${scaleColor(all, v)}">${v == null || v === '' ? '' : escapeXml(String(v))}</td>`;
+  return `<table class="res-table"><thead><tr><th></th>${cols.map(x => `<th>${escapeXml(x.name)}</th>`).join('')}</tr></thead><tbody>
+    <tr><th>ED50</th>${cols.map(x => td(x.ed, eds)).join('')}</tr>
+    <tr><th>Conc. (µg/mL)</th>${cols.map(x => td(x.con, cons)).join('')}</tr></tbody></table>`;
+}
+
 function plateBlockHtml(pc) {
   const p = pc.plateIndex, r = review;
   for (const q of [...pc.samples.flatMap(s => s.points), ...pc.std.points]) q.suggested = r.suggested.has(q.key);
@@ -2195,6 +2234,7 @@ function plateBlockHtml(pc) {
       <div class="chart-card"><div class="chart-title">Sample dose–response &amp; ED50</div>${renderSampleChart(pc)}</div>
       <div class="chart-card"><div class="chart-title">Standard curve &amp; interpolation</div>${renderStandardChart(pc)}</div>
     </div>
+    <div class="res-wrap">${resultsTableHtml(p)}</div>
   </div>`;
 }
 

@@ -186,7 +186,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 <!-- Per-plate visualizations (populated after processing) -->
 <div id="chartsSection" style="display:none"></div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.3.2 &nbsp;·&nbsp; 15/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.3.3 &nbsp;·&nbsp; 15/10/2026</div>
 
 <script>
 'use strict';
@@ -1363,143 +1363,6 @@ function buildProtocolSheet(meta, plateFits, plateCharts, fit) {
   return ws;
 }
 
-// ─── SOP SHEET ────────────────────────────────────────────────────────────────
-function buildSOPSheet() {
-  const rows = [];
-  const GREY  = 'FFD9D9D9';
-  const LBLUE = 'FFEEF2FF';
-
-  const TITLE  = {font:{bold:true,sz:16,name:'Calibri'}};
-  const META   = {font:{italic:true,sz:11,name:'Calibri'}};
-  const SEC    = {font:{bold:true,sz:12,name:'Calibri'},fill:{patternType:'solid',fgColor:{rgb:GREY}}};
-  const SUB    = {font:{bold:true,sz:11,name:'Calibri'},fill:{patternType:'solid',fgColor:{rgb:LBLUE}}};
-  const BODY   = {font:{sz:10,name:'Calibri'},alignment:{wrapText:true,vertical:'top'}};
-  const STEP   = {font:{sz:10,name:'Calibri'},alignment:{vertical:'top'}};
-  const BREAK  = {font:{italic:true,sz:9,color:{rgb:'FF808080'},name:'Calibri'}};
-
-  let r = 0;
-  function addRow(col1, val1, s1, col2, val2, s2) {
-    while (rows.length <= r) rows.push([]);
-    if (col1 !== null) rows[r][0] = {v:String(val1??''),t:'s',s:s1||{}};
-    if (col2 !== null) rows[r][1] = {v:String(val2??''),t:'s',s:s2||{}};
-    r++;
-  }
-
-  function title(text)  { addRow(0,'',{},1,text,TITLE); }
-  function meta(text)   { addRow(0,'',{},1,text,META); }
-  function blank()      { addRow(0,'',{},1,'',{}); }
-  function body(text)   { addRow(0,'',{},1,text,BODY); }
-  function section(n,h) { blank(); addRow(0,n,SEC,1,h.toUpperCase(),SEC); }
-  function subsect(n,h) { blank(); addRow(0,n,SUB,1,h,SUB); }
-  function step(n,text) { addRow(0,n+'.',STEP,1,text,BODY); }
-  function substep(l,t) { addRow(0,'  ('+l+')',STEP,1,t,BODY); }
-  function brk(label)   {
-    blank();
-    addRow(0,'',{},1,'· · · · · · · · · · · · · · · · · ·  '+label+'  · · · · · · · · · · · · · · · · · ·',BREAK);
-    blank();
-  }
-
-  title('SOP ELISA');
-  meta('Kasimir Reich  |  03-20-2026');
-  blank();
-  body('Goal: An enzyme-linked immunosorbent assay (ELISA) is described, which can be used to determine the quantity of antibodies or other proteins. Attached is an Excel file for calculations.');
-  body('Estimated Time: Coating usually takes < 30 minutes the evening before, then around a day including waiting times.');
-
-  section(1,'Preparation');
-  subsect('1.1','Planning of the Plates');
-  step(1,'Determine the number and type of samples. Decide which proteins or antibodies to test for.');
-  step(2,'Plan the plates. Around 15 plates can be run on a single day, but start with a lower number if still gaining experience. On each plate, the first column should be a negative control with water (blank). The last should be the positive control of known concentration (standard). Each column is the dilution series for a single sample.');
-  step(3,'Plan the starting dilution and the dilution coefficient for both samples and standard. For example: Start with 1:50 for samples and then dilute 1:3. Start with 1000 ng/mL for the standard and do a 1:5 dilution.');
-  step(4,'Do the calculations using the Excel spreadsheet.');
-  step(5,'Check that the washing machine is available for the day of your ELISA.');
-  brk('Flexible Break Point');
-  subsect('1.2','Coating');
-  step(1,'Prepare a 2 µg/mL coating solution of the protein you want to coat with (e.g. TM4 core gp140 protein or the anti-idiotype antibody anti-3BNC117 human IgG1k). The total volume can be calculated using the spreadsheet.');
-  step(2,'Prepare a wet chamber: Take the plastic box from the 4°C room. Put wet paper towels around the edges.');
-  step(3,'Take a flat bottom ELISA 96-well plate.');
-  step(4,'Fill 25 µL of the coating solution into each well.');
-  step(5,'Put the plate into the wet chamber box and put the box into the 4°C room.');
-  step(6,'Repeat for all plates.');
-  step(7,'Let the plates incubate overnight.');
-  step(8,'Check whether blocking solution (5% milk) is prepared. It can be found in the door of the Mr. Shiny fridge.');
-  step(9,'If not, prepare new 5% milk: Take a fresh bottle of 1X PBS (Attention: not 10X!). Go to the weighing room and add 25 g of milk powder. Mix well by inverting and put into the fridge door.');
-  brk('Overnight Break Point');
-
-  section(2,'Performing the ELISA');
-  body('Work one plate at a time to avoid the drying out of plates. If plates dry out, the margins will have a higher signal in the measurements (edge effect). Always keep the plates covered by another (empty) plate. Keep in the wet chamber as much as possible.');
-  subsect('2.1','Blocking');
-  step(1,'Take the plates from the 4°C room.');
-  step(2,'Throw out the coating solution and blot dry.');
-  step(3,'Add 170 µL of the 5% milk to each well using the automatic multichannel pipette.');
-  step(4,'Incubate for 2 h in the wet chamber at room temperature.');
-  step(5,'Prepare for later steps:');
-  substep('a','Take all samples from the freezer and let them unthaw.');
-  substep('b','Get the secondary antibody (Harry\'s ELISA box in the Mr. Shiny fridge) and the standard (freezer below Harry\'s bench) and keep them on ice.');
-  substep('c','Take the TMB solutions for the enzymatic reaction out of the 4°C room and let them warm up to room temperature.');
-  brk('Coffee Break Point');
-  subsect('2.2','Preparation of Dilution Series and Sample Loading');
-  body('Once the samples are ready, start making the dilution series.');
-  step(1,'Take a V-shaped 96 ELISA well plate and begin by preparing with PBS (e.g. 120 µL into each well of the first row and 90 µL into the others).');
-  step(2,'Leave the blank and add the serum (e.g. 2.4 µL for 1:50) starting dilution for each sample into the first row.');
-  step(3,'Use the "Pipette and Mix" mode of the automatic multichannel pipette to mix and transfer (e.g. 30 µL for 1:4).');
-  step(4,'Prepare the standard once for all the plates using 8 FACS tubes (e.g. start at 1000 ng/mL in 625 µL and then transfer 125 µL to 500 µL to a 1:5 dilution).');
-  step(5,'Once the blocking time is passed, wash plates using the plate washer George Washington.');
-  substep('a','Before opening any bottle be sure to depressurize!');
-  substep('b','Check that the PBS and water bottles are full and the trash empty.');
-  substep('c','Prime the machine using the yellow bottle (PBS). Sometimes there is a problem with the pressure. This can often be circumvented by having the bottle fully filled and checking the cap. Depressurize before opening.');
-  substep('d','Load the plates into the front tower and cover both towers with empty plates to prevent the plates from drying out.');
-  substep('e','Select the program halfwell 6x PBS and click run.');
-  substep('f','After the plates are washed, prime with water (green).');
-  step(6,'Load 25 µL of the samples:');
-  substep('a','Throw out the washing PBS and blot dry.');
-  substep('b','Using a normal multichannel transfer 25 µL of the dilution series: Reuse the tips. Start with the highest dilution, transfer without blowing out, blow out over the original dilution and then move on to the next highest dilution.');
-  substep('c','To keep things simple, use a second pipette to transfer the standard and reuse these tips.');
-  step(7,'Incubate for 1.5 h in the wet chamber at room temperature.');
-  brk('Lunch Break Point');
-  subsect('2.3','Adding the Secondary Antibody');
-  step(1,'After incubation, wash the plates using the program halfwell 6x PBS. Prime with PBS before and with water after.');
-  step(2,'Meanwhile, prepare a 1:5000 dilution of the secondary antibody (e.g. anti-mouse IgG-HRP, antibody is Jackson Cat. 115-035-071 (0.8 mg/mL Harry April 2025)). Calculate the needed volume using the table. (25 µL × 96 wells × plate number + a little extra)');
-  step(3,'Throw away the washing PBS and blot dry.');
-  step(4,'Add 25 µL of the secondary antibody solution.');
-  step(5,'Incubate for 1 h in the wet chamber at room temperature.');
-  brk('Coffee Break Point');
-  subsect('2.4','Performing the Enzymatic Reaction');
-  step(1,'After incubation, wash the plates using the program halfwell 6x PBS. Prime with PBS before and with water after. If you\'re likely to be the last person using the machine that day, start the shut down sequence — this cleans and depressurizes the machine.');
-  step(2,'Meanwhile, prepare a 1:1 mix of the TMB substrate and the H₂O₂. In total, it\'s double the volume of the secondary antibody stain.');
-  step(3,'Throw away the washing PBS and blot dry.');
-  step(4,'Add 50 µL of the solution to each well.');
-  step(5,'Develop the reaction for around 12 min until the highest concentration of standard is maxed out.');
-  step(6,'Stop the reaction using 50 µL of 1 M H₂SO₄. Attention: Do not let any H₂SO₄ come on your clothes or skin!');
-  step(7,'Read immediately afterwards using the plate reader.');
-  subsect('2.5','Reading the Results');
-  step(1,'Use the plate reader machine. Open the Omega software and use the experiment Harry 450 and 570. 450 nm is the wavelength of the reaction. 570 nm is for measuring potential contamination or dirt.');
-  step(2,'Name the plates with date, experiment name, and number.');
-  step(3,'Use the software to open the plate holder and insert the plate.');
-  step(4,'Start an experiment.');
-  step(5,'Wait... (Great time to talk to someone or do some flashcards.)');
-  step(6,'Repeat for all plates.');
-  subsect('2.6','Transfer of Data');
-  step(1,'Open the Omega Analysis Software.');
-  step(2,'Click on open, select all the files and right-click them to select "Export as multiple ASCII files".');
-  step(3,'Save the data to the folder "tempshare/*yourname*".');
-  brk('Flexible Break Point');
-
-  section(3,'Analysis');
-  subsect('3.1','Cleaning of the Data');
-  step(1,'Copy the files from tempshare to your computer.');
-  step(2,'Merge the separate files manually or using Python.');
-  step(3,'Color the individual tables according to Harry\'s color scheme (Red = larger) manually or using Python.');
-  step(4,'Add the sample names using Python or manually.');
-  subsect('3.2','Determination of EC₅₀ or Concentration');
-  step(1,'The EC₅₀ is the concentration at which half the maximum reaction occurs. It is the turning point of a sigmoidal function fitted to the data. This has the advantage of being independent of the starting concentration (as long as the data points allow for the fitting of a curve).');
-  step(2,'It can be calculated using a Prism sheet or using Python.');
-  step(3,'Based on the standard, an absolute concentration can also be calculated. This is done by fitting a function to the standard with the known concentration as x values and then using the inverse function to calculate the concentrations in the samples. Use Prism or Python.');
-
-  const ws = aoaToSheet(rows);
-  ws['!cols'] = [{wch:7},{wch:105}];
-  return ws;
-}
-
 // ─── CORRECTED ED50 (in-plate blank background + censored interpolation) ──────
 // Optional stage ported from elisa_ed50.py, enabled by the "Edge-effect ED50"
 // toggle. Evaporation raises background at the plate margins; a free-Bottom 4PL
@@ -2269,7 +2132,6 @@ async function buildResultsBlob() {
   XLSX.utils.book_append_sheet(wb, wsData, 'Processed Data');
   XLSX.utils.book_append_sheet(wb, buildResultsTableSheet(), 'Results Table');
   XLSX.utils.book_append_sheet(wb, buildProtocolSheet(r.meta, plateFits, r.analysis.plateCharts, fitConfig), 'Protocol Parameters');
-  XLSX.utils.book_append_sheet(wb, buildSOPSheet(), 'SOP');
   if (corrected) {
     XLSX.utils.book_append_sheet(wb, buildCorrectedSummarySheet(corrected), 'ED50 Corrected');
     XLSX.utils.book_append_sheet(wb, buildCorrectedQCSheet(corrected), 'QC Edge Effect');

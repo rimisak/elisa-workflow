@@ -117,7 +117,13 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .ptile.cur{outline:2px solid #1c1c1e;outline-offset:1px}
 .plate-charts-block.current .plate-charts-header{color:#007aff}
 .plate-charts-block.current{box-shadow:-4px 0 0 #007aff;padding-left:8px}
-.flag-badge{font-size:11px;font-weight:500;border-radius:999px;padding:2px 9px;background:#fff0d6;color:#a35c00;border:1px solid #ff9500}
+.flag-banner{border:1px solid #ff9500;background:#fff6e8;border-radius:10px;padding:10px 14px;margin:6px 0 10px}
+.flag-banner.ok{border-color:#34c759;background:#eefaf1}
+.flag-head{font-size:17px;font-weight:600;color:#a35c00;line-height:1.35}
+.flag-banner.ok .flag-head{color:#1d7a35;font-size:15px}
+.flag-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.flag-item{font-size:12px;background:#fff;border:1px solid #ffd199;border-radius:6px;padding:2px 8px;color:#6b4300}
+.flag-banner .focus-note{margin:8px 0 0}
 .focus-note{font-size:12px;color:#8e8e93;margin:2px 0 6px}
 .rv-empty{padding:18px;text-align:center;color:#636366;font-size:13px}
 #reviewBusy{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#1c1c1e;color:#fff;border-radius:999px;padding:8px 18px;font-size:13px;z-index:50;display:none;box-shadow:0 4px 16px rgba(0,0,0,.25)}
@@ -284,7 +290,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.12.0 &nbsp;·&nbsp; 15/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.12.1 &nbsp;·&nbsp; 15/10/2026</div>
 
 <script>
 'use strict';
@@ -2512,19 +2518,19 @@ function plateFlags(pc) {
   const r = review;
   if (r.flagCache && r.flagCache[pc.plateIndex]) return r.flagCache[pc.plateIndex];
   const samples = new Map(), notes = [];
-  const add = (name, why) => { if (!samples.has(name)) samples.set(name, []); samples.get(name).push(why); };
+  const add = (name, kind, text, n = 1) => { if (!samples.has(name)) samples.set(name, []); samples.get(name).push({kind, text, n}); };
   const fc = fitConfig;
   for (const s of pc.samples) {
     const live = s.points.filter(q => !q.excluded);
     const open = live.filter(q => r.suggested.has(q.key)).length;
-    if (open) add(s.name, `${open} suggested outlier${open > 1 ? 's' : ''}`);
-    if (!s.params) { if (live.length) add(s.name, 'fit failed'); continue; }
+    if (open) add(s.name, 'outlier', `${open} suggested outlier${open > 1 ? 's' : ''}`, open);
+    if (!s.params) { if (live.length) add(s.name, 'failed', 'fit failed'); continue; }
     const ys = live.map(q => q.y);
     if (ys.length < 3 || Math.max(...ys) - Math.min(...ys) < FLAG.MIN_RANGE) continue;
-    if (atBound(s.params[2], fc.lower[2]) || atBound(s.params[2], fc.upper[2])) add(s.name, 'ED50 at fit bound');
-    else if (atBound(s.params[3], fc.lower[3]) || atBound(s.params[3], fc.upper[3])) add(s.name, 'slope at fit bound');
+    if (atBound(s.params[2], fc.lower[2]) || atBound(s.params[2], fc.upper[2])) add(s.name, 'bound', 'ED50 at fit bound');
+    else if (atBound(s.params[3], fc.lower[3]) || atBound(s.params[3], fc.upper[3])) add(s.name, 'bound', 'slope at fit bound');
     const r2 = r2Of(live, s.params);
-    if (r2 !== null && r2 < FLAG.MIN_R2) add(s.name, `poor fit (R² ${r2.toFixed(2)})`);
+    if (r2 !== null && r2 < FLAG.MIN_R2) add(s.name, 'r2', `poor fit (R² ${r2.toFixed(2)})`);
   }
   if (!r.meta.universalStd) {
     const sp = pc.std.points.filter(q => !q.excluded), open = sp.filter(q => r.suggested.has(q.key)).length;
@@ -2532,16 +2538,26 @@ function plateFlags(pc) {
     if (!pc.std.points.length) notes.push('no standard points');
     else {
       if (open) notes.push(`${open} suggested standard outlier${open > 1 ? 's' : ''}`);
-      if (pc.std.params.every((v, i) => v === sf.p0[i])) notes.push('standard fit failed');
+      if (pc.std.params.every((v, i) => v === sf.p0[i])) notes.push('standard-curve fit failed');
       else {
         const r2 = r2Of(sp, pc.std.params);
-        if (r2 !== null && r2 < FLAG.MIN_STD_R2) notes.push(`standard R² ${r2.toFixed(3)}`);
+        if (r2 !== null && r2 < FLAG.MIN_STD_R2) notes.push(`poor standard curve (R² ${r2.toFixed(3)})`);
       }
     }
   }
   const reasons = [...notes];
-  for (const [n, w] of samples) reasons.push(`${n}: ${w.join(', ')}`);
-  const out = {samples, notes, reasons, count: samples.size + notes.length};
+  for (const [n, w] of samples) reasons.push(`${n}: ${w.map(x => x.text).join(', ')}`);
+  // One plain-language sentence for the plate: what it is flagged for, most important first.
+  const tally = k => { let m = 0, pts = 0; for (const w of samples.values()) for (const x of w) if (x.kind === k) { m++; pts += x.n; } return {m, pts}; };
+  const pl = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+  const parts = [...notes];
+  const o = tally('outlier'), f = tally('failed'), b = tally('bound'), q = tally('r2');
+  if (f.m) parts.push(`${pl(f.m, 'sample')} with a failed fit`);
+  if (o.m) parts.push(`${pl(o.pts, 'suggested outlier')} in ${pl(o.m, 'sample')}`);
+  if (q.m) parts.push(`${pl(q.m, 'poorly fitted sample')}`);
+  if (b.m) parts.push(`${pl(b.m, 'sample')} with ED50 or slope at a fit bound`);
+  const headline = parts.length ? 'Flagged: ' + (parts.length > 1 ? parts.slice(0, -1).join(', ') + ' and ' + parts[parts.length - 1] : parts[0]) + '.' : '';
+  const out = {samples, notes, reasons, headline, count: samples.size + notes.length};
   (r.flagCache || (r.flagCache = {}))[pc.plateIndex] = out;
   return out;
 }
@@ -2687,16 +2703,24 @@ function plateBlockHtml(pc) {
     chips += `<button class="chip ${cls}" data-k="${q.key}" title="${escapeXml(tip)}"><span class="chip-dot" style="background:${col}"></span>${word} ${Math.round(q.x * 100) / 100}</button>`;
   }
   const acc = r.accepted.has(p);
-  const badges = [...fl.notes, ...(fl.samples.size ? [`${fl.samples.size} flagged sample${fl.samples.size > 1 ? 's' : ''}`] : [])]
-    .map(t => `<span class="flag-badge">${escapeXml(t)}</span>`).join('');
-  const focusNote = focus
-    ? `<div class="focus-note">Showing the ${fl.samples.size} flagged of ${pc.samples.length} samples (${[...fl.samples.entries()].map(([n, w]) => escapeXml(n) + ': ' + escapeXml(w.join(', '))).join(' · ')}). “Show all” reveals the rest.</div>` : '';
+  const nEx = plateExclCount(p);
+  let banner = '';
+  if (fl.count) {
+    const items = [...fl.samples.entries()].map(([n, w]) => `<span class="flag-item"><b>${escapeXml(n)}</b> ${escapeXml(w.map(x => x.text).join(', '))}</span>`)
+      .concat(fl.notes.map(t => `<span class="flag-item">${escapeXml(t)}</span>`)).join('');
+    banner = `<div class="flag-banner"><div class="flag-head">⚠ ${escapeXml(fl.headline)}</div>
+      <div class="flag-list">${items}</div>
+      ${focus ? `<div class="focus-note">Graphs show only the ${fl.samples.size} flagged of ${pc.samples.length} samples — “Show all” reveals the rest.</div>` : ''}</div>`;
+  } else if (nEx) {
+    banner = `<div class="flag-banner ok"><div class="flag-head">✎ No issues flagged — ${nEx} point${nEx > 1 ? 's' : ''} excluded by you.</div></div>`;
+  } else {
+    banner = `<div class="flag-banner ok"><div class="flag-head">✓ Clean — no issues found.</div></div>`;
+  }
   return `<div class="plate-charts-block${r.cur === p ? ' current' : ''}" id="plateBlock${p}" data-plate="${p}">
     <div class="plate-charts-header">Plate ${p + 1}
       <button class="btn btn-sm ${acc ? 'btn-accepted' : 'btn-secondary'}" data-accept="${p}">${acc ? '✓ Accepted' : 'Accept plate'}</button>
-      ${badges}
     </div>
-    ${focusNote}
+    ${banner}
     <div class="chart-legend">${legend}</div>
     ${chips ? `<div class="chip-row">${chips}</div>` : ''}
     <div class="plate-charts-row">

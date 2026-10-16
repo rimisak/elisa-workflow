@@ -313,7 +313,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.16.2 &nbsp;·&nbsp; 16/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.17.0 &nbsp;·&nbsp; 16/10/2026</div>
 
 <script>
 'use strict';
@@ -3462,6 +3462,11 @@ async function runProcessing(saved) {
       }
     }
     prog.set(99, 'Preparing the review…');
+
+    // Auto-accept plates with no flags and no edits so only plates needing a look remain.
+    let autoAcc = 0;
+    for (let p = 0; p < numPlates; p++) if (!review.accepted.has(p) && !needsReview(p)) { review.accepted.add(p); autoAcc++; }
+    if (autoAcc) log(`  Auto-accepted ${autoAcc} clean plate(s).`);
 
     renderReview();
     prog.set(100, 'Done');

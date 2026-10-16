@@ -313,7 +313,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.18.0 &nbsp;·&nbsp; 16/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.18.1 &nbsp;·&nbsp; 16/10/2026</div>
 
 <script>
 'use strict';
@@ -3472,7 +3472,8 @@ async function runProcessing(saved) {
     prog.set(100, 'Done');
     setBadge('badgeProcessing', '✓ Done', 'done');
     setSection('secProcessing', false);
-    setSection('secReview', true);
+    // When every plate was auto-accepted, updateSections already collapsed Review and opened Download.
+    if (review.accepted.size < numPlates) setSection('secReview', true);
     log('Review the graphs, exclude outliers if needed, accept each plate, then download.', 'success');
   } catch (err) {
     if (err !== CANCELLED) {

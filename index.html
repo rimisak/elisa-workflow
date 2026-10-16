@@ -313,7 +313,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.17.0 &nbsp;·&nbsp; 16/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.18.0 &nbsp;·&nbsp; 16/10/2026</div>
 
 <script>
 'use strict';
@@ -347,7 +347,7 @@ function updateSections() {
     hint.textContent = `Accept all plates in the review step to enable the download (${acc}/${n} accepted).`;
     return;
   }
-  if (!r.dlOpened) { r.dlOpened = true; setSection('secDownload', true); }
+  if (!r.dlOpened) { r.dlOpened = true; setSection('secReview', false); setSection('secDownload', true); }
   prepareDownload();
   if (r.blob) {
     setBadge('badgeDownload', 'Ready', 'done');

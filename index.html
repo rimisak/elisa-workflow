@@ -13,8 +13,6 @@
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:#f2f2f7;color:#1c1c1e;min-height:100vh;padding:24px}
 h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
-.browser-warning{display:flex;align-items:center;gap:12px;justify-content:space-between;background:#fff4d6;border:1px solid #ffd666;color:#7a5200;border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:16px}
-.browser-warning button{background:none;border:none;font-size:20px;line-height:1;color:#7a5200;cursor:pointer}
 .toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
 .toolbar-title{display:flex;align-items:center;gap:10px}
 .app-icon{width:40px;height:40px;flex-shrink:0;line-height:0}
@@ -154,10 +152,6 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 </head>
 <body>
 
-<div class="browser-warning" id="browserWarning" style="display:none">
-  <span>⚠️ This app is optimized for Google Chrome. Other browsers may show display or download problems.</span>
-  <button onclick="this.parentNode.style.display='none'" aria-label="Dismiss">×</button>
-</div>
 
 <div class="toolbar">
   <div class="toolbar-title">
@@ -305,14 +299,11 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.15.0 &nbsp;·&nbsp; 16/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.15.1 &nbsp;·&nbsp; 16/10/2026</div>
 
 <script>
 'use strict';
 
-// Chrome and Chromium-based browsers (Edge, Brave, Opera…) carry "Chrome" in the UA; Safari and Firefox don't.
-if (!/Chrome|CriOS|Chromium/.test(navigator.userAgent))
-  document.getElementById('browserWarning').style.display = 'flex';
 
 // ─── COLLAPSIBLE SECTIONS ─────────────────────────────────────────────────────
 function setSection(id, open) { document.getElementById(id).classList.toggle('open', !!open); }

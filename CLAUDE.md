@@ -4,14 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Working rules for every change
 
-- **Update the footer on every change.** The page footer in `index.html` (`.page-footer`, near the end of the markup) reads `Kasimir Reich · v<version> · <DD/MM/YYYY>`. Set the date to today's date and bump the version in the same edit. Version scheme: `MAJOR.MINOR.PATCH` — patch for fixes and tweaks, minor for new features, major for breaking changes to the workflow or output layout. Current: v1.15.1.
+- **Update the footer on every change.** The page footer in `index.html` (`.page-footer`, near the end of the markup) reads `Kasimir Reich · v<version> · <DD/MM/YYYY>`. Set the date to today's date and bump the version in the same edit. Version scheme: `MAJOR.MINOR.PATCH` — patch for fixes and tweaks, minor for new features, major for breaking changes to the workflow or output layout. Current: v1.16.0.
 - **Commit after each edit.** When a change is finished, commit it straight away (small, focused commits; message explains the why). Don't let edits pile up uncommitted.
 
 ## What this is
 
 A single-file, client-side ELISA analysis tool. The entire application is `index.html` — markup, CSS, and JS in one file with no framework, no build step, and no backend. It takes BMG Omega plate-reader CSV exports plus a metadata spreadsheet, fits standard/sample curves, and produces a styled `.xlsx` workbook (downloaded in-browser) plus on-page SVG charts.
 
-Two runtime dependencies, vendored in `vendor/` (no network needed; `sw.js` + `manifest.webmanifest` make the app an offline-capable PWA — bump `CACHE` in `sw.js` when `index.html` or a vendored file changes):
+Two runtime dependencies, inlined in `<script>` tags at the top of `index.html` (minified; no network needed, so the file works offline and can be downloaded and opened on its own — there is no service worker, manifest or `vendor/` folder):
 - `xlsx-js-style` — read/write XLSX with cell styling.
 - `jszip` — used to post-process the written XLSX (see conditional formatting below).
 
@@ -23,9 +23,7 @@ There is no build, lint, or test suite. To preview, serve the directory statical
 npx serve -p 7823 .
 ```
 
-Then open `http://localhost:7823`. Opening `index.html` directly via `file://` also works (the service worker only registers over http(s)). All logic runs in the browser; "processing" is triggered by the Process button (`runProcessing`), which reads the loaded files from in-memory state and writes a workbook via `downloadBlob`.
-
-**Standalone download:** `node build-standalone.js` writes `ELISA-Workflow-App.html` — `index.html` with `vendor/*.js` and the icon inlined and the manifest/service worker removed, so it runs offline from one file (also over `file://`). Re-run it and commit the result after every change to `index.html` or `vendor/`.
+Then open `http://localhost:7823`. Opening `index.html` directly via `file://` also works. All logic runs in the browser; "processing" is triggered by the Process button (`runProcessing`), which reads the loaded files from in-memory state and writes a workbook via `downloadBlob`.
 
 Deployment: GitHub Pages serves `index.html` from the repo root (that's why the app file is named `index.html`). Default work branch is `main`.
 

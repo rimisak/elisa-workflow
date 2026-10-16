@@ -313,7 +313,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.18.1 &nbsp;·&nbsp; 16/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.18.2 &nbsp;·&nbsp; 16/10/2026</div>
 
 <script>
 'use strict';
@@ -659,6 +659,11 @@ function newAnalysis() {
   sec.style.display = 'none'; sec.innerHTML = '';
   const box = document.getElementById('logBox');
   box.innerHTML = ''; box.style.display = 'none';
+  document.getElementById('progressWrap').style.display = 'none';
+  document.getElementById('progressFill').style.width = '0%';
+  document.getElementById('progressPct').textContent = '0%';
+  document.getElementById('progressLabel').textContent = '';
+  document.getElementById('progressEta').textContent = '';
   setSection('secUpload', true); setSection('secProcessing', true);
   setSection('secReview', false); setSection('secDownload', false);
   setBadge('badgeProcessing', 'Not started', 'idle');
@@ -1512,6 +1517,7 @@ function makeProgress() {
   const t0 = performance.now();
   let lastYield = t0;
   wrap.style.display = 'block';
+  fill.style.width = '0%'; pctEl.textContent = '0%'; lblEl.textContent = ''; etaEl.textContent = 'estimating…';
   const fmt = sec => sec < 90 ? `${Math.max(1, Math.round(sec))} s` : `${Math.floor(sec / 60)} min ${Math.round(sec % 60)} s`;
   return {
     set(pct, label) {

@@ -313,7 +313,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.16.0 &nbsp;·&nbsp; 16/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.16.1 &nbsp;·&nbsp; 16/10/2026</div>
 
 <script>
 'use strict';
@@ -1342,6 +1342,9 @@ function stdFitConfig(fc) {
   return {lower: lo, upper: hi, p0};
 }
 
+// Lowest concentration reported for the standard (same units as the Interp. Con. row).
+const STD_CON_FLOOR = 0.01;
+
 function calculateConcentrations(series, seriesST, seriesSA, fc, universalStd) {
   fc = stdFitConfig(fc);
   const stdPts = stdFitPoints(series.get('standard') || [], seriesST);
@@ -1375,7 +1378,7 @@ function calculateConcentrations(series, seriesST, seriesSA, fc, universalStd) {
         conRow.push('/'); choValRow.push('/'); choDilRow.push('/');
       } else {
         const con = inverse4PL(first.y, top, bottom, hill, ic50) * Math.pow(5, first.i) / 1000;
-        conRow.push(Math.round(con * 100)/100);
+        conRow.push(Math.max(STD_CON_FLOOR, Math.round(con * 100)/100));   // never report 0 for the standard
         choValRow.push(first.y);
         choDilRow.push(String(seriesST[first.i]) + ' (Con)');
       }

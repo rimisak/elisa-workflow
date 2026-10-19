@@ -119,6 +119,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .legend-item{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#3a3a3c}
 .plate-charts-header{display:flex;flex-direction:column;align-items:flex-start;gap:8px}
 .btn-accept{background:#007aff;color:#fff;padding:9px 22px;font-size:14px;font-weight:600}
+.accept-row{display:flex;gap:8px;flex-wrap:wrap}
 .btn-accept:hover{background:#0062cc}
 .btn-accepted{background:#34c759;color:#fff}
 .btn-accepted:hover{background:#2aa84a}
@@ -2588,7 +2589,7 @@ function plateBlockHtml(pc) {
   }
   return `<div class="plate-charts-block${r.cur === p ? ' current' : ''}" id="plateBlock${p}" data-plate="${p}">
     <div class="plate-charts-header">Plate ${p + 1}
-      <button class="btn ${acc ? 'btn-accepted' : 'btn-accept'}" data-accept="${p}">${acc ? '✓ Accepted' : 'Accept plate and show next'}</button>
+      <div class="accept-row"><button class="btn ${acc ? 'btn-accepted' : 'btn-accept'}" data-accept="${p}">${acc ? '✓ Accepted' : 'Accept plate and show next'}</button>${acc ? `<button class="btn btn-accept" data-nextplate="${p}">Next plate →</button>` : ''}</div>
     </div>
     ${banner}
     ${hookNote}
@@ -2863,6 +2864,8 @@ document.addEventListener('click', e => {
   if (pt) { toggleExclusion(pt.dataset.k); return; }
   const xp = e.target.closest('[data-exclplate]');
   if (xp) { excludeSuggestedInPlate(Number(xp.dataset.exclplate)); return; }
+  const nx = e.target.closest('[data-nextplate]');
+  if (nx) { review.cur = Number(nx.dataset.nextplate); stepPlate(1); return; }
   const acc = e.target.closest('[data-accept]');
   if (acc) {
     acceptPlate(Number(acc.dataset.accept));

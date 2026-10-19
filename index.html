@@ -80,6 +80,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .text-input{padding:8px 12px;border-radius:8px;border:1px solid #c7c7cc;font-size:14px;flex:1;outline:none;transition:border .15s}
 .text-input:focus{border-color:#007aff}
 .process-btn{width:100%;padding:12px;font-size:16px;font-weight:600;border-radius:10px}
+.accept-all-btn{padding:20px;font-size:20px;border-radius:12px}
 .log-box{background:#1c1c1e;border-radius:10px;padding:14px 16px;min-height:120px;max-height:280px;overflow-y:auto;font-family:'SF Mono',Menlo,Monaco,monospace;font-size:12px;line-height:1.6}
 .log-line{color:#d1d1d6;white-space:pre-wrap;word-break:break-word}
 .log-line.success{color:#30d158}
@@ -2625,7 +2626,7 @@ function reviewHeaderHtml(bottom) {
     <div class="pt-strip" id="plateStrip">${plateTilesHtml()}</div>
     <button class="btn btn-secondary btn-sm rv-keys-btn" data-act="keys">Keyboard shortcuts</button>
     <div class="rv-keys" id="rvKeys" hidden><kbd>J</kbd>/<kbd>→</kbd> next plate · <kbd>K</kbd>/<kbd>←</kbd> previous · <kbd>A</kbd> accept &amp; go to next · <kbd>X</kbd> exclude suggested here · <kbd>C</kbd> clear exclusions here · <kbd>F</kbd> needs review ⇄ all</div>`;
-  return `<button class="btn btn-primary process-btn" data-act="acceptAll" ${r.accepted.size === n ? 'disabled' : ''}>Accept all remaining plates</button>`;
+  return `<button class="btn btn-primary process-btn accept-all-btn" data-act="acceptAll" ${r.accepted.size === n ? 'disabled' : ''}>Accept all remaining plates</button>`;
 }
 
 function reviewListHtml() {

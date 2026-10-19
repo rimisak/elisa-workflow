@@ -2865,7 +2865,14 @@ document.addEventListener('click', e => {
   const xp = e.target.closest('[data-exclplate]');
   if (xp) { excludeSuggestedInPlate(Number(xp.dataset.exclplate)); return; }
   const nx = e.target.closest('[data-nextplate]');
-  if (nx) { review.cur = Number(nx.dataset.nextplate); stepPlate(1); return; }
+  if (nx) {
+    const list = visiblePlates(), i = list.indexOf(Number(nx.dataset.nextplate));
+    if (i >= 0 && i < list.length - 1) {
+      if (!document.getElementById('plateBlock' + list[i + 1])) { review.limit = Math.max(review.limit, i + 2); document.getElementById('reviewList').innerHTML = reviewListHtml(); }
+      setCurrent(list[i + 1], true);
+    }
+    return;
+  }
   const acc = e.target.closest('[data-accept]');
   if (acc) {
     acceptPlate(Number(acc.dataset.accept));

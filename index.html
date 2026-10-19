@@ -318,7 +318,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.23.7 &nbsp;·&nbsp; 19/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.23.8 &nbsp;·&nbsp; 19/10/2026</div>
 
 <script>
 'use strict';
@@ -361,7 +361,7 @@ function updateSections() {
   if (r.out) {
     setBadge('badgeDownload', 'Ready', 'done');
     btn.disabled = false; btn.textContent = 'Download ' + name;
-    hint.textContent = r.excl.size ? `${r.excl.size} excluded point(s) will be listed on the "Excluded Points" sheet.` : 'No points excluded.';
+    hint.textContent = r.excl.size ? `${r.excl.size} excluded point(s) will be listed on the "Excluded Points" sheet.` : '';
   } else {
     setBadge('badgeDownload', 'Preparing…', 'busy');
     btn.disabled = true; btn.textContent = 'Preparing…';

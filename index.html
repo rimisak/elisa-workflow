@@ -301,7 +301,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.19.6 &nbsp;·&nbsp; 19/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.19.7 &nbsp;·&nbsp; 19/10/2026</div>
 
 <script>
 'use strict';
@@ -672,12 +672,16 @@ function log(msg, cls='') {
 }
 
 // Download helper
+// Safari quirks: it may open a typed blob (e.g. the xlsx MIME type) in a tab instead of saving it,
+// so the blob is re-typed as octet-stream (the .xlsx extension still tells Excel what it is); and it
+// can drop the download if the link leaves the page in the same tick, so removal is deferred.
 function downloadBlob(blob, filename) {
-  const url = URL.createObjectURL(blob);
+  const url = URL.createObjectURL(new Blob([blob], {type: 'application/octet-stream'}));
   const a = document.createElement('a');
-  a.href = url; a.download = filename;
-  document.body.appendChild(a); a.click();
-  document.body.removeChild(a);
+  a.href = url; a.download = filename; a.rel = 'noopener'; a.style.display = 'none';
+  document.body.appendChild(a);
+  a.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true, view: window}));
+  setTimeout(() => a.remove(), 1000);
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 

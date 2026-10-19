@@ -675,9 +675,11 @@ function log(msg, cls='') {
 // Download helper. `data` is a string or bytes (ArrayBuffer / Uint8Array); it must be ready before
 // the click, since Safari only honours a download started synchronously inside the user's click.
 // Safari quirks: on a page opened via file:// it will not save blob: URLs, so a data: URL is used
-// there; it may open a typed blob in a tab instead of saving it, so everything is octet-stream (the
-// extension still tells Excel what it is); and it can drop the download if the link leaves the page
-// in the same tick, so removal is deferred.
+// there — and it ignores the download filename on file:// (saves "Unknown"), so the data: URL
+// carries the real MIME type to get at least the right extension; over http(s) it may open a typed
+// blob in a tab instead of saving it, so blobs are octet-stream (the filename gives the extension);
+// and it can drop the download if the link leaves the page in the same tick, so removal is deferred.
+const DOWNLOAD_MIME = {xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', csv: 'text/csv'};
 function bytesToBase64(u8) {
   let s = '';
   for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
@@ -686,7 +688,8 @@ function bytesToBase64(u8) {
 function downloadData(data, filename) {
   const u8 = typeof data === 'string' ? new TextEncoder().encode(data) : new Uint8Array(data);
   const useDataUrl = location.protocol === 'file:';
-  const url = useDataUrl ? 'data:application/octet-stream;base64,' + bytesToBase64(u8)
+  const mime = DOWNLOAD_MIME[filename.split('.').pop().toLowerCase()] || 'application/octet-stream';
+  const url = useDataUrl ? 'data:' + mime + ';base64,' + bytesToBase64(u8)
                          : URL.createObjectURL(new Blob([u8], {type: 'application/octet-stream'}));
   const a = document.createElement('a');
   a.href = url; a.download = filename; a.rel = 'noopener'; a.style.display = 'none';

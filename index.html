@@ -316,7 +316,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.22.6 &nbsp;·&nbsp; 19/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.23.0 &nbsp;·&nbsp; 19/10/2026</div>
 
 <script>
 'use strict';
@@ -2751,7 +2751,11 @@ function acceptPlate(p) {
     const el = document.getElementById('plateBlock' + p);
     if (el) el.remove();
     refreshHeaders();
-    if (!after.length) { renderReview(); return; }
+    if (!after.length) {
+      renderReview();
+      if (accepting && r.accepted.size === r.numPlates) requestAnimationFrame(() => document.getElementById('secDownload').scrollIntoView({block: 'start', behavior: 'smooth'}));
+      return;
+    }
     const next = after[Math.min(idx, after.length - 1)];
     if (!document.getElementById('plateBlock' + next)) { r.limit = Math.max(r.limit, after.indexOf(next) + 1); document.getElementById('reviewList').innerHTML = reviewListHtml(); }
     setCurrent(next, true);
@@ -2763,6 +2767,11 @@ function acceptPlate(p) {
       const next = after[idx + 1];
       if (!document.getElementById('plateBlock' + next)) { r.limit = Math.max(r.limit, idx + 2); document.getElementById('reviewList').innerHTML = reviewListHtml(); }
       setCurrent(next, true);
+    } else if (accepting && idx >= 0) {
+      // Last plate: on to the download once everything is accepted (the review section has just
+      // collapsed), otherwise to the footer with the accept-all controls.
+      const target = r.accepted.size === r.numPlates ? 'secDownload' : 'reviewFooter';
+      requestAnimationFrame(() => { const t = document.getElementById(target); if (t) t.scrollIntoView({block: 'start', behavior: 'smooth'}); });
     }
   }
 }

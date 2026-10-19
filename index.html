@@ -315,7 +315,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.22.4 &nbsp;·&nbsp; 19/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.22.5 &nbsp;·&nbsp; 19/10/2026</div>
 
 <script>
 'use strict';
@@ -2668,6 +2668,9 @@ function refreshReview(plate) {
   // Plates that borrow this plate's standard have new results too and must be accepted again.
   const deps = plate == null ? [] : standardDependents(plate);
   deps.forEach(d => review.accepted.delete(d));
+  // Keep the edited plate at the same spot on screen: header/strip and block heights change under it.
+  const anchor = plate == null ? null : document.getElementById('plateBlock' + plate);
+  const anchorTop = anchor ? anchor.getBoundingClientRect().top : 0;
   saveSession();
   updateSections();
   refreshHeaders();
@@ -2676,6 +2679,8 @@ function refreshReview(plate) {
     const el = document.getElementById('plateBlock' + q);
     if (el) el.outerHTML = plateBlockHtml(review.analysis.plateCharts[q]);
   }
+  const now = anchor && document.getElementById('plateBlock' + plate);
+  if (now) window.scrollBy(0, now.getBoundingClientRect().top - anchorTop);
 }
 
 // Moves the current-plate marker (block outline, strip tile) and optionally scrolls to it.

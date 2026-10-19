@@ -117,7 +117,9 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .chart-title{font-size:13px;font-weight:600;color:#3a3a3c;margin-bottom:8px}
 .chart-legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin-bottom:8px}
 .legend-item{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#3a3a3c}
-.plate-charts-header{display:flex;align-items:center;gap:10px}
+.plate-charts-header{display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+.btn-accept{background:#007aff;color:#fff;padding:9px 22px;font-size:14px;font-weight:600}
+.btn-accept:hover{background:#0062cc}
 .btn-accepted{background:#34c759;color:#fff}
 .btn-accepted:hover{background:#2aa84a}
 .rv-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 8px}
@@ -313,7 +315,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.22.2 &nbsp;·&nbsp; 19/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.22.3 &nbsp;·&nbsp; 19/10/2026</div>
 
 <script>
 'use strict';
@@ -2586,7 +2588,7 @@ function plateBlockHtml(pc) {
   }
   return `<div class="plate-charts-block${r.cur === p ? ' current' : ''}" id="plateBlock${p}" data-plate="${p}">
     <div class="plate-charts-header">Plate ${p + 1}
-      <button class="btn btn-sm ${acc ? 'btn-accepted' : 'btn-secondary'}" data-accept="${p}">${acc ? '✓ Accepted' : 'Accept plate'}</button>
+      <button class="btn ${acc ? 'btn-accepted' : 'btn-accept'}" data-accept="${p}">${acc ? '✓ Accepted' : 'Accept plate'}</button>
     </div>
     ${banner}
     ${hookNote}

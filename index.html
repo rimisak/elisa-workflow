@@ -304,7 +304,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.19.2 &nbsp;·&nbsp; 19/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.19.3 &nbsp;·&nbsp; 19/10/2026</div>
 
 <script>
 'use strict';
@@ -2577,7 +2577,7 @@ function reviewHeaderHtml(bottom) {
         ${bottom ? '' : '<button class="btn btn-secondary btn-sm" data-act="keys" title="Keyboard shortcuts" aria-label="Keyboard shortcuts">?</button>'}
       </div>
     </div>
-    ${bottom ? '' : `<div class="rv-tabs">${tab('todo', `Needs review (${todo})`)}${tab('all', `All plates (${n})`)}${tab('accepted', `Accepted (${acc})`)}</div>
+    ${bottom ? '' : `<div class="rv-tabs">${tab('all', `All plates (${n})`)}${tab('todo', `Needs review (${todo})`)}${tab('accepted', `Accepted (${acc})`)}</div>
     <div class="pt-strip" id="plateStrip">${plateTilesHtml()}</div>
     <div class="rv-keys" id="rvKeys" hidden><kbd>J</kbd>/<kbd>→</kbd> next plate · <kbd>K</kbd>/<kbd>←</kbd> previous · <kbd>A</kbd> accept &amp; go to next · <kbd>X</kbd> exclude suggested here · <kbd>C</kbd> clear exclusions here · <kbd>F</kbd> needs review ⇄ all</div>`}`;
 }
@@ -3002,7 +3002,7 @@ async function runProcessing(saved) {
     await new Promise(r => setTimeout(r, 10));
     review = {grid, numPlates, meta, outputName,
               excl: new Set(), suggested: new Set(), hidden: new Set(), accepted: new Set(), analysis: null, cache: new Map(),
-              view: 'todo', cur: null, limit: FLAG.BATCH, focusOff: new Set(), flagCache: null, stdFrom: {}};
+              view: 'all', cur: null, limit: FLAG.BATCH, focusOff: new Set(), flagCache: null, stdFrom: {}};
     pool = numPlates >= 2 ? createFitPool(grid, meta, fitConfig, numPlates) : null;
     log(pool ? `  Fitting in parallel on ${pool.size} worker(s).` : '  Fitting on the main thread.');
     const tFit = performance.now();

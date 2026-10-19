@@ -145,7 +145,11 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .flag-head{font-size:17px;font-weight:600;color:#a35c00;line-height:1.35}
 .flag-banner.ok .flag-head{color:#1d7a35;font-size:15px}
 .flag-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.flag-group{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-top:8px}
+.flag-group .flag-list{margin-top:0}
+.flag-gtitle{font-size:12px;font-weight:600;color:#6b4300;min-width:150px}
 .flag-item{font-size:12px;background:#fff;border:1px solid #ffd199;border-radius:6px;padding:2px 8px;color:#6b4300}
+.flag-item.ok{border-color:#a8e0b5;color:#1d7a35}
 .flag-banner .focus-note{margin:8px 0 0}
 .focus-note{font-size:12px;color:#8e8e93;margin:2px 0 6px}
 .rv-empty{padding:18px;text-align:center;color:#636366;font-size:13px}
@@ -308,7 +312,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.20.0 &nbsp;·&nbsp; 19/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.21.0 &nbsp;·&nbsp; 19/10/2026</div>
 
 <script>
 'use strict';
@@ -2344,7 +2348,7 @@ function plateFlags(pc) {
     const r2 = r2Of(live, s.params);
     if (r2 !== null && r2 < FLAG.MIN_R2) add(s.name, 'r2', `poor fit (R² ${r2.toFixed(2)})`);
   }
-  let noStd = false;
+  let noStd = false, stdR2 = null, stdOpen = 0;
   if (!r.meta.universalStd && !pc.std.borrowed) {
     const why = standardMissing(pc);
     if (why) { noStd = true; notes.push(`no usable standard curve — probably not pipetted (${why})`); }
@@ -2354,10 +2358,11 @@ function plateFlags(pc) {
     const sf = stdFitConfig(fc);
     if (!pc.std.points.length) notes.push('no standard points');
     else {
+      stdOpen = open;
       if (open) notes.push(`${open} suggested standard outlier${open > 1 ? 's' : ''}`);
       if (pc.std.params.every((v, i) => v === sf.p0[i])) notes.push('standard-curve fit failed');
       else {
-        const r2 = r2Of(sp, pc.std.params);
+        const r2 = stdR2 = r2Of(sp, pc.std.params);
         if (r2 !== null && r2 < FLAG.MIN_STD_R2) notes.push(`poor standard curve (R² ${r2.toFixed(3)})`);
       }
     }
@@ -2367,14 +2372,15 @@ function plateFlags(pc) {
   // One plain-language sentence for the plate: what it is flagged for, most important first.
   const tally = k => { let m = 0, pts = 0; for (const w of samples.values()) for (const x of w) if (x.kind === k) { m++; pts += x.n; } return {m, pts}; };
   const pl = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
-  const parts = [...notes];
+  // Same order as the banner groups: standard curve, outliers, poorly fitted curves.
+  const parts = notes.filter(t => !/standard outlier/.test(t));
   const o = tally('outlier'), f = tally('failed'), b = tally('bound'), q = tally('r2');
+  if (o.m || stdOpen) parts.push(`${pl(o.pts + stdOpen, 'suggested outlier')}${o.m ? ` in ${pl(o.m, 'sample')}` : ''}${stdOpen ? `${o.m ? ' and' : ' in'} the standard` : ''}`);
   if (f.m) parts.push(`${pl(f.m, 'sample')} with a failed fit`);
-  if (o.m) parts.push(`${pl(o.pts, 'suggested outlier')} in ${pl(o.m, 'sample')}`);
   if (q.m) parts.push(`${pl(q.m, 'poorly fitted sample')}`);
   if (b.m) parts.push(`${pl(b.m, 'sample')} with ED50 or slope at a fit bound`);
   const headline = parts.length ? 'Flagged: ' + (parts.length > 1 ? parts.slice(0, -1).join(', ') + ' and ' + parts[parts.length - 1] : parts[0]) + '.' : '';
-  const out = {samples, notes, reasons, headline, noStd, count: samples.size + notes.length};
+  const out = {samples, notes, reasons, headline, noStd, stdR2, stdOpen, count: samples.size + notes.length};
   if (out.count) (r.everFlagged || (r.everFlagged = new Set())).add(pc.plateIndex);
   (r.flagCache || (r.flagCache = {}))[pc.plateIndex] = out;
   return out;
@@ -2543,10 +2549,23 @@ function plateBlockHtml(pc) {
   const nEx = plateExclCount(p);
   let banner = '';
   if (fl.count) {
-    const items = [...fl.samples.entries()].map(([n, w]) => `<span class="flag-item"><b>${escapeXml(n)}</b> ${escapeXml(w.map(x => x.text).join(', '))}</span>`)
-      .concat(fl.notes.filter(t => !/^no usable standard/.test(t)).map(t => `<span class="flag-item">${escapeXml(t)}</span>`)).join('');
+    // Grouped by problem, in the order to work through them: standard curve, outliers, poor fits.
+    const item = (n, txt) => `<span class="flag-item">${n ? `<b>${escapeXml(n)}</b> ` : ''}${escapeXml(txt)}</span>`;
+    const okItem = txt => `<span class="flag-item ok">${escapeXml(txt)}</span>`;
+    const ofKind = kinds => [...fl.samples.entries()].map(([n, w]) => [n, w.filter(x => kinds.includes(x.kind))]).filter(([, w]) => w.length);
+    const stdBad = fl.notes.filter(t => !/standard outlier/.test(t));
+    const stdItems = stdBad.length ? stdBad.map(t => item('', t)).join('')
+      : okItem(r.meta.universalStd ? 'OK — universal standard curve' : pc.std.borrowed ? `OK — borrowed from plate ${pc.std.from + 1}` : `OK${fl.stdR2 != null ? ` (R² ${fl.stdR2.toFixed(3)})` : ''}`);
+    const outl = ofKind(['outlier']), nOut = outl.reduce((a, [, w]) => a + w[0].n, 0) + fl.stdOpen;
+    const outItems = (fl.stdOpen ? item('Standard', `${fl.stdOpen} suggested outlier${fl.stdOpen > 1 ? 's' : ''}`) : '')
+      + outl.map(([n, w]) => item(n, w[0].text)).join('');
+    const fits = ofKind(['failed', 'r2', 'bound']);
+    const fitItems = fits.map(([n, w]) => item(n, w.map(x => x.text).join(', '))).join('');
+    const group = (i, title, body, extra = '') => `<div class="flag-group"><span class="flag-gtitle">${i}. ${title}</span><div class="flag-list">${body}</div>${extra}</div>`;
     banner = `<div class="flag-banner"><div class="flag-head">⚠ ${escapeXml(fl.headline)}</div>
-      <div class="flag-list">${items}</div>
+      ${group(1, 'Standard curve', stdItems)}
+      ${group(2, 'Outliers', nOut ? outItems : okItem('None'), nOut ? `<button class="btn btn-secondary btn-sm" data-exclplate="${p}">Exclude all ${nOut} outlier${nOut > 1 ? 's' : ''}</button>` : '')}
+      ${group(3, 'Poorly fitted curves', fits.length ? fitItems : okItem('None'))}
       ${focus ? `<div class="focus-note">Graphs show only the ${focusSamples(pc).size} flagged of ${pc.samples.length} samples — “Show all” reveals the rest.</div>` : ''}</div>`;
   } else if (plateResolved(p)) {
     banner = `<div class="flag-banner ok"><div class="flag-head">✓ Resolved — ${nEx} point${nEx > 1 ? 's' : ''} excluded, no issues remain.</div>${focus ? `<div class="focus-note">Graphs still show only the ${focusSamples(pc).size} sample${focusSamples(pc).size > 1 ? "s" : ""} that ${focusSamples(pc).size > 1 ? "were" : "was"} flagged — “Show all” reveals the rest.</div>` : ''}</div>`;
@@ -2827,6 +2846,8 @@ document.addEventListener('click', e => {
   }
   const pt = e.target.closest('[data-k]');
   if (pt) { toggleExclusion(pt.dataset.k); return; }
+  const xp = e.target.closest('[data-exclplate]');
+  if (xp) { excludeSuggestedInPlate(Number(xp.dataset.exclplate)); return; }
   const acc = e.target.closest('[data-accept]');
   if (acc) {
     acceptPlate(Number(acc.dataset.accept));

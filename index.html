@@ -312,7 +312,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.21.1 &nbsp;·&nbsp; 19/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.21.2 &nbsp;·&nbsp; 19/10/2026</div>
 
 <script>
 'use strict';
@@ -2563,7 +2563,7 @@ function plateBlockHtml(pc) {
     const fitItems = fits.map(([n, w]) => item(n, w.map(x => x.text).join(', '))).join('');
     const group = (i, title, body, extra = '') => `<div class="flag-group"><span class="flag-gtitle">${i}. ${title}</span><div class="flag-list">${body}</div>${extra}</div>`;
     banner = `<div class="flag-banner"><div class="flag-head">⚠ ${escapeXml(fl.headline)}</div>
-      ${group(1, 'Standard curve', stdItems)}
+      ${group(1, 'Standard curve fit', stdItems)}
       ${group(2, 'Outliers', nOut ? outItems : okItem('None detected'), nOut ? `<button class="btn btn-secondary btn-sm" data-exclplate="${p}">Exclude all ${nOut} outlier${nOut > 1 ? 's' : ''}</button>` : '')}
       ${group(3, 'Poorly fitted curves', fits.length ? fitItems : okItem('None'))}
       ${focus ? `<div class="focus-note">Graphs show only the ${focusSamples(pc).size} flagged of ${pc.samples.length} samples — “Show all” reveals the rest.</div>` : ''}</div>`;

@@ -88,6 +88,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .option-row{display:flex;align-items:center;justify-content:space-between;gap:14px}
 .option-text{display:flex;flex-direction:column;gap:2px}
 .option-title{font-size:14px;font-weight:500;color:#1c1c1e}
+.exp-tag{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:6px;font-size:10px;font-weight:600;letter-spacing:.3px;text-transform:uppercase;vertical-align:1px;color:#9a5b00;background:#fff3dc;border:1px solid #f5d9a8}
 .option-sub{font-size:12px;color:#aeaeb2}
 .switch{position:relative;display:inline-block;width:46px;height:28px;flex-shrink:0}
 .switch input{opacity:0;width:0;height:0}
@@ -245,7 +246,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
   <div class="option-row" style="margin-top:14px;border-top:1px solid #f0f0f0;padding-top:14px">
     <span class="option-text">
-      <span class="option-title">Correct saturation hunch</span>
+      <span class="option-title">Correct saturation hunch <span class="exp-tag" title="Experimental: heuristic, not yet validated on real data">Experimental</span></span>
       <span class="option-sub">When the concentrated dilutions are maxed out they sit flat and slightly below a bump just before the curve falls. Those points are treated as capped at the plateau for the fit (raw values stay in the output, marked).</span>
     </span>
     <label class="switch">
@@ -255,7 +256,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
   <div class="option-row" style="margin-top:14px;border-top:1px solid #f0f0f0;padding-top:14px">
     <span class="option-text">
-      <span class="option-title">Edge-effect ED50 (in-plate blanks)</span>
+      <span class="option-title">Edge-effect ED50 (in-plate blanks) <span class="exp-tag" title="Experimental: heuristic, not yet validated on real data">Experimental</span></span>
       <span class="option-sub">elisa_ed50.py method: row-wise background from blank column(s), Bottom fixed at 0, censored half-plateau ED50. Adds rows 37–41 plus "ED50 Corrected" &amp; "QC Edge Effect" sheets.</span>
     </span>
     <label class="switch">
@@ -313,7 +314,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.18.2 &nbsp;·&nbsp; 16/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.18.3 &nbsp;·&nbsp; 19/10/2026</div>
 
 <script>
 'use strict';

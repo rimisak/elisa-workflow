@@ -317,7 +317,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.23.1 &nbsp;·&nbsp; 19/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.23.2 &nbsp;·&nbsp; 19/10/2026</div>
 
 <script>
 'use strict';
@@ -2609,9 +2609,9 @@ function plateTilesHtml() {
   return [...Array(r.numPlates).keys()].map(p => {
     const f = plateFlags(r.analysis.plateCharts[p]), ex = plateExclCount(p);
     const res = !r.accepted.has(p) && plateResolved(p);
-    const cls = r.accepted.has(p) ? 'acc' : f.count ? 'flag' : res ? 'res' : ex ? 'edit' : '';
+    const cls = r.accepted.has(p) ? 'acc' : f.count ? 'flag' : res ? 'res' : ex ? 'edit' : 'acc';
     const tip = `Plate ${p + 1}` + (r.accepted.has(p) ? ' — accepted' : f.count ? ' — ' + f.reasons.slice(0, 4).join('; ') : res ? ' — resolved by exclusion' : ex ? ' — edited' : ' — clean');
-    return `<button class="ptile ${cls}${r.cur === p ? ' cur' : ''}" data-goto="${p}" title="${escapeXml(tip)}">${p + 1}${r.accepted.has(p) ? '✓' : f.count ? '·' + f.count : ''}</button>`;
+    return `<button class="ptile ${cls}${r.cur === p ? ' cur' : ''}" data-goto="${p}" title="${escapeXml(tip)}">${p + 1}${r.accepted.has(p) ? '✓' : ''}</button>`;
   }).join('');
 }
 

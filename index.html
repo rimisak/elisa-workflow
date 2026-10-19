@@ -317,7 +317,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.23.3 &nbsp;·&nbsp; 19/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.23.4 &nbsp;·&nbsp; 19/10/2026</div>
 
 <script>
 'use strict';
@@ -2625,13 +2625,7 @@ function reviewHeaderHtml(bottom) {
     <div class="pt-strip" id="plateStrip">${plateTilesHtml()}</div>
     <button class="btn btn-secondary btn-sm rv-keys-btn" data-act="keys">Keyboard shortcuts</button>
     <div class="rv-keys" id="rvKeys" hidden><kbd>J</kbd>/<kbd>→</kbd> next plate · <kbd>K</kbd>/<kbd>←</kbd> previous · <kbd>A</kbd> accept &amp; go to next · <kbd>X</kbd> exclude suggested here · <kbd>C</kbd> clear exclusions here · <kbd>F</kbd> needs review ⇄ all</div>`;
-  return `<div class="review-bar">
-      <div class="review-actions">
-        <button class="btn btn-secondary btn-sm" data-act="excludeSuggested" ${nSug ? '' : 'disabled'}>Exclude suggested (${nSug})</button>
-        <button class="btn btn-secondary btn-sm" data-act="clearExcl" ${r.excl.size ? '' : 'disabled'}>Clear exclusions</button>
-        <button class="btn btn-secondary btn-sm" data-act="acceptAll" ${r.accepted.size === n ? 'disabled' : ''}>Accept all</button>
-      </div>
-    </div>`;
+  return `<button class="btn btn-primary process-btn" data-act="acceptAll" ${r.accepted.size === n ? 'disabled' : ''}>Accept all remaining plates</button>`;
 }
 
 function reviewListHtml() {

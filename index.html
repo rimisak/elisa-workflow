@@ -2524,7 +2524,8 @@ function plateBlockHtml(pc) {
   const fl = plateFlags(pc), focus = focusActive(pc);
   if (pc.samples.length) legend += `<span class="legend-all">
     <button class="btn btn-secondary btn-sm" data-showall="${p}" ${nHid ? '' : 'disabled'}>Show all</button>
-    <button class="btn btn-secondary btn-sm" data-hideall="${p}" ${nHid === pc.samples.length ? 'disabled' : ''}>Hide all</button></span>`;
+    <button class="btn btn-secondary btn-sm" data-hideall="${p}" ${nHid === pc.samples.length ? 'disabled' : ''}>Hide all</button>
+    <button class="btn btn-secondary btn-sm" data-act="toggleShowExcl" title="Applies to all graphs">${review.showExcl ? 'Hide' : 'Show'} excluded points</button></span>`;
   if (!legend) legend = '<span class="legend-item" style="color:#aeaeb2">No sample curves for this plate</span>';
 
   // Chips directly under the legend: every excluded or suggested point, labelled by dilution step.
@@ -2619,7 +2620,6 @@ function reviewHeaderHtml(bottom) {
   if (!bottom) return `<div class="card-label" style="margin-bottom:10px">Review &amp; accept</div>
     <div class="rv-tabs">${tab('all', `All plates (${n})`)}${tab('todo', `Needs review (${todo})`)}${tab('accepted', `Accepted (${acc})`)}</div>
     <div class="pt-strip" id="plateStrip">${plateTilesHtml()}</div>
-    <button class="btn btn-secondary btn-sm rv-keys-btn" data-act="toggleShowExcl">${r.showExcl ? 'Hide' : 'Show'} excluded points${r.excl.size ? ' (' + r.excl.size + ')' : ''}</button>
     <button class="btn btn-secondary btn-sm rv-keys-btn" data-act="keys">Keyboard shortcuts</button>
     <div class="rv-keys" id="rvKeys" hidden><kbd>J</kbd>/<kbd>→</kbd> next plate · <kbd>K</kbd>/<kbd>←</kbd> previous · <kbd>A</kbd> accept &amp; go to next · <kbd>X</kbd> exclude suggested here · <kbd>C</kbd> clear exclusions here · <kbd>F</kbd> needs review ⇄ all</div>`;
   return `<div class="review-bar">

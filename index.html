@@ -318,7 +318,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.23.9 &nbsp;·&nbsp; 19/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.23.10 &nbsp;·&nbsp; 19/10/2026</div>
 
 <script>
 'use strict';
@@ -2515,6 +2515,12 @@ function resultsTableHtml(p) {
     <tr><th>Conc. (µg/mL)</th>${cols.map(x => td(x.con, cons)).join('')}</tr></tbody></table>`;
 }
 
+// Samples whose curve fit is poor right now: failed fit, R² below FLAG.MIN_R2, or ED50/slope at a fit bound.
+function poorNames(pc) {
+  const out = new Set();
+  for (const [n, w] of plateFlags(pc).samples) if (w.some(x => x.kind === 'r2' || x.kind === 'failed' || x.kind === 'bound')) out.add(n);
+  return out;
+}
 function plateBlockHtml(pc) {
   const p = pc.plateIndex, r = review;
   for (const q of [...pc.samples.flatMap(s => s.points), ...pc.std.points]) q.suggested = r.suggested.has(q.key);
@@ -2529,6 +2535,7 @@ function plateBlockHtml(pc) {
   if (pc.samples.length) legend += `<span class="legend-all">
     <button class="btn btn-secondary btn-sm" data-showall="${p}" ${nHid ? '' : 'disabled'}>Show all dilution curves</button>
     <button class="btn btn-secondary btn-sm" data-hideall="${p}" ${nHid === pc.samples.length ? 'disabled' : ''}>Hide all dilution curves</button>
+    <button class="btn btn-secondary btn-sm" data-poorfit="${p}" ${poorNames(pc).size ? '' : 'disabled'} title="Show only curves with a failed fit, low R² or a parameter at its fit bound">Show only poor fits</button>
     <button class="btn btn-secondary btn-sm" data-act="toggleShowExcl" title="Applies to all graphs">${review.showExcl ? 'Hide' : 'Show'} excluded points</button></span>`;
   if (!legend) legend = '<span class="legend-item" style="color:#aeaeb2">No sample curves for this plate</span>';
 
@@ -2859,6 +2866,16 @@ document.addEventListener('click', e => {
     const p = Number(sa.dataset.showall);
     review.focusOff.add(p);
     review.hidden = new Set([...review.hidden].filter(k => !k.startsWith(p + '|')));
+    refreshReview(p);
+    return;
+  }
+  const pf = e.target.closest('[data-poorfit]');
+  if (pf) {
+    if (pf.disabled) return;
+    const p = Number(pf.dataset.poorfit), pc = review.analysis.plateCharts[p], poor = poorNames(pc);
+    review.focusOff.add(p);
+    review.hidden = new Set([...review.hidden].filter(k => !k.startsWith(p + '|')));
+    for (const s of pc.samples) if (!poor.has(s.name)) review.hidden.add(p + '|' + s.name);
     refreshReview(p);
     return;
   }

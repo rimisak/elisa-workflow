@@ -315,7 +315,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.22.3 &nbsp;·&nbsp; 19/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.22.4 &nbsp;·&nbsp; 19/10/2026</div>
 
 <script>
 'use strict';
@@ -2588,7 +2588,7 @@ function plateBlockHtml(pc) {
   }
   return `<div class="plate-charts-block${r.cur === p ? ' current' : ''}" id="plateBlock${p}" data-plate="${p}">
     <div class="plate-charts-header">Plate ${p + 1}
-      <button class="btn ${acc ? 'btn-accepted' : 'btn-accept'}" data-accept="${p}">${acc ? '✓ Accepted' : 'Accept plate'}</button>
+      <button class="btn ${acc ? 'btn-accepted' : 'btn-accept'}" data-accept="${p}">${acc ? '✓ Accepted' : 'Accept plate and show next'}</button>
     </div>
     ${banner}
     ${hookNote}
@@ -2730,7 +2730,8 @@ function stepPlate(dir) {
 // marker moves to the plate that takes its place and the page keeps its scroll position.
 function acceptPlate(p) {
   const r = review, before = visiblePlates(), idx = before.indexOf(p);
-  if (r.accepted.has(p)) r.accepted.delete(p); else r.accepted.add(p);
+  const accepting = !r.accepted.has(p);
+  if (accepting) r.accepted.add(p); else r.accepted.delete(p);
   saveSession(); updateSections();
   const after = visiblePlates();
   if (r.view !== 'all' && !after.includes(p)) {
@@ -2745,6 +2746,11 @@ function acceptPlate(p) {
     refreshHeaders();
     const el = document.getElementById('plateBlock' + p);
     if (el) el.outerHTML = plateBlockHtml(r.analysis.plateCharts[p]);
+    if (accepting && idx >= 0 && idx < after.length - 1) {
+      const next = after[idx + 1];
+      if (!document.getElementById('plateBlock' + next)) { r.limit = Math.max(r.limit, idx + 2); document.getElementById('reviewList').innerHTML = reviewListHtml(); }
+      setCurrent(next, true);
+    }
   }
 }
 
@@ -3121,16 +3127,11 @@ async function runProcessing(saved) {
     }
     prog.set(99, 'Preparing the review…');
 
-    // Auto-accept plates with no flags and no edits so only plates needing a look remain.
-    let autoAcc = 0;
-    for (let p = 0; p < numPlates; p++) if (!review.accepted.has(p) && !needsReview(p)) { review.accepted.add(p); autoAcc++; }
-    if (autoAcc) log(`  Auto-accepted ${autoAcc} clean plate(s).`);
-
     renderReview();
     prog.set(100, 'Done');
     setBadge('badgeProcessing', '✓ Done', 'done');
     setSection('secProcessing', false);
-    // When every plate was auto-accepted, updateSections already collapsed Review and opened Download.
+    // When every plate was already accepted (restored session), updateSections already collapsed Review and opened Download.
     if (review.accepted.size < numPlates) setSection('secReview', true);
     log('Review the graphs, exclude outliers if needed, accept each plate, then download.', 'success');
   } catch (err) {

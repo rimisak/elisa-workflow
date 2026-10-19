@@ -317,7 +317,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.23.2 &nbsp;·&nbsp; 19/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.23.3 &nbsp;·&nbsp; 19/10/2026</div>
 
 <script>
 'use strict';
@@ -2629,7 +2629,7 @@ function reviewHeaderHtml(bottom) {
       <div class="review-actions">
         <button class="btn btn-secondary btn-sm" data-act="excludeSuggested" ${nSug ? '' : 'disabled'}>Exclude suggested (${nSug})</button>
         <button class="btn btn-secondary btn-sm" data-act="clearExcl" ${r.excl.size ? '' : 'disabled'}>Clear exclusions</button>
-        <button class="btn btn-secondary btn-sm" data-act="acceptAll" ${acc === n ? 'disabled' : ''}>Accept all</button>
+        <button class="btn btn-secondary btn-sm" data-act="acceptAll" ${r.accepted.size === n ? 'disabled' : ''}>Accept all</button>
       </div>
     </div>`;
 }

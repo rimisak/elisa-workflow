@@ -2564,7 +2564,7 @@ function plateBlockHtml(pc) {
     const group = (i, title, body, extra = '') => `<div class="flag-group"><span class="flag-gtitle">${i}. ${title}</span><div class="flag-list">${body}</div>${extra}</div>`;
     banner = `<div class="flag-banner"><div class="flag-head">⚠ ${escapeXml(fl.headline)}</div>
       ${group(1, 'Standard curve', stdItems)}
-      ${group(2, 'Outliers', nOut ? outItems : okItem('None'), nOut ? `<button class="btn btn-secondary btn-sm" data-exclplate="${p}">Exclude all ${nOut} outlier${nOut > 1 ? 's' : ''}</button>` : '')}
+      ${group(2, 'Outliers', nOut ? outItems : okItem('None detected'), nOut ? `<button class="btn btn-secondary btn-sm" data-exclplate="${p}">Exclude all ${nOut} outlier${nOut > 1 ? 's' : ''}</button>` : '')}
       ${group(3, 'Poorly fitted curves', fits.length ? fitItems : okItem('None'))}
       ${focus ? `<div class="focus-note">Graphs show only the ${focusSamples(pc).size} flagged of ${pc.samples.length} samples — “Show all” reveals the rest.</div>` : ''}</div>`;
   } else if (plateResolved(p)) {

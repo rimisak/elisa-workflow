@@ -317,7 +317,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.23.0 &nbsp;·&nbsp; 19/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.23.1 &nbsp;·&nbsp; 19/10/2026</div>
 
 <script>
 'use strict';
@@ -2403,7 +2403,6 @@ function needsReview(p) {
 function visiblePlates() {
   const r = review, all = [...Array(r.numPlates).keys()];
   if (r.view === 'all') return all;
-  if (r.view === 'accepted') return all.filter(p => r.accepted.has(p));
   return all.filter(needsReview);
 }
 function triageCounts() {
@@ -2619,10 +2618,10 @@ function plateTilesHtml() {
 function reviewHeaderHtml(bottom) {
   const r = review, n = r.numPlates;
   const nSug = [...r.suggested].filter(k => !r.excl.has(k)).length;
-  const {todo, acc} = triageCounts();
+  const {todo} = triageCounts();
   const tab = (v, label) => `<button class="rv-tab${r.view === v ? ' on' : ''}" data-view="${v}">${label}</button>`;
   if (!bottom) return `<div class="card-label" style="margin-bottom:10px">Review &amp; accept</div>
-    <div class="rv-tabs">${tab('all', `All plates (${n})`)}${tab('todo', `Needs review (${todo})`)}${tab('accepted', `Accepted (${acc})`)}</div>
+    <div class="rv-tabs">${tab('all', `All plates (${n})`)}${tab('todo', `Show only plates that need review (${todo})`)}</div>
     <div class="pt-strip" id="plateStrip">${plateTilesHtml()}</div>
     <button class="btn btn-secondary btn-sm rv-keys-btn" data-act="keys">Keyboard shortcuts</button>
     <div class="rv-keys" id="rvKeys" hidden><kbd>J</kbd>/<kbd>→</kbd> next plate · <kbd>K</kbd>/<kbd>←</kbd> previous · <kbd>A</kbd> accept &amp; go to next · <kbd>X</kbd> exclude suggested here · <kbd>C</kbd> clear exclusions here · <kbd>F</kbd> needs review ⇄ all</div>`;

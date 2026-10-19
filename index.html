@@ -2561,7 +2561,7 @@ function plateBlockHtml(pc) {
     const group = (i, title, body, extra = '') => `<div class="flag-group"><span class="flag-gtitle">${i}. ${title}</span><div class="flag-list">${body}</div>${extra}</div>`;
     banner = `<div class="flag-banner"><div class="flag-head">⚠ Plate flagged.</div>
       ${group(1, 'Standard curve fit', stdItems)}
-      ${group(2, 'Outliers', nOut ? outItems : okItem('None detected'), nOut ? `<button class="btn btn-secondary btn-sm" data-exclplate="${p}">Exclude all ${nOut} outlier${nOut > 1 ? 's' : ''}</button>` : '')}
+      ${group(2, 'Outliers', nOut ? outItems : okItem('None detected'), nOut ? `<button class="btn btn-secondary btn-sm" data-exclplate="${p}">Exclude all ${nOut} outlier${nOut > 1 ? 's' : ''} (X)</button>` : '')}
       ${group(3, 'Poorly fitted curves', fits.length ? fitItems : okItem('None'))}
       ${focus ? `<div class="focus-note">Graphs show only the ${focusSamples(pc).size} flagged of ${pc.samples.length} samples — “Show all” reveals the rest.</div>` : ''}</div>`;
   } else if (plateResolved(p)) {
@@ -2589,7 +2589,7 @@ function plateBlockHtml(pc) {
   }
   return `<div class="plate-charts-block${r.cur === p ? ' current' : ''}" id="plateBlock${p}" data-plate="${p}">
     <div class="plate-charts-header">Plate ${p + 1}
-      <div class="accept-row"><button class="btn ${acc ? 'btn-accepted' : 'btn-accept'}" data-accept="${p}">${acc ? '✓ Accepted' : 'Accept plate and show next'}</button>${acc ? `<button class="btn btn-accept" data-nextplate="${p}">Next plate →</button>` : ''}</div>
+      <div class="accept-row"><button class="btn ${acc ? 'btn-accepted' : 'btn-accept'}" data-accept="${p}">${acc ? '✓ Accepted' : 'Accept plate and show next (A)'}</button>${acc ? `<button class="btn btn-accept" data-nextplate="${p}">Next plate → (J)</button>` : ''}</div>
     </div>
     ${banner}
     ${hookNote}

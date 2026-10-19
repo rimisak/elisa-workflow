@@ -304,7 +304,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.19.1 &nbsp;·&nbsp; 19/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.19.2 &nbsp;·&nbsp; 19/10/2026</div>
 
 <script>
 'use strict';
@@ -2566,12 +2566,11 @@ function plateTilesHtml() {
 function reviewHeaderHtml(bottom) {
   const r = review, n = r.numPlates;
   const nSug = [...r.suggested].filter(k => !r.excl.has(k)).length;
-  const {todo, clean, acc} = triageCounts();
+  const {todo, acc} = triageCounts();
   const tab = (v, label) => `<button class="rv-tab${r.view === v ? ' on' : ''}" data-view="${v}">${label}</button>`;
   return `${bottom ? '' : '<div class="card-label" style="margin-bottom:10px">Review &amp; accept</div>'}
     <div class="review-bar">
       <div class="review-actions">
-        <button class="btn btn-sm btn-primary" data-act="acceptClean" ${clean ? '' : 'disabled'}>Accept clean plates (${clean})</button>
         <button class="btn btn-secondary btn-sm" data-act="excludeSuggested" ${nSug ? '' : 'disabled'}>Exclude suggested (${nSug})</button>
         <button class="btn btn-secondary btn-sm" data-act="clearExcl" ${r.excl.size ? '' : 'disabled'}>Clear exclusions</button>
         <button class="btn btn-secondary btn-sm" data-act="acceptAll" ${acc === n ? 'disabled' : ''}>Accept all</button>
@@ -2580,15 +2579,14 @@ function reviewHeaderHtml(bottom) {
     </div>
     ${bottom ? '' : `<div class="rv-tabs">${tab('todo', `Needs review (${todo})`)}${tab('all', `All plates (${n})`)}${tab('accepted', `Accepted (${acc})`)}</div>
     <div class="pt-strip" id="plateStrip">${plateTilesHtml()}</div>
-    <div class="rv-keys" id="rvKeys" hidden><kbd>J</kbd>/<kbd>→</kbd> next plate · <kbd>K</kbd>/<kbd>←</kbd> previous · <kbd>A</kbd> accept &amp; go to next · <kbd>X</kbd> exclude suggested here · <kbd>C</kbd> clear exclusions here · <kbd>F</kbd> needs review ⇄ all · <kbd>Shift</kbd>+<kbd>A</kbd> accept clean plates</div>`}`;
+    <div class="rv-keys" id="rvKeys" hidden><kbd>J</kbd>/<kbd>→</kbd> next plate · <kbd>K</kbd>/<kbd>←</kbd> previous · <kbd>A</kbd> accept &amp; go to next · <kbd>X</kbd> exclude suggested here · <kbd>C</kbd> clear exclusions here · <kbd>F</kbd> needs review ⇄ all</div>`}`;
 }
 
 function reviewListHtml() {
   const r = review, list = visiblePlates();
   if (!list.length) {
-    const {clean} = triageCounts();
     return `<div class="card rv-empty">${r.view === 'todo'
-      ? (clean ? `Nothing needs review. ${clean} clean plate(s) are ready — use “Accept clean plates”.` : 'Nothing left to review.')
+      ? 'Nothing left to review.'
       : 'No plates in this view.'}</div>`;
   }
   if (r.cur == null || !list.includes(r.cur)) r.cur = list[0];
@@ -2806,9 +2804,6 @@ document.addEventListener('click', e => {
     case 'acceptAll':
       for (let p = 0; p < review.numPlates; p++) review.accepted.add(p);
       renderReview(); break;
-    case 'acceptClean':
-      for (let p = 0; p < review.numPlates; p++) if (!review.accepted.has(p) && !needsReview(p)) review.accepted.add(p);
-      renderReview(); break;
     case 'keys': { const k = document.getElementById('rvKeys'); if (k) k.hidden = !k.hidden; break; }
     case 'more':
       review.limit += FLAG.BATCH;
@@ -2832,12 +2827,6 @@ document.addEventListener('keydown', e => {
   if (!sec || !sec.classList.contains('open')) return;
   const key = e.key.toLowerCase();
   const cur = review.cur;
-  if (e.shiftKey && key === 'a') {
-    e.preventDefault();
-    for (let p = 0; p < review.numPlates; p++) if (!review.accepted.has(p) && !needsReview(p)) review.accepted.add(p);
-    renderReview();
-    return;
-  }
   if (e.shiftKey) return;
   switch (key) {
     case 'j': case 'arrowright': case 'n': e.preventDefault(); stepPlate(1); break;

@@ -337,7 +337,7 @@ function updateSections() {
   }
   if (!r.dlOpened) { r.dlOpened = true; setSection('secReview', false); setSection('secDownload', true); }
   prepareDownload();
-  if (r.blob) {
+  if (r.out) {
     setBadge('badgeDownload', 'Ready', 'done');
     btn.disabled = false; btn.textContent = 'Download ' + name;
     hint.textContent = r.excl.size ? `${r.excl.size} excluded point(s) will be listed on the "Excluded Points" sheet.` : 'No points excluded.';
@@ -671,18 +671,28 @@ function log(msg, cls='') {
   box.scrollTop = box.scrollHeight;
 }
 
-// Download helper
-// Safari quirks: it may open a typed blob (e.g. the xlsx MIME type) in a tab instead of saving it,
-// so the blob is re-typed as octet-stream (the .xlsx extension still tells Excel what it is); and it
-// can drop the download if the link leaves the page in the same tick, so removal is deferred.
-function downloadBlob(blob, filename) {
-  const url = URL.createObjectURL(new Blob([blob], {type: 'application/octet-stream'}));
+// Download helper. `data` is a string or bytes (ArrayBuffer / Uint8Array); it must be ready before
+// the click, since Safari only honours a download started synchronously inside the user's click.
+// Safari quirks: on a page opened via file:// it will not save blob: URLs, so a data: URL is used
+// there; it may open a typed blob in a tab instead of saving it, so everything is octet-stream (the
+// extension still tells Excel what it is); and it can drop the download if the link leaves the page
+// in the same tick, so removal is deferred.
+function bytesToBase64(u8) {
+  let s = '';
+  for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+function downloadData(data, filename) {
+  const u8 = typeof data === 'string' ? new TextEncoder().encode(data) : new Uint8Array(data);
+  const useDataUrl = location.protocol === 'file:';
+  const url = useDataUrl ? 'data:application/octet-stream;base64,' + bytesToBase64(u8)
+                         : URL.createObjectURL(new Blob([u8], {type: 'application/octet-stream'}));
   const a = document.createElement('a');
   a.href = url; a.download = filename; a.rel = 'noopener'; a.style.display = 'none';
   document.body.appendChild(a);
   a.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true, view: window}));
   setTimeout(() => a.remove(), 1000);
-  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  if (!useDataUrl) setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
 // ─── CREATE METADATA TEMPLATE ─────────────────────────────────────────────────
@@ -706,7 +716,7 @@ function createCsvTemplate() {
     '',
     cols, ...block()
   ];
-  downloadBlob(new Blob([lines.join('\r\n') + '\r\n'], {type:'text/csv'}), 'Plate_template.csv');
+  downloadData(lines.join('\r\n') + '\r\n', 'Plate_template.csv');
 }
 
 function createTemplate() {
@@ -757,7 +767,7 @@ function createTemplate() {
   XLSX.utils.book_append_sheet(wb, wsSet, 'Settings');
 
   const buf = XLSX.write(wb, {bookType:'xlsx', type:'array'});
-  downloadBlob(new Blob([buf], {type:'application/octet-stream'}), 'MetaData.xlsx');
+  downloadData(buf, 'MetaData.xlsx');
 }
 
 // ─── MATH UTILITIES ───────────────────────────────────────────────────────────
@@ -2663,7 +2673,7 @@ function setStdFrom(p, src) {
   if (!r.stdFrom) r.stdFrom = {};
   if (src == null) delete r.stdFrom[p]; else r.stdFrom[p] = src;
   r.accepted.delete(p);
-  r.blob = null; r.prepFailed = false; r.blobTok = (r.blobTok || 0) + 1;
+  r.out = null; r.prepFailed = false; r.blobTok = (r.blobTok || 0) + 1;
   reanalyze();
   refreshReview(p);
 }
@@ -2706,7 +2716,7 @@ function toggleExclusion(key) {
   if (r.excl.has(key)) r.excl.delete(key); else r.excl.add(key);
   const p = Number(key.split('|')[0]);
   r.accepted.delete(p);   // data changed — plate must be re-accepted
-  r.blob = null; r.prepFailed = false; r.blobTok = (r.blobTok || 0) + 1;
+  r.out = null; r.prepFailed = false; r.blobTok = (r.blobTok || 0) + 1;
   reanalyze();
   refreshReview(p);
 }
@@ -2717,7 +2727,7 @@ async function setAllExclusions(mutate) {
   r.busy = true;
   r.excl = mutate(r.excl);
   r.accepted.clear();
-  r.blob = null; r.prepFailed = false; r.blobTok = (r.blobTok || 0) + 1;
+  r.out = null; r.prepFailed = false; r.blobTok = (r.blobTok || 0) + 1;
   try { await reanalyzeAsync(); } finally { r.busy = false; }
   renderReview();
 }
@@ -2728,7 +2738,7 @@ function excludeSuggestedInPlate(p) {
   if (!keys.length) return;
   keys.forEach(k => review.excl.add(k));
   review.accepted.delete(p);
-  review.blob = null; review.prepFailed = false; review.blobTok = (review.blobTok || 0) + 1;
+  review.out = null; review.prepFailed = false; review.blobTok = (review.blobTok || 0) + 1;
   reanalyze();
   refreshReview(p);
 }
@@ -2737,7 +2747,7 @@ function clearPlateExclusions(p) {
   if (!keys.length) return;
   keys.forEach(k => review.excl.delete(k));
   review.accepted.delete(p);
-  review.blob = null; review.prepFailed = false; review.blobTok = (review.blobTok || 0) + 1;
+  review.out = null; review.prepFailed = false; review.blobTok = (review.blobTok || 0) + 1;
   reanalyze();
   refreshReview(p);
 }
@@ -2904,9 +2914,9 @@ function buildExcludedSheet() {
   return ws;
 }
 
-// The workbook is built ahead of the click: Safari only honours a download that starts
+// The workbook bytes are built ahead of the click: Safari only honours a download that starts
 // synchronously inside the user's click, not after awaits (it opens the blob instead).
-async function buildResultsBlob() {
+async function buildResultsBytes() {
   const r = review;
   const {ws: wsData, condfmt, plateFits} = r.analysis;
   const wb = XLSX.utils.book_new();
@@ -2915,18 +2925,17 @@ async function buildResultsBlob() {
   XLSX.utils.book_append_sheet(wb, buildProtocolSheet(r.meta, plateFits, r.analysis.plateCharts, fitConfig), 'Protocol Parameters');
   if (r.excl.size) XLSX.utils.book_append_sheet(wb, buildExcludedSheet(), 'Excluded Points');
   let buf = XLSX.write(wb, {bookType:'xlsx', type:'array'});
-  buf = await injectConditionalFormatting(buf, condfmt);
-  return new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  return await injectConditionalFormatting(buf, condfmt);
 }
 
 async function prepareDownload() {
   const r = review;
-  if (r.blob || r.preparing || r.prepFailed) return;
+  if (r.out || r.preparing || r.prepFailed) return;
   r.preparing = true;
   const tok = r.blobTok || 0;
   try {
-    const blob = await buildResultsBlob();
-    if (review === r && (r.blobTok || 0) === tok && r.accepted.size === r.numPlates) r.blob = blob;
+    const bytes = await buildResultsBytes();
+    if (review === r && (r.blobTok || 0) === tok && r.accepted.size === r.numPlates) r.out = bytes;
   } catch (err) {
     r.prepFailed = true;
     log(`❌ Error: ${err.message}`, 'error');
@@ -2938,9 +2947,9 @@ async function prepareDownload() {
 
 function downloadResults() {
   const r = review;
-  if (!r || !r.blob) return;
+  if (!r || !r.out) return;
   const name = document.getElementById('outputName').value.trim() || defaultOutputName();
-  downloadBlob(r.blob, name + '.xlsx');
+  downloadData(r.out, name + '.xlsx');
   log(`✅ Downloaded ${name}.xlsx (${r.excl.size} point(s) excluded).`, 'success');
 }
 

@@ -313,7 +313,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.22.0 &nbsp;·&nbsp; 19/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.22.1 &nbsp;·&nbsp; 19/10/2026</div>
 
 <script>
 'use strict';
@@ -2228,6 +2228,7 @@ function renderSampleChart(pc) {
   const xd = logDomain(xs), yd = linDomain(ys);
   const S = makeScales(xd, yd);
   let body = axisSvg(xd, yd, S, 'Sample dilution factor (log)', 'OD');
+  let pts = ''; // points are drawn after every line so guide lines never cover them
   pc.samples.forEach((s, i) => {
     if (isHidden(pc, s)) return;
     const col = sampleColor(i);
@@ -2239,16 +2240,16 @@ function renderSampleChart(pc) {
     if (s.params) {
       body += `<path d="${curvePath(s.params, xd, S)}" fill="none" stroke="${col}" stroke-width="1.6"/>`;
     }
-    for (const p of s.points) body += pointSvg(p, S, col, 2.8, `${s.name}, 1:${fmtTick(p.x)}`);
+    for (const p of s.points) pts += pointSvg(p, S, col, 2.8, `${s.name}, 1:${fmtTick(p.x)}`);
     // Hunch-corrected points: a dashed ring where the fit treated the reading (pointer-events off).
     for (const p of s.points) {
       if (p.fy === undefined) continue;
       const cx = S.X(p.x).toFixed(1), y0 = S.Y(p.y).toFixed(1), y1 = S.Y(p.fy).toFixed(1);
-      body += `<g pointer-events="none"><line x1="${cx}" y1="${y0}" x2="${cx}" y2="${y1}" stroke="${col}" stroke-width="1" stroke-dasharray="2 2" opacity=".7"/>`
+      pts += `<g pointer-events="none"><line x1="${cx}" y1="${y0}" x2="${cx}" y2="${y1}" stroke="${col}" stroke-width="1" stroke-dasharray="2 2" opacity=".7"/>`
             + `<circle cx="${cx}" cy="${y1}" r="3.6" fill="none" stroke="${col}" stroke-width="1.2" stroke-dasharray="2 2"/></g>`;
     }
   });
-  return svgWrap(body);
+  return svgWrap(body + pts);
 }
 
 // Right graph: standard points + fitted standard curve, plus per-sample guide lines
@@ -2269,8 +2270,9 @@ function renderStandardChart(pc) {
   if (pc.std.params) {
     body += `<path d="${curvePath(pc.std.params, xd, S)}" fill="none" stroke="#1c1c1e" stroke-width="1.8"/>`;
   }
-  for (const p of pc.std.points) body += pointSvg(p, S, '#1c1c1e', 3, `Standard, ${fmtTick(p.x)}`);
-  for (const p of donorPts) body += `<circle cx="${S.X(p.x).toFixed(1)}" cy="${S.Y(p.y).toFixed(1)}" r="3" fill="#fff" stroke="#8e8e93" stroke-width="1.3"><title>Plate ${pc.std.from + 1} standard, ${fmtTick(p.x)} · OD ${p.y.toFixed(3)}</title></circle>`;
+  let pts = '';
+  for (const p of pc.std.points) pts += pointSvg(p, S, '#1c1c1e', 3, `Standard, ${fmtTick(p.x)}`);
+  for (const p of donorPts) pts += `<circle cx="${S.X(p.x).toFixed(1)}" cy="${S.Y(p.y).toFixed(1)}" r="3" fill="#fff" stroke="#8e8e93" stroke-width="1.3"><title>Plate ${pc.std.from + 1} standard, ${fmtTick(p.x)} · OD ${p.y.toFixed(3)}</title></circle>`;
   pc.samples.forEach((s, i) => {
     if (isHidden(pc, s)) return;
     if (s.chosenVal == null || s.intersectionX == null || !(s.intersectionX > 0)) return;
@@ -2285,7 +2287,7 @@ function renderStandardChart(pc) {
     body += `<line class="dash-hit" x1="${xLeft.toFixed(1)}" y1="${py.toFixed(1)}" x2="${px.toFixed(1)}" y2="${py.toFixed(1)}" stroke="${col}" stroke-width="12" data-tip="${tip}"/>`;
     body += `<line class="dash-hit" x1="${px.toFixed(1)}" y1="${py.toFixed(1)}" x2="${px.toFixed(1)}" y2="${yBot.toFixed(1)}" stroke="${col}" stroke-width="12" data-tip="${tip}"/>`;
   });
-  return svgWrap(body);
+  return svgWrap(body + pts);
 }
 
 // ─── REVIEW STATE ─────────────────────────────────────────────────────────────

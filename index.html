@@ -318,7 +318,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.23.10 &nbsp;·&nbsp; 19/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.23.11 &nbsp;·&nbsp; 19/10/2026</div>
 
 <script>
 'use strict';
@@ -2570,7 +2570,7 @@ function plateBlockHtml(pc) {
     banner = `<div class="flag-banner"><div class="flag-head">⚠ Plate flagged.</div>
       ${group(1, 'Standard curve fit', stdItems)}
       ${group(2, 'Outliers', nOut ? outItems : okItem('None detected'), nOut ? `<button class="btn btn-secondary btn-sm" data-exclplate="${p}">Exclude all ${nOut} outlier${nOut > 1 ? 's' : ''} <kbd class="keycap">X</kbd></button>` : '')}
-      ${group(3, 'Poorly fitted curves', fits.length ? fitItems : okItem('None'))}
+      ${group(3, 'Poorly fitted curves', fits.length ? fitItems : okItem('None'), fits.length ? `<button class="btn btn-secondary btn-sm" data-poorfit="${p}">Show only poor fits</button>` : '')}
       ${focus ? `<div class="focus-note">Graphs show only the ${focusSamples(pc).size} flagged of ${pc.samples.length} samples — “Show all” reveals the rest.</div>` : ''}</div>`;
   } else if (plateResolved(p)) {
     banner = `<div class="flag-banner ok"><div class="flag-head">✓ Resolved — ${nEx} point${nEx > 1 ? 's' : ''} excluded, no issues remain.</div>${focus ? `<div class="focus-note">Graphs still show only the ${focusSamples(pc).size} sample${focusSamples(pc).size > 1 ? "s" : ""} that ${focusSamples(pc).size > 1 ? "were" : "was"} flagged — “Show all” reveals the rest.</div>` : ''}</div>`;

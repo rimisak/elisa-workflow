@@ -304,7 +304,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.19.3 &nbsp;·&nbsp; 19/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.19.4 &nbsp;·&nbsp; 19/10/2026</div>
 
 <script>
 'use strict';
@@ -822,45 +822,53 @@ function solveGaussian(A, b) {
 }
 
 function levenbergMarquardt(xdata, ydata, p0, lower, upper) {
-  if (!xdata.length || !ydata.length) throw new Error('No data');
-
-  function clamp(p) { return p.map((v,i)=>Math.max(lower[i],Math.min(upper[i],v))); }
-  function residuals(p) { return xdata.map((x,i)=>ydata[i]-model4PL(x,p)); }
-  function sse(p) { return residuals(p).reduce((s,r)=>s+r*r,0); }
-  function jacobian(p) {
-    const eps = 1e-7;
-    return xdata.map(x => p.map((_, j) => {
-      const p1=[...p]; p1[j]+=eps;
-      const p2=[...p]; p2[j]-=eps;
-      return (model4PL(x,p1)-model4PL(x,p2))/(2*eps);
-    }));
-  }
+  const n = xdata.length;
+  if (!n || !ydata.length) throw new Error('No data');
+  const clamp = p => p.map((v,i)=>Math.max(lower[i],Math.min(upper[i],v)));
+  const sseOf = p => { let s = 0; for (let i = 0; i < n; i++) { const r = ydata[i] - model4PL(xdata[i], p); s += r*r; } return s; };
 
   let p = clamp([...p0]);
-  let lambda = 1e-3;
+  let cur = sseOf(p);
+  let lambda = 1e-3, stall = 0;
 
   for (let iter = 0; iter < 500; iter++) {
-    const r = residuals(p);
-    const J = jacobian(p);
-    const JtJ = Array.from({length:4},()=>new Array(4).fill(0));
-    const Jtr = new Array(4).fill(0);
-    for (let i=0; i<xdata.length; i++) {
-      for (let j=0; j<4; j++) {
-        for (let k=0; k<4; k++) JtJ[j][k] += J[i][j]*J[i][k];
-        Jtr[j] += J[i][j]*r[i];
+    // Normal equations from the analytic Jacobian of the 4PL (ratio clamped like model4PL).
+    const [bo, to, c, h] = p, span = to - bo;
+    const JtJ = [[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]], Jtr = [0,0,0,0];
+    for (let i = 0; i < n; i++) {
+      const x = xdata[i];
+      let j0, j1, j2 = 0, j3 = 0, res;
+      if (c <= 0) { j0 = 1; j1 = 0; res = ydata[i] - bo; }
+      else {
+        const q = x / c, clamped = q < 1e-15;
+        const r = Math.pow(clamped ? 1e-15 : q, h), d = 1 + r;
+        j0 = r / d; j1 = 1 / d;
+        if (!clamped) { const k = span * r / (d*d); j2 = k * h / c; j3 = -k * Math.log(q); }
+        res = ydata[i] - (bo + span / d);
+      }
+      const J = [j0, j1, j2, j3];
+      for (let a = 0; a < 4; a++) {
+        const Ja = J[a], row = JtJ[a];
+        for (let k = a; k < 4; k++) row[k] += Ja * J[k];
+        Jtr[a] += Ja * res;
       }
     }
+    for (let a = 1; a < 4; a++) for (let k = 0; k < a; k++) JtJ[a][k] = JtJ[k][a];
     const A = JtJ.map((row,i)=>row.map((v,j)=>i===j?v+lambda:v));
     const dp = solveGaussian(A, Jtr);
     if (!dp) { lambda*=10; continue; }
     const pNew = clamp(p.map((v,i)=>v+dp[i]));
-    if (sse(pNew) < sse(p)) {
+    const sNew = sseOf(pNew);
+    if (sNew < cur) {
       const diff = dp.reduce((s,d)=>s+Math.abs(d),0);
-      p = pNew;
+      const gain = cur - sNew;
+      p = pNew; cur = sNew;
       lambda = Math.max(lambda/10, 1e-10);
-      if (diff < 1e-8) break;
+      stall = gain <= 1e-11 * cur ? stall + 1 : 0;   // creeping along a flat ridge or bound
+      if (diff < 1e-8 || stall >= 15) break;
     } else {
       lambda = Math.min(lambda*10, 1e10);
+      if (lambda >= 1e10) break;   // no step improves the fit any more
     }
   }
   return p;
@@ -1263,8 +1271,11 @@ function fitBest4PL(xdata, ydata, fc) {
     ic50Set.add(Math.pow(10, logLo + i * (logHi - logLo) / 7));
 
   let bestParams = null, bestSse = Infinity;
+  const tried = new Set();
   for (const ic50Init of ic50Set) {
     const ic50Clamped = Math.max(fc.lower[2]+1e-6, Math.min(fc.upper[2], ic50Init));
+    if (tried.has(ic50Clamped)) continue;   // several seeds clamp to the same bound
+    tried.add(ic50Clamped);
     const p0 = [fc.p0[0], fc.p0[1], ic50Clamped, fc.p0[3]];
     try {
       const p = levenbergMarquardt(xdata, ydata, p0, fc.lower, fc.upper);

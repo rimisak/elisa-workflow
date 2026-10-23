@@ -398,7 +398,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.32.0 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.32.1 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -609,7 +609,7 @@ async function restoreFiles() {
     document.getElementById('subtractBgChk').checked = !!o.subtractBg;
     document.getElementById('hookChk').checked = o.hookFix !== false;
     if (o.outputName) document.getElementById('outputName').value = o.outputName;
-    runProcessing(sess);
+    // Not re-run on reload: the saved session is picked up when Process is pressed (runProcessing reads it).
   }
 }
 

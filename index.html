@@ -116,7 +116,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .res-table tbody th{background:#eef2ff;text-align:left;font-weight:600}
 .page-footer{text-align:center;font-size:11px;color:#aeaeb2;padding:12px 0 4px;letter-spacing:.2px}
 /* Per-plate charts */
-.plate-charts-block{margin-bottom:18px;padding:10px 12px;border-radius:10px;border:2px solid transparent;max-height:85vh;overflow-y:auto;overscroll-behavior:contain;scroll-margin-top:12px}
+.plate-charts-block{margin-bottom:18px;padding:10px 12px;border-radius:10px;border:2px solid transparent;max-height:85vh;overflow-y:auto;overscroll-behavior:contain}
 .plate-charts-block.is-acc{background:#dff6e5}
 .plate-charts-block.is-flag{background:#fff0d6}
 .plate-charts-header{font-size:15px;font-weight:600;color:#1c1c1e;margin:6px 0 4px}
@@ -341,7 +341,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.29.14 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.29.15 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -2911,7 +2911,7 @@ function setCurrent(p, scroll) {
   r.cur = p;
   document.querySelectorAll('.plate-charts-block.current').forEach(e => e.classList.remove('current'));
   const el = document.getElementById('plateBlock' + p);
-  if (el) { el.classList.add('current'); if (scroll) el.scrollIntoView({block: 'start', behavior: 'smooth'}); }
+  if (el) { el.classList.add('current'); if (scroll) el.scrollIntoView({block: 'center', behavior: 'smooth'}); }
   document.querySelectorAll('#plateStrip .ptile.cur').forEach(e => e.classList.remove('cur'));
   const tile = document.querySelector(`#plateStrip .ptile[data-goto="${p}"]`);
   if (tile) {

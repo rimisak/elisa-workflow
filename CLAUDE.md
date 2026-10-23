@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Working rules for every change
 
-- **Update the footer on every change.** The page footer in `index.html` (`.page-footer`, near the end of the markup) reads `Kasimir Reich · v<version> · <DD/MM/YYYY>`. Set the date to today's date and bump the version in the same edit. Version scheme: `MAJOR.MINOR.PATCH` — patch for fixes and tweaks, minor for new features, major for breaking changes to the workflow or output layout. Current: v1.23.11.
+- **Update the footer on every change.** The page footer in `index.html` (`.page-footer`, near the end of the markup) reads `Kasimir Reich · v<version> · <DD/MM/YYYY>`. Set the date to today's date and bump the version in the same edit. Version scheme: `MAJOR.MINOR.PATCH` — patch for fixes and tweaks, minor for new features, major for breaking changes to the workflow or output layout. Current: v1.24.0.
 - **Commit after each edit.** When a change is finished, commit it straight away (small, focused commits; message explains the why). Don't let edits pile up uncommitted.
 
 ## What this is
@@ -53,6 +53,7 @@ Processing shows a progress bar with percentage and an ETA (pace so far). Fittin
 ## Processing pipeline (in `runProcessing`)
 
 0. **Reader import** (at file load, `loadCSVFiles` → `normalizePlateText`): BMG files pass through; BioTek Gen5, Tecan (CSV/XLSX) and SpectraMax/SoftMax Pro exports are found structurally (header row `1…12` + 8 rows of 12 values; tab/`;`/`,` delimiters, decimal comma, optional row letters) and rewritten as the canonical 29-line BMG layout, wavelengths taken from the text above each block (first read = signal slot, second = reference slot, swapped if the first is the longer wavelength). The formats were written from vendor documentation and synthetic exports, not real instrument files — validate against real exports before relying on a vendor.
+0b. **384-well mode** (checkbox under the file zone, `plate384Chk`): `split384Text` turns each 384 export (header `1…24`, rows A–P) into four canonical 96-well plates at load time (rows A–H odd/even columns → subplates A/B, rows I–P → C/D; `subplateOf384`), so everything downstream is unchanged; `render384Pattern` draws the colour-coded map. Toggling re-reads `lastPlateFiles`. Metadata needs four Names rows per file. Written from the stated layout and synthetic data, not real exports.
 1. `parseCsvText` (first 29 lines only) → `mergePlates` → the `grid` above.
 2. Optional `subtractBackground(grid, numPlates)` — when the "Subtract 570 nm background" toggle is on (default on), replaces each 450 nm well with `450 − 570` in place, relabels the block header to "Data (450 − 570)", and leaves the 570 block intact. Runs *before* everything downstream, so corrected values flow into all fits and the output sheet automatically.
 3. `parseMetadata(metaBytes)` → sample names, per-cell fill colors (copied into the output names row), and dilution series.

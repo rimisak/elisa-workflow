@@ -213,6 +213,17 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
     <button class="btn btn-secondary btn-sm" onclick="clearCSV()">Clear</button>
   </div>
   <input type="file" id="csvInput" accept=".csv,.txt,.tsv,.xlsx,.xls" multiple style="display:none" onchange="onCSVInputChange()">
+  <div class="option-row" style="margin-top:14px;border-top:1px solid #f0f0f0;padding-top:14px">
+    <span class="option-text">
+      <span class="option-title">384-well plates</span>
+      <span class="option-sub">Each file is a 384-well plate that holds four interleaved 96-well subplates (A–D, pipetted every other well). They are split back into four separate plates.</span>
+    </span>
+    <label class="switch">
+      <input type="checkbox" id="plate384Chk" onchange="on384Toggle()">
+      <span class="slider"></span>
+    </label>
+  </div>
+  <div id="pattern384" style="display:none;margin-top:12px"></div>
 </div>
 
 <!-- Metadata -->
@@ -318,7 +329,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.23.11 &nbsp;·&nbsp; 19/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.24.0 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -548,8 +559,11 @@ function onDropCSV(e) {
 // Plate files from any supported reader (BMG, BioTek, Tecan, SpectraMax) are converted to the BMG
 // layout here, so the rest of the app only ever sees one format. An Excel file that is really the
 // metadata workbook (it has a Names sheet) is moved to the Metadata slot instead.
+let lastPlateFiles = [];  // File objects as dropped, so toggling 384-well mode can re-read them
 async function loadCSVFiles(files) {
   if (!files.length) return;
+  lastPlateFiles = files;
+  const is384 = document.getElementById('plate384Chk').checked;
   const results = [], problems = [];
   let metaFile = null;
   for (const f of files) {
@@ -561,6 +575,10 @@ async function loadCSVFiles(files) {
         text = workbookToText(bytes);
       } else {
         text = await f.text();
+      }
+      if (is384) {
+        for (const s of split384Text(text, f.name)) results.push({ name: s.name, text: s.text, reader: s.reader, warnings: s.warnings });
+        continue;
       }
       const n = normalizePlateText(text, f.name);
       results.push({ name: f.name, text: n.text, reader: n.reader, warnings: n.warnings });
@@ -602,7 +620,7 @@ function showCSVState() {
   updateProcessBtn();
 }
 function clearCSV() {
-  csvFiles = [];
+  csvFiles = []; lastPlateFiles = [];
   document.getElementById('csvZone').classList.remove('has-files');
   document.getElementById('csvZoneText').textContent = 'Drop plate files here or click to browse';
   updateBgLabels();
@@ -1061,6 +1079,8 @@ function readerToCanonicalText(parsed) {
 
 // Entry point: BMG files pass through untouched; anything else is converted. Throws when no plate is found.
 function normalizePlateText(text, fileName) {
+  if (/(^|[,;\t])12[,;\t]13[,;\t]14[,;\t]/m.test(text))
+    throw new Error('this looks like a 384-well plate: switch on "384-well plates" under the file zone');
   if (/Raw Data \(/.test(text) && /^\s*,1,2,3,4,5,6,7,8,9,10,11,12/m.test(text))
     return { text, reader: 'BMG LABTECH', warnings: [], wavelengths: [] };
   const parsed = parseReaderText(text, fileName);
@@ -1069,6 +1089,93 @@ function normalizePlateText(text, fileName) {
   const r = readerToCanonicalText(parsed);
   return { text: r.text, reader: parsed.reader, warnings: r.warnings, wavelengths: r.wavelengths };
 }
+// ─── 384-WELL PLATES ──────────────────────────────────────────────────────────
+// A 384-well plate (rows A–P, columns 1–24) holds four 96-well subplates, pipetted into every other
+// well. Rows A–H: odd columns → Subplate A, even columns → Subplate B. Rows I–P: odd columns →
+// Subplate C, even columns → Subplate D. Subplate well (row r, col c), 0-based, is plate well
+// (rowOffset + r, 2c + parity). Each subplate is re-emitted as an ordinary 96-well file so the rest
+// of the app sees plain plates.
+const SUBPLATES = ['A', 'B', 'C', 'D'];
+const SUB_COLORS = ['#0a84ff', '#ff9f0a', '#30b050', '#bf5af2'];
+const subplateOf384 = (r, c) => (r >= 8 ? 2 : 0) + (c % 2);   // 0-based plate row / col → 0..3
+
+function parse384Blocks(text) {
+  const lines = text.replace(/\r\n?/g, '\n').split('\n');
+  const delim = pickDelimiter(lines);
+  const decComma = delim !== ',' && /\d,\d/.test(text) && !/\d\.\d/.test(text);
+  const blocks = [];
+  let prevEnd = 0;
+  for (let i = 0; i + 16 < lines.length; i++) {
+    const hdr = splitReaderLine(lines[i], delim);
+    let k = -1;
+    for (let s = 0; s + 24 <= hdr.length && k < 0; s++)
+      if (hdr.slice(s, s + 24).every((v, j) => v === String(j + 1))) k = s;
+    if (k < 0) continue;
+    const rows = [];
+    for (let r = 0; r < 16; r++) {
+      const cells = splitReaderLine(lines[i + 1 + r], delim);
+      const letter = cells.slice(0, k).find(c => /^[A-Pa-p]$/.test(c));
+      if (letter && letter.toUpperCase() !== 'ABCDEFGHIJKLMNOP'[r]) break;
+      const vals = cells.slice(k, k + 24).map(v => readerNumber(v, decComma));
+      while (vals.length < 24) vals.push(null);
+      if (vals.filter(v => v !== null).length < 8) break;
+      rows.push(vals);
+    }
+    if (rows.length !== 16) continue;
+    blocks.push({ wl: blockWavelength(lines, prevEnd, i, delim), rows });
+    prevEnd = i + 17;
+    i += 16;
+  }
+  return { lines, blocks };
+}
+
+// One 384-well export → four canonical 96-well plate texts (A, B, C, D).
+function split384Text(text, fileName) {
+  const { lines, blocks } = parse384Blocks(text);
+  if (!blocks.length)
+    throw new Error('no 384-well plate data found (expected a header row 1…24 followed by rows A–P)');
+  const base = String(fileName || '').replace(/\.[^.]+$/, '');
+  const reader = detectReader(text);
+  return SUBPLATES.map((letter, s) => {
+    const rowOff = (s >> 1) * 8, par = s & 1;
+    const sub = blocks.map(b => ({
+      wl: b.wl,
+      rows: Array.from({ length: 8 }, (_, r) => Array.from({ length: 12 }, (_, c) => b.rows[rowOff + r][2 * c + par]))
+    }));
+    const r = readerToCanonicalText({ reader: `${reader}, 384-well`, plateName: `${base} · Subplate ${letter}`, blocks: sub });
+    return { name: `${fileName} · Subplate ${letter}`, text: r.text, reader: `384-well subplate ${letter}`, warnings: s === 0 ? r.warnings : [] };
+  });
+}
+
+function on384Toggle() {
+  render384Pattern();
+  if (lastPlateFiles.length) loadCSVFiles(lastPlateFiles);
+}
+
+// Colour-coded map of the 384 → 96 assignment, shown while 384-well mode is on.
+function render384Pattern() {
+  const box = document.getElementById('pattern384');
+  if (!document.getElementById('plate384Chk').checked) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  const cs = 22, x0 = 22, y0 = 20;
+  let svg = `<svg viewBox="0 0 ${x0 + 24 * cs + 4} ${y0 + 16 * cs + 4}" style="width:100%;max-width:560px;display:block" role="img" aria-label="384-well plate colour-coded by subplate">`;
+  for (let c = 0; c < 24; c++) svg += `<text x="${x0 + c * cs + cs / 2}" y="13" text-anchor="middle" font-size="9" fill="#8e8e93">${c + 1}</text>`;
+  for (let r = 0; r < 16; r++) {
+    svg += `<text x="${x0 - 6}" y="${y0 + r * cs + cs / 2 + 3}" text-anchor="end" font-size="9" fill="#8e8e93">${'ABCDEFGHIJKLMNOP'[r]}</text>`;
+    for (let c = 0; c < 24; c++) {
+      const s = subplateOf384(r, c);
+      const mark = (c < 2 && (r === 0 || r === 8));
+      svg += `<circle cx="${x0 + c * cs + cs / 2}" cy="${y0 + r * cs + cs / 2}" r="${cs / 2 - 2}" fill="${SUB_COLORS[s]}" fill-opacity="${mark ? 1 : .55}"${mark ? ' stroke="#1d1d1f" stroke-width="1.5"' : ''}/>`;
+      if (mark) svg += `<text x="${x0 + c * cs + cs / 2}" y="${y0 + r * cs + cs / 2 + 3}" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">${SUBPLATES[s]}</text>`;
+    }
+  }
+  svg += `<line x1="${x0}" x2="${x0 + 24 * cs}" y1="${y0 + 8 * cs}" y2="${y0 + 8 * cs}" stroke="#1d1d1f" stroke-opacity=".25" stroke-dasharray="3 3"/></svg>`;
+  const rule = [['A', 'rows A–H', 'odd columns'], ['B', 'rows A–H', 'even columns'], ['C', 'rows I–P', 'odd columns'], ['D', 'rows I–P', 'even columns']];
+  const legend = rule.map((x, s) => `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:12px;white-space:nowrap"><span style="width:10px;height:10px;border-radius:50%;background:${SUB_COLORS[s]}"></span><b>Subplate ${x[0]}</b> ${x[1]}, ${x[2]}</span>`).join('');
+  box.innerHTML = svg + `<div style="font-size:12px;color:#6e6e73;margin-top:6px;line-height:1.7">${legend}</div>
+    <div style="font-size:12px;color:#6e6e73">A1 → Subplate A · A2 → Subplate B · I1 → Subplate C · I2 → Subplate D. Subplate well (row, column) = plate well (row, 2·column − 1 or 2·column). Each subplate becomes its own plate, in the order A, B, C, D per file (metadata needs four Names rows per file).</div>`;
+  box.style.display = 'block';
+}
+
 // Excel plate exports (Tecan i-control / Magellan): flatten every sheet to CSV text first.
 function workbookToText(bytes) {
   const wb = XLSX.read(bytes, { type: 'array' });

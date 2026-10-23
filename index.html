@@ -2741,7 +2741,7 @@ function plateBlockHtml(pc) {
     for (const q of s.points) {
       if (!q.excluded && !q.suggested) continue;
       const ex = q.excluded;
-      sections[ex ? 2 : 1].push(`<button class="chip ${ex ? 'excluded' : 'suggested'}" ${only(s.name, ex ? ' data-showexcl="1"' : '')} title="${escapeXml(`${s.name} · ${'ABCDEFGH'[q.i]} · OD ${q.y.toFixed(3)} — click to show only this curve`)}"><span class="chip-dot" style="background:${col}"></span>${escapeXml(s.name)} · Dilution ${Math.round(q.x * 100) / 100}</button>`);
+      sections[ex ? 2 : 1].push(`<button class="chip ${ex ? 'excluded' : 'suggested'}" ${only(s.name, ` data-key="${q.key}"` + (ex ? ' data-showexcl="1"' : ''))} title="${escapeXml(`${s.name} · ${'ABCDEFGH'[q.i]} · OD ${q.y.toFixed(3)} — click to show only this curve; click again to ${ex ? 'restore' : 'exclude'} the point`)}"><span class="chip-dot" style="background:${col}"></span>${escapeXml(s.name)} · Dilution ${Math.round(q.x * 100) / 100}</button>`);
     }
   });
   for (const q of pc.std.points) {
@@ -3131,6 +3131,8 @@ document.addEventListener('click', e => {
   if (on) {
     const [ps, ...rest] = on.dataset.only.split('|'), p = Number(ps), name = rest.join('|');
     const pc = review.analysis.plateCharts[p];
+    // Already the only curve shown: this click toggles the point itself.
+    if (on.dataset.key && pc.samples.every(s => (s.name === name) === !isHidden(pc, s))) { toggleExclusion(on.dataset.key); return; }
     review.focusOff.add(p);
     review.hidden = new Set([...review.hidden].filter(k => !k.startsWith(p + '|')));
     for (const s of pc.samples) if (s.name !== name) review.hidden.add(p + '|' + s.name);

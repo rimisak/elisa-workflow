@@ -3580,7 +3580,8 @@ async function runProcessing(saved) {
               excl: new Set(saved && saved.excl || []), suggested: new Set(), hidden: new Set(saved && saved.hidden || []),
               accepted: new Set(saved && saved.accepted || []), analysis: null, cache: new Map(),
               files, view: 'all', cur: null, limit: FLAG.BATCH, focusOff: new Set(), flagCache: null, stdFrom: saved && saved.stdFrom || {},
-              ready: new Set(), done: new Set(), nextRel: 0, seen: new Set(), fresh: null, fitting: false, shown: false, restoring: !!saved};
+              ready: new Set(), done: new Set(), nextRel: 0, seen: new Set(), fresh: null, fitting: false, shown: false, restoring: !!saved,
+              dlOpened: !!saved};   // a restored review stays on Review even when every plate was accepted; Download opens on the next accept
     // Open the review right away: every plate is a grey tile until its fit is done.
     review.fitting = true;
     review.analysis = {plateCharts: Array(numPlates).fill(null), ec50Rows: [], conRows: [], plateFits: []};

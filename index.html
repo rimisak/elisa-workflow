@@ -169,6 +169,9 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .legend-btn.off .legend-swatch,.legend-btn.off .cb{opacity:.6}
 .legend-btn.off{color:#8e8e93}
 .legend-all{display:inline-flex;gap:6px;margin-left:auto}
+.row-bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:8px;font-size:12px;color:#636366}
+.rowbtn{border:1px solid #c7c7cc;border-radius:6px;min-width:28px;padding:2px 8px;font-size:12px;font-weight:600;cursor:pointer;background:#fff}
+.rowbtn.on{border-color:#8e8e93;background:#f2f2f7;color:#636366;text-decoration:line-through}
 .chip-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
 .chip{border:1px solid;border-radius:999px;padding:3px 10px;font-size:12px;cursor:pointer;background:#fff}
 .chip-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:baseline}
@@ -329,7 +332,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.25.0 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.26.0 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -2740,6 +2743,7 @@ function plateBlockHtml(pc) {
     ${stdBar}
     <div class="chart-legend">${legend}</div>
     ${chips ? `<div class="chip-row">${chips}</div>` : ''}
+    ${rowBarHtml(p)}
     <div class="plate-charts-row">
       <div class="chart-card"><div class="chart-title">Sample dose–response &amp; ED50</div>${renderSampleChart(pc)}</div>
       <div class="chart-card"><div class="chart-title">Standard curve &amp; interpolation${pc.std.from != null ? ` (plate ${pc.std.from + 1}'s standard)` : ''}</div>${renderStandardChart(pc)}</div>
@@ -2767,6 +2771,7 @@ function reviewHeaderHtml(bottom) {
   if (!bottom) return `<div class="card-label" style="margin-bottom:10px">Review &amp; accept</div>
     <div class="rv-tabs">${tab('all', `All plates (${n})`)}${tab('todo', `Show only plates that need review (${todo})`)}</div>
     <div class="pt-strip" id="plateStrip">${plateTilesHtml()}</div>
+    ${rowBarHtml(null)}
     <button class="btn btn-secondary btn-sm rv-keys-btn" data-act="keys">Keyboard shortcuts</button>
     <div class="rv-keys" id="rvKeys" hidden><kbd>J</kbd>/<kbd>→</kbd> next plate · <kbd>K</kbd>/<kbd>←</kbd> previous · <kbd>A</kbd> accept &amp; go to next · <kbd>X</kbd> exclude suggested here · <kbd>C</kbd> clear exclusions here · <kbd>F</kbd> needs review ⇄ all</div>`;
   return `<button class="btn btn-primary process-btn" data-act="acceptAll" ${r.accepted.size === n ? 'disabled' : ''}>Accept all remaining plates</button>`;
@@ -2914,6 +2919,45 @@ function acceptPlate(p) {
   }
 }
 
+// Whole-row exclusion (e.g. an edge effect in row H): row letter i (0 = A … 7 = H) in every
+// well-column of the plate that holds a sample or standard with a reading.
+function rowKeys(p, i) {
+  const g = review.grid, off = p * 14, out = [];
+  for (let c = 1; c <= 12; c++) {
+    if (g[7][off + c] !== '' && g[7][off + c] != null && typeof g[9 + i][off + c] === 'number') out.push(exKey(p, c, i));
+  }
+  return out;
+}
+function rowExcluded(i, p) {   // p == null: every plate that has the row
+  const plates = p == null ? [...Array(review.numPlates).keys()] : [p];
+  const ks = plates.flatMap(q => rowKeys(q, i));
+  return ks.length > 0 && ks.every(k => review.excl.has(k));
+}
+function rowBarHtml(p) {
+  const btns = [...'ABCDEFGH'].map((L, i) => `<button class="rowbtn${rowExcluded(i, p) ? ' on' : ''}" data-row="${i}" data-rowplate="${p == null ? '' : p}" title="${rowExcluded(i, p) ? 'Restore' : 'Exclude'} row ${L} ${p == null ? 'on all plates' : 'on this plate'}">${L}</button>`).join('');
+  return `<div class="row-bar"><span>Exclude whole row${p == null ? ' on all plates' : ''}:</span>${btns}</div>`;
+}
+async function toggleRowExclusion(i, p) {
+  const r = review;
+  if (r.busy) return;
+  const plates = p == null ? [...Array(r.numPlates).keys()] : [p];
+  const on = rowExcluded(i, p);
+  const touched = plates.filter(q => rowKeys(q, i).length);
+  if (p != null) {
+    rowKeys(p, i).forEach(k => on ? r.excl.delete(k) : r.excl.add(k));
+    r.accepted.delete(p);
+    r.out = null; r.prepFailed = false; r.blobTok = (r.blobTok || 0) + 1;
+    reanalyze();
+    refreshReview(p);
+    return;
+  }
+  touched.forEach(q => { rowKeys(q, i).forEach(k => on ? r.excl.delete(k) : r.excl.add(k)); r.accepted.delete(q); });
+  r.out = null; r.prepFailed = false; r.blobTok = (r.blobTok || 0) + 1;
+  r.busy = true;
+  try { await reanalyzeAsync(); } finally { r.busy = false; }
+  renderReview();
+}
+
 function toggleExclusion(key) {
   const r = review;
   if (r.excl.has(key)) r.excl.delete(key); else r.excl.add(key);
@@ -3028,6 +3072,8 @@ document.addEventListener('click', e => {
   if (pt) { toggleExclusion(pt.dataset.k); return; }
   const xp = e.target.closest('[data-exclplate]');
   if (xp) { excludeSuggestedInPlate(Number(xp.dataset.exclplate)); return; }
+  const rb = e.target.closest('[data-row]');
+  if (rb) { toggleRowExclusion(Number(rb.dataset.row), rb.dataset.rowplate === '' ? null : Number(rb.dataset.rowplate)); return; }
   const nx = e.target.closest('[data-nextplate]');
   if (nx) {
     const list = visiblePlates(), i = list.indexOf(Number(nx.dataset.nextplate));

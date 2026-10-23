@@ -329,7 +329,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.24.1 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.25.0 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -484,6 +484,7 @@ function saveSession() {
   if (!r || r.stale) return;
   storeSet('session', {
     excl: [...r.excl], accepted: [...r.accepted], hidden: [...r.hidden], stdFrom: r.stdFrom || {},
+    files: r.files,
     opts: {
       subtractBg: document.getElementById('subtractBgChk').checked,
       hookFix: document.getElementById('hookChk').checked,
@@ -491,10 +492,35 @@ function saveSession() {
     }
   });
 }
-// New or removed input files make any saved review (and the one on screen) obsolete.
+// Forget the saved review and mark the one on screen obsolete (new analysis).
 function dropSession() {
   if (review) review.stale = true;
   storeDel('session');
+}
+// New or removed input files make the review on screen obsolete, but the saved session stays: the next
+// run carries exclusions, accepted plates, hidden samples and borrowed standards over to every plate whose
+// file name and contents are unchanged (`remapSession`), wherever it sits in the new file list.
+function staleSession() {
+  if (review) review.stale = true;
+}
+function textSig(t) {
+  let h = 5381;
+  for (let i = 0; i < t.length; i++) h = ((h << 5) + h + t.charCodeAt(i)) | 0;
+  return t.length + ':' + (h >>> 0);
+}
+function remapSession(sess, files) {
+  if (!sess || !sess.files) return sess;  // saved before plates were tracked by file: plate numbers as they are
+  const old = new Map(sess.files.map((f, i) => [f.name, {i, sig: f.sig}]));
+  const map = {};  // old plate index -> new plate index, for plates whose file is unchanged
+  files.forEach((f, p) => { const o = old.get(f.name); if (o && o.sig === f.sig) map[o.i] = p; });
+  const key = k => { const j = k.indexOf('|'), n = map[k.slice(0, j)]; return n == null ? null : n + k.slice(j); };
+  const keys = a => (a || []).map(key).filter(k => k != null);
+  const stdFrom = {};
+  for (const [d, src] of Object.entries(sess.stdFrom || {})) if (map[d] != null && map[src] != null) stdFrom[map[d]] = map[src];
+  return {...sess,
+    excl: keys(sess.excl), hidden: keys(sess.hidden), stdFrom,
+    accepted: (sess.accepted || []).map(i => map[i]).filter(n => n != null),
+    kept: Object.keys(map).length, lost: sess.files.length - Object.keys(map).length};
 }
 
 async function restoreFiles() {
@@ -594,7 +620,7 @@ async function loadCSVFiles(files, force) {  // force: true/false from the 384 t
   render384Pattern();
   csvFiles = results.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
   storeSet('csvFiles', csvFiles);
-  dropSession();
+  staleSession();
   showCSVState();
 }
 // Wavelengths of the signal / reference reads, taken from the loaded plate files' block labels
@@ -630,7 +656,7 @@ function clearCSV() {
   document.getElementById('csvFileList').innerHTML = '';
   document.getElementById('csvInput').value = '';
   storeDel('csvFiles');
-  dropSession();
+  staleSession();
   updateProcessBtn();
 }
 
@@ -652,7 +678,7 @@ function loadMetaFile(f) {
     metaBytes = new Uint8Array(ev.target.result);
     metaName  = f.name;
     storeSet('meta', {name: metaName, bytes: metaBytes});
-    dropSession();
+    staleSession();
     showMetaState();
   };
   r.readAsArrayBuffer(f);
@@ -668,7 +694,7 @@ function clearMeta() {
   document.getElementById('metaZoneText').textContent = 'Drop MetaData.xlsx here or click to browse';
   document.getElementById('metaInput').value = '';
   storeDel('meta');
-  dropSession();
+  staleSession();
   updateProcessBtn();
 }
 
@@ -3160,6 +3186,7 @@ async function runProcessing(saved) {
   btn.textContent = 'Processing...';
   clearLog();
   review = null;
+  if (!saved) saved = await storeGet('session');
 
   const chartsSec = document.getElementById('chartsSection');
   if (chartsSec) { chartsSec.style.display = 'none'; chartsSec.innerHTML = ''; }
@@ -3181,6 +3208,7 @@ async function runProcessing(saved) {
   try {
     log('Parsing CSV files...', 'info');
     prog.set(1, 'Parsing files…');
+    const files = csvFiles.map(f => ({name: f.name, sig: textSig(f.text)}));
     const csvArrays = csvFiles.map(f => parseCsvText(f.text));
     const numPlates = csvArrays.length;
     log(`  ${numPlates} plate(s) parsed.`);
@@ -3222,7 +3250,7 @@ async function runProcessing(saved) {
     await new Promise(r => setTimeout(r, 10));
     review = {grid, numPlates, meta, outputName,
               excl: new Set(), suggested: new Set(), hidden: new Set(), accepted: new Set(), analysis: null, cache: new Map(),
-              view: 'all', cur: null, limit: FLAG.BATCH, focusOff: new Set(), flagCache: null, stdFrom: {}};
+              files, view: 'all', cur: null, limit: FLAG.BATCH, focusOff: new Set(), flagCache: null, stdFrom: {}};
     pool = numPlates >= 2 ? createFitPool(grid, meta, fitConfig, numPlates) : null;
     log(pool ? `  Fitting in parallel on ${pool.size} worker(s).` : '  Fitting on the main thread.');
     const tFit = performance.now();
@@ -3267,6 +3295,10 @@ async function runProcessing(saved) {
     log(`  ${review.suggested.size} suggested outlier(s).`);
 
     if (saved) {
+      saved = remapSession(saved, files);
+      if (saved.lost != null) {
+        log(`Carrying over the previous review: ${saved.kept} unchanged plate(s)${saved.lost ? `, ${saved.lost} changed or removed (their edits are dropped)` : ''}.`, 'info');
+      }
       review.excl = new Set(saved.excl || []);
       review.accepted = new Set(saved.accepted || []);
       review.hidden = new Set(saved.hidden || []);

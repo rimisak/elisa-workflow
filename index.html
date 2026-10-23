@@ -329,7 +329,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.24.0 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.24.1 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -560,10 +560,10 @@ function onDropCSV(e) {
 // layout here, so the rest of the app only ever sees one format. An Excel file that is really the
 // metadata workbook (it has a Names sheet) is moved to the Metadata slot instead.
 let lastPlateFiles = [];  // File objects as dropped, so toggling 384-well mode can re-read them
-async function loadCSVFiles(files) {
+async function loadCSVFiles(files, force) {  // force: true/false from the 384 toggle, undefined = auto-detect per file
   if (!files.length) return;
   lastPlateFiles = files;
-  const is384 = document.getElementById('plate384Chk').checked;
+  let any384 = false;
   const results = [], problems = [];
   let metaFile = null;
   for (const f of files) {
@@ -576,7 +576,8 @@ async function loadCSVFiles(files) {
       } else {
         text = await f.text();
       }
-      if (is384) {
+      if (force === undefined ? parse384Blocks(text).blocks.length > 0 : force) {
+        any384 = true;
         for (const s of split384Text(text, f.name)) results.push({ name: s.name, text: s.text, reader: s.reader, warnings: s.warnings });
         continue;
       }
@@ -589,6 +590,8 @@ async function loadCSVFiles(files) {
   if (problems.length) alert('Could not read:\n' + problems.join('\n'));
   if (metaFile) loadMetaFile(metaFile);
   if (!results.length) return;
+  document.getElementById('plate384Chk').checked = any384;
+  render384Pattern();
   csvFiles = results.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
   storeSet('csvFiles', csvFiles);
   dropSession();
@@ -1149,7 +1152,7 @@ function split384Text(text, fileName) {
 
 function on384Toggle() {
   render384Pattern();
-  if (lastPlateFiles.length) loadCSVFiles(lastPlateFiles);
+  if (lastPlateFiles.length) loadCSVFiles(lastPlateFiles, document.getElementById('plate384Chk').checked);
 }
 
 // Colour-coded map of the 384 → 96 assignment, shown while 384-well mode is on.

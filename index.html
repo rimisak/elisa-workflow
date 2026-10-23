@@ -168,34 +168,27 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .plate-charts-block::-webkit-scrollbar-thumb{background:#8e8e93;border-radius:6px;border:2px solid transparent;background-clip:content-box}
 .plate-charts-block::-webkit-scrollbar-thumb:hover{background:#636366;background-clip:content-box}
 #scrollHint{display:none;cursor:pointer;z-index:6;background:#1c1c1e;color:#fff;font-size:12px;font-weight:600;padding:6px 14px;border-radius:999px;box-shadow:0 2px 10px rgba(0,0,0,.3);opacity:.9}
-body.rv-lock #scrollHint.show{display:block;grid-column:2;grid-row:1/3;align-self:end;justify-self:center;margin-bottom:22px}
+body.rv-lock #scrollHint.show{display:block;grid-column:1;grid-row:1/3;align-self:end;justify-self:center;margin-bottom:22px}
 /* Review mode: the page itself does not scroll; the open Review section fills the window and shows one plate at a time. */
 body.rv-lock{height:100vh;overflow:hidden;display:flex;flex-direction:column;padding:8px 24px 12px}
 body.rv-lock>*:not(#secReview){display:none!important}
 body.rv-lock #secReview{flex:1;min-height:0;display:flex;flex-direction:column;margin-bottom:0}
 body.rv-lock #secReview .sec-head{flex:none}
 body.rv-lock #secReview .sec-body{flex:1;min-height:0;display:flex;flex-direction:column;margin-top:10px}
-body.rv-lock #chartsSection{flex:1;min-height:0;display:grid!important;grid-template-columns:auto minmax(0,1fr) auto 340px;grid-template-rows:auto 1fr;gap:0 14px}
-body.rv-lock #reviewHeader{grid-column:4;grid-row:1;overflow-y:auto;max-height:100%}
+body.rv-lock #chartsSection{flex:1;min-height:0;display:grid!important;grid-template-columns:minmax(0,1fr) 340px;grid-template-rows:auto 1fr;gap:0 14px}
+body.rv-lock #reviewHeader{grid-column:2;grid-row:1;overflow-y:auto;max-height:100%}
 /* Accept / next: a narrow strip beside the plate box that widens over it on hover. */
-body.rv-lock #reviewActions{grid-column:3}
-body.rv-lock #reviewBack{grid-column:1}
-#reviewBack .ra-btn{justify-content:flex-start}
-#reviewBack:empty{display:none}
-.ra-wrap .ra-btn.off,.ra-wrap .ra-btn.off:hover{background:#c7c7cc;cursor:default;box-shadow:none}
-/* The strips are real grid columns: widening one narrows the plate box beside it. */
-body.rv-lock .ra-wrap{grid-row:1/3;margin-bottom:10px;width:48px;overflow:hidden;interpolate-size:allow-keywords;transition:width .18s ease}
-body.rv-lock .ra-wrap:hover,body.rv-lock .ra-wrap:focus-within{width:max-content}
-.ra-wrap .ra-inner{height:100%;display:flex;flex-direction:column;gap:10px}
-.ra-wrap .ra-btn{flex:1;display:flex;align-items:center;justify-content:flex-end;gap:12px;padding:0 14px;border-radius:10px;border:none;overflow:hidden;white-space:nowrap;font-size:16px;font-weight:600;color:#fff;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.18)}
-.ra-wrap .ra-btn.go{background:#007aff}.ra-btn.go:hover{background:#0062cc}
-.ra-wrap .ra-btn.done{background:#34c759}
-.ra-wrap .ra-lbl{opacity:0;transition:opacity .12s}
-.ra-wrap:hover .ra-lbl,.ra-wrap:focus-within .ra-lbl{opacity:1}
-.ra-wrap .ra-ico{font-size:22px;line-height:1;flex:none;width:20px;text-align:center}
-.ra-wrap .keycap{font-size:12px}
+/* Back / accept / next stack at the bottom of the right-hand column, beside the plate box. */
+body.rv-lock #reviewActions{grid-column:2;grid-row:2;align-self:end;margin-bottom:10px;display:flex;flex-direction:column;gap:10px}
+#reviewActions .process-btn{padding:18px 12px;font-size:18px}
+#reviewActions .process-btn .keycap{font-size:12px}
+#reviewActions .ra-row{display:flex;gap:10px}
+#reviewActions .ra-row .process-btn{flex:1;width:auto;padding:14px 10px;font-size:16px}
+#reviewActions .btn-back{background:#e5e5ea;color:#1c1c1e}
+#reviewActions .btn-back:hover{background:#d1d1d6}
+#reviewActions .btn-back:disabled{background:#c7c7cc;color:#f2f2f7;cursor:default}
 body.rv-lock #reviewHeader{flex:none;padding:12px 16px;margin-bottom:10px}
-body.rv-lock #reviewList{grid-column:2;grid-row:1/3;min-height:0;position:relative;margin-bottom:10px}
+body.rv-lock #reviewList{grid-column:1;grid-row:1/3;min-height:0;position:relative;margin-bottom:10px}
 body.rv-lock #reviewList>.plate-charts-block{margin-bottom:0}
 body.rv-lock #reviewList>.plate-charts-block:not(.current){display:none}
 body.rv-lock #reviewList>.plate-charts-block.current{height:100%;max-height:none}
@@ -398,7 +391,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.32.2 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.32.3 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -2969,28 +2962,19 @@ function refreshListIncremental() {
 }
 
 // Accept / next buttons for the plate being reviewed; they live beside the plate box, outside its scroll area.
-// Back strip: previous plate in the current filter (greyed out on the first one).
-function backBarHtml() {
-  const r = review, p = r && r.cur, list = visiblePlates(), i = list.indexOf(p);
-  if (p == null) return '';
-  const first = i <= 0;
-  return `<div class="ra-inner"><button class="ra-btn go${first ? ' off' : ''}" ${first ? 'disabled' : `data-prevplate="${p}"`} title="${first ? 'This is the first plate' : 'Previous plate (K)'}"><span class="ra-ico">←</span><span class="ra-lbl">Previous plate <kbd class="keycap">K</kbd></span></button></div>`;
-}
-
 function refreshActions() {
-  const a = document.getElementById('reviewActions'), b = document.getElementById('reviewBack');
+  const a = document.getElementById('reviewActions');
   if (a) a.innerHTML = acceptBarHtml();
-  if (b) b.innerHTML = backBarHtml();
 }
 
 function acceptBarHtml() {
   const r = review, p = r && r.cur;
   if (p == null || !r.analysis.plateCharts[p]) return '';
   const acc = r.accepted.has(p);
-  const btn = (cls, attr, lbl, ico, tip) => `<button class="ra-btn ${cls}" ${attr} title="${tip}"><span class="ra-lbl">${lbl}</span><span class="ra-ico">${ico}</span></button>`;
-  return '<div class="ra-inner">'
-    + btn(acc ? 'done' : 'go', `data-accept="${p}"`, acc ? 'Accepted' : 'Accept plate and show next <kbd class="keycap">A</kbd>', '✓', acc ? 'Accepted (click to undo)' : 'Accept plate and show next (A)')
-    + (acc ? btn('go', `data-nextplate="${p}"`, 'Next plate <kbd class="keycap">J</kbd>', '→', 'Next plate (J)') : '')
+  const list = visiblePlates(), first = list.indexOf(p) <= 0;
+  return `<button class="btn process-btn ${acc ? 'btn-accepted' : 'btn-primary'}" data-accept="${p}">${acc ? '✓ Accepted' : 'Accept plate and show next <kbd class="keycap">A</kbd>'}</button>`
+    + `<div class="ra-row"><button class="btn process-btn btn-back" ${first ? 'disabled' : `data-prevplate="${p}"`} title="${first ? 'This is the first plate' : 'Previous plate (K)'}">← Back <kbd class="keycap">K</kbd></button>`
+    + (acc ? `<button class="btn btn-primary process-btn" data-nextplate="${p}">Next plate → <kbd class="keycap">J</kbd></button>` : '')
     + '</div>';
 }
 
@@ -3022,8 +3006,7 @@ function renderReview(animate) {
   if (!sec || !review) return;
   sec.innerHTML = `<div id="reviewHeader" class="card">${reviewHeaderHtml()}</div>`
     + `<div id="reviewList">${reviewListHtml()}</div>`
-    + `<div id="reviewBack" class="ra-wrap">${backBarHtml()}</div>`
-    + `<div id="reviewActions" class="ra-wrap">${acceptBarHtml()}</div>`
+    + `<div id="reviewActions">${acceptBarHtml()}</div>`
     + `<div id="scrollHint">↓ Scroll for more</div>`;
   sec.style.display = 'block';
   if (animate) sec.querySelectorAll('.plate-charts-block').forEach(el => { el.classList.add('enter'); el.addEventListener('animationend', () => el.classList.remove('enter'), {once: true}); });

@@ -393,7 +393,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.32.5 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.32.6 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -2977,7 +2977,8 @@ function acceptBarHtml() {
   return `<button class="btn process-btn ${acc ? 'btn-accepted' : 'btn-primary'}" data-accept="${p}">${acc ? '✓ Accepted' : 'Accept plate and show next <kbd class="keycap">A</kbd>'}</button>`
     + `<div class="ra-row"><button class="btn process-btn btn-back" ${first ? 'disabled' : `data-prevplate="${p}"`} title="${first ? 'This is the first plate' : 'Previous plate (←)'}">Back <kbd class="keycap">←</kbd></button>`
     + `<button class="btn process-btn btn-back" ${last ? 'disabled' : `data-nextplate="${p}"`} title="${last ? 'This is the last plate' : 'Next plate (→)'}">Next <kbd class="keycap">→</kbd></button>`
-    + '</div>';
+    + '</div>'
+    + (last && r.accepted.size < r.numPlates ? `<button class="btn process-btn btn-primary" data-act="acceptAll" ${r.fitting ? 'disabled' : ''}>Accept all remaining plates (${r.numPlates - r.accepted.size})</button>` : '');
 }
 
 // Shows the "Scroll for more" pill while the current plate has content below the visible part.
@@ -3358,6 +3359,9 @@ document.addEventListener('click', e => {
   switch (act.dataset.act) {
     case 'excludeSuggested': setAllExclusions(ex => new Set([...ex, ...review.suggested])); break;
     case 'clearExcl': setAllExclusions(() => new Set()); break;
+    case 'acceptAll':
+      for (let p = 0; p < review.numPlates; p++) review.accepted.add(p);
+      renderReview(); break;
     case 'toggleShowExcl': review.showExcl = !review.showExcl; renderReview(); break;
     case 'more':
       review.limit += FLAG.BATCH;

@@ -328,7 +328,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.27.5 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.27.6 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -1748,8 +1748,11 @@ self.onmessage = e => {
   try {
     if (m.type === 'plate') {
       const it = plateEntryGen(ctx.grid, m.p, ctx.meta, ctx.fc, new Set(m.excl), msg => self.postMessage({type: 'log', id, msg}), m.stdOverride || null);
-      let r;
-      while (!(r = it.next()).done) self.postMessage({type: 'tick', id});
+      let r, last = performance.now();
+      // Each tick says which phase it belongs to and how long that step took, so the progress bar can weight
+      // fitting and outlier screening by their real cost.
+      const tk = ph => { const now = performance.now(); self.postMessage({type: 'tick', id, ph, dt: ph === 'pad' ? 0 : now - last}); last = now; };
+      while (!(r = it.next()).done) tk('fit');
       if (!m.screen) { self.postMessage({type: 'done', id, result: r.value}); return; }
       // Outlier screening on the plate's fresh (unexcluded) fits, in the same job.
       const pc = r.value.plateChart, series = pc.samples.map(s => [s.points, s.params, false]);
@@ -1757,9 +1760,9 @@ self.onmessage = e => {
       const sug = [];
       for (const [pts, params, isStd] of series) {
         for (const q of suggestOutliers(pts, params, isStd ? ctx.stdFc : ctx.fc)) sug.push(q.key);
-        self.postMessage({type: 'tick', id});
+        tk('screen');
       }
-      for (let k = series.length; k < ${FIT_STEPS_PER_PLATE}; k++) self.postMessage({type: 'tick', id});
+      for (let k = series.length; k < ${FIT_STEPS_PER_PLATE}; k++) tk('pad');
       self.postMessage({type: 'done', id, result: {entry: r.value, sug}});
     }
   } catch (err) { self.postMessage({type: 'error', id, message: String((err && err.message) || err)}); }
@@ -1805,7 +1808,7 @@ function createFitPool(grid, meta, fc, maxWorkers) {
       w.onmessage = e => {
         const m = e.data, job = running.get(w);
         if (!job) return;
-        if (m.type === 'tick') { job.onTick && job.onTick(); return; }
+        if (m.type === 'tick') { job.onTick && job.onTick(m); return; }
         if (m.type === 'log') { job.onLog && job.onLog(m.msg); return; }
         running.delete(w); idle.push(w);
         if (m.type === 'done') job.resolve(m.result); else job.reject(new Error(m.message));
@@ -1853,7 +1856,7 @@ async function fitAndScreenParallel(pool, numPlates, excl, cache, logFn, tick) {
   try {
     const found = new Set();
     let chain = Promise.resolve();
-    const tickSoon = () => { chain = chain.then(() => tick()); chain.catch(() => {}); return chain; };
+    const tickSoon = m => { chain = chain.then(() => tick(m)); chain.catch(() => {}); return chain; };
     await Promise.all([...Array(numPlates).keys()].map(p =>
       pool.run({type: 'plate', p, excl: [...excl].filter(k => k.startsWith(p + '|')), screen: true}, tickSoon, logFn)
         .then(r => { cache.set(plateSig(p, excl), r.entry); r.sug.forEach(k => found.add(k)); })));
@@ -3337,12 +3340,20 @@ async function runProcessing(saved) {
     let screened = false;
     if (pool) {
       // One job per plate does the fits and the outlier screening; progress covers 5–97 %.
-      const total = numPlates * FIT_STEPS_PER_PLATE * 2;
-      let done = 0;
-      const sug = await fitAndScreenParallel(pool, numPlates, review.excl, review.cache, msg => log(msg), async () => {
+      // Outlier screening costs far more than a fit, so ticks are weighted by the measured time per step
+      // of each phase (equal until both have been seen) instead of counted alike.
+      const total = numPlates * FIT_STEPS_PER_PLATE;
+      const n = {fit: 0, screen: 0}, sum = {fit: 0, screen: 0}, cnt = {fit: 0, screen: 0};
+      const sugStart = () => cnt.screen ? sum.screen / cnt.screen : (cnt.fit ? sum.fit / cnt.fit : 1);
+      const fitCost = () => cnt.fit ? sum.fit / cnt.fit : 1;
+      const sug = await fitAndScreenParallel(pool, numPlates, review.excl, review.cache, msg => log(msg), async m => {
         if (gen !== runGen) throw CANCELLED;
-        done++;
-        prog.set(5 + 92 * Math.min(1, done / total), `Fitting and screening… ${Math.min(100, Math.round(100 * done / total))} %`);
+        const ph = m && m.ph === 'screen' ? 'screen' : 'fit';
+        n[ph]++;
+        if (m && m.ph !== 'pad' && m.dt > 0) { sum[ph] += m.dt; cnt[ph]++; }
+        const fc1 = fitCost(), sc1 = sugStart();
+        const frac = Math.min(1, (n.fit * fc1 + n.screen * sc1) / (total * (fc1 + sc1)));
+        prog.set(5 + 92 * frac, `Fitting and screening… ${Math.min(100, Math.round(100 * frac))} %`);
         await prog.yieldMaybe();
       });
       if (sug) { review.suggested = sug; screened = true; }

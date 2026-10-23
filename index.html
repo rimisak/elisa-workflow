@@ -146,6 +146,15 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .ptile.edit{background:#e4f0ff;border-color:#007aff;color:#0050b3}
 .ptile.res{background:#eefaf1;border:1px dashed #34c759;color:#1d7a35}
 .ptile.acc{background:#dff6e5;border-color:#34c759;color:#1d7a35}
+.ptile{transition:background-color .4s,border-color .4s,color .4s}
+.ptile.pop{animation:tilePop .55s ease-out}
+@keyframes tilePop{from{transform:scale(.8);background:#e5e5ea;opacity:.5}60%{transform:scale(1.12)}to{transform:none}}
+.plate-charts-block.enter{animation:blockIn .45s ease-out both}
+@keyframes blockIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.sec.open .sec-body{animation:secIn .3s ease-out}
+@keyframes secIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+.rv-fitting{transition:opacity .3s}
+@media (prefers-reduced-motion:reduce){.ptile.pop,.plate-charts-block.enter,.sec.open .sec-body{animation:none}}
 .ptile.cur{outline:2px solid #1c1c1e;outline-offset:1px}
 .ptile.pend{background:repeating-linear-gradient(135deg,#f2f2f7 0 6px,#e5e5ea 6px 12px);color:#aeaeb2;cursor:default}
 .rv-fitting{display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:7px 10px;border-radius:7px;background:#e4f0ff;color:#0050b3;font-size:12px}
@@ -389,7 +398,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.31.2 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.32.0 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -2910,7 +2919,7 @@ function plateTilesHtml() {
     const res = !r.accepted.has(p) && plateResolved(p);
     const cls = r.accepted.has(p) ? 'acc' : f.count ? 'flag' : res ? 'res' : ex ? 'edit' : 'acc';
     const tip = plateLabel(p) + (r.accepted.has(p) ? ' — accepted' : f.count ? ' — ' + f.reasons.slice(0, 4).join('; ') : res ? ' — resolved by exclusion' : ex ? ' — edited' : ' — clean');
-    return `<button class="ptile ${cls}${r.cur === p ? ' cur' : ''}" data-goto="${p}" title="${escapeXml(tip)}">${p + 1}${r.accepted.has(p) ? '✓' : ''}</button>`;
+    return `<button class="ptile ${cls}${r.cur === p ? ' cur' : ''}${r.fresh && r.fresh.has(p) ? ' pop' : ''}" data-goto="${p}" title="${escapeXml(tip)}">${p + 1}${r.accepted.has(p) ? '✓' : ''}</button>`;
   }).join('');
 }
 
@@ -2919,7 +2928,7 @@ function reviewHeaderHtml() {
   const nSug = [...r.suggested].filter(k => !r.excl.has(k)).length;
   const {todo} = triageCounts();
   const tab = (v, label) => `<button class="rv-tab${r.view === v ? ' on' : ''}" data-view="${v}">${label}</button>`;
-  const fitting = r.fitting ? `<div class="rv-fitting"><span class="spin"></span>Still fitting in the background — ${r.ready.size} of ${n} plates ready. You can start reviewing the finished ones; the rest appear as they complete.</div>` : '';
+  const fitting = r.fitting ? `<div class="rv-fitting"><span class="spin"></span>${r.restoring ? 'Restoring your previous review' : 'Fitting'} — ${r.ready.size} of ${n} plates ready. You can start reviewing the finished ones; the rest appear as they complete.</div>` : '';
   return `${fitting}<div class="rv-toprow"><span class="rv-label">Filter:</span><div class="rv-tabs">${tab('all', `All plates (${n})`)}${tab('todo', `Needs review (${todo})`)}</div></div>
     <div class="pt-strip" id="plateStrip">${plateTilesHtml()}</div>
     ${rowBarHtml(null)}`;
@@ -2948,13 +2957,14 @@ function refreshListIncremental() {
   if (!box) return;
   const vis = visiblePlates();
   const have = [...box.querySelectorAll(':scope > .plate-charts-block')].map(e => +e.dataset.plate);
-  if (!have.length || !vis.length) { renderReview(); return; }
+  if (!have.length || !vis.length) { renderReview(true); return; }
   const want = vis.slice(0, Math.max(r.limit, vis.indexOf(r.cur) + 1));
   const add = want.filter(p => !have.includes(p));
   if (add.some(p => p < Math.max(...have))) { renderReview(); return; }
   const more = document.getElementById('rvMore');
   if (more) more.remove();
   box.insertAdjacentHTML('beforeend', add.map(p => plateBlockHtml(r.analysis.plateCharts[p])).join('') + moreCardHtml(want.length, vis.length));
+  for (const p of add) { const el = document.getElementById('plateBlock' + p); if (el) { el.classList.add('enter'); el.addEventListener('animationend', () => el.classList.remove('enter'), {once: true}); } }
 }
 
 // Accept / next buttons for the plate being reviewed; they live beside the plate box, outside its scroll area.
@@ -3006,7 +3016,7 @@ function observeReviewList() {
   requestAnimationFrame(updateScrollHint);
 }
 
-function renderReview() {
+function renderReview(animate) {
   const sec = document.getElementById('chartsSection');
   if (!sec || !review) return;
   sec.innerHTML = `<div id="reviewHeader" class="card">${reviewHeaderHtml()}</div>`
@@ -3015,6 +3025,7 @@ function renderReview() {
     + `<div id="reviewActions" class="ra-wrap">${acceptBarHtml()}</div>`
     + `<div id="scrollHint">↓ Scroll for more</div>`;
   sec.style.display = 'block';
+  if (animate) sec.querySelectorAll('.plate-charts-block').forEach(el => { el.classList.add('enter'); el.addEventListener('animationend', () => el.classList.remove('enter'), {once: true}); });
   syncReviewLock();
   saveSession();
   updateSections();
@@ -3577,7 +3588,7 @@ async function runProcessing(saved) {
               excl: new Set(saved && saved.excl || []), suggested: new Set(), hidden: new Set(saved && saved.hidden || []),
               accepted: new Set(saved && saved.accepted || []), analysis: null, cache: new Map(),
               files, view: 'all', cur: null, limit: FLAG.BATCH, focusOff: new Set(), flagCache: null, stdFrom: saved && saved.stdFrom || {},
-              ready: new Set(), fitting: false, shown: false};
+              ready: new Set(), seen: new Set(), fresh: null, fitting: false, shown: false, restoring: !!saved};
     // Open the review right away: every plate is a grey tile until its fit is done.
     review.fitting = true;
     review.analysis = {plateCharts: Array(numPlates).fill(null), ec50Rows: [], conRows: [], plateFits: []};
@@ -3597,6 +3608,8 @@ async function runProcessing(saved) {
       uiTimer = 0;
       if (gen !== runGen || !review.ready.size) return;
       reanalyze();
+      review.fresh = new Set([...review.ready].filter(p => !review.seen.has(p)));   // tiles that animate in
+      review.seen = new Set(review.ready);
       if (!review.shown) {
         review.shown = true;
         renderReview();
@@ -3605,6 +3618,7 @@ async function runProcessing(saved) {
       } else {
         refreshHeaders(); refreshListIncremental(); updateSections();
       }
+      review.fresh = null;
     };
     const onPlate = (p, sug) => {
       if (gen !== runGen) return;

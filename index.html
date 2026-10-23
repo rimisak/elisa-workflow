@@ -2767,7 +2767,7 @@ function reviewHeaderHtml(bottom) {
   if (!bottom) return `<div class="card-label" style="margin-bottom:10px">Review &amp; accept</div>
     <div class="rv-tabs">${tab('all', `All plates (${n})`)}${tab('todo', `Show only plates that need review (${todo})`)}</div>
     <div class="pt-strip" id="plateStrip">${plateTilesHtml()}</div>
-    ${rowBarHtml(null)}`;
+    <div style="margin-top:14px">${rowBarHtml(null)}</div>`;
   return `<button class="btn btn-primary process-btn" data-act="acceptAll" ${r.accepted.size === n ? 'disabled' : ''}>Accept all remaining plates</button>`;
 }
 
@@ -2929,7 +2929,7 @@ function rowExcluded(i, p) {   // p == null: every plate that has the row
 }
 function rowBarHtml(p) {
   const btns = [...'ABCDEFGH'].map((L, i) => `<button class="rowbtn${rowExcluded(i, p) ? ' on' : ''}" data-row="${i}" data-rowplate="${p == null ? '' : p}" title="${rowExcluded(i, p) ? 'Restore' : 'Exclude'} row ${L} ${p == null ? 'on all plates' : 'on this plate'}">${L}</button>`).join('');
-  return `<div class="row-bar"><span>Exclude whole row${p == null ? ' on all plates' : ''}:</span>${btns}</div>`;
+  return `<div class="row-bar"><span>Exclude whole row on ${p == null ? 'all plates' : 'this plate'}:</span>${btns}</div>`;
 }
 async function toggleRowExclusion(i, p) {
   const r = review;

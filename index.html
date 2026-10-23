@@ -391,7 +391,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.32.3 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.32.4 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -2971,10 +2971,10 @@ function acceptBarHtml() {
   const r = review, p = r && r.cur;
   if (p == null || !r.analysis.plateCharts[p]) return '';
   const acc = r.accepted.has(p);
-  const list = visiblePlates(), first = list.indexOf(p) <= 0;
+  const list = visiblePlates(), i = list.indexOf(p), first = i <= 0, last = i < 0 || i >= list.length - 1;
   return `<button class="btn process-btn ${acc ? 'btn-accepted' : 'btn-primary'}" data-accept="${p}">${acc ? '✓ Accepted' : 'Accept plate and show next <kbd class="keycap">A</kbd>'}</button>`
-    + `<div class="ra-row"><button class="btn process-btn btn-back" ${first ? 'disabled' : `data-prevplate="${p}"`} title="${first ? 'This is the first plate' : 'Previous plate (K)'}">← Back <kbd class="keycap">K</kbd></button>`
-    + (acc ? `<button class="btn btn-primary process-btn" data-nextplate="${p}">Next plate → <kbd class="keycap">J</kbd></button>` : '')
+    + `<div class="ra-row"><button class="btn process-btn btn-back" ${first ? 'disabled' : `data-prevplate="${p}"`} title="${first ? 'This is the first plate' : 'Previous plate (←)'}">Back <kbd class="keycap">←</kbd></button>`
+    + `<button class="btn process-btn btn-back" ${last ? 'disabled' : `data-nextplate="${p}"`} title="${last ? 'This is the last plate' : 'Next plate (→)'}">Next <kbd class="keycap">→</kbd></button>`
     + '</div>';
 }
 
@@ -3366,7 +3366,7 @@ document.addEventListener('change', e => {
   setStdFrom(Number(sel.dataset.stdfrom), Number(sel.value));
 });
 
-// Keyboard review: J/K step through the listed plates, A accepts and moves on.
+// Keyboard review: ←/→ (or K/J) step through the listed plates, A accepts and moves on.
 document.addEventListener('keydown', e => {
   if (!review || !review.analysis || review.busy || e.metaKey || e.ctrlKey || e.altKey) return;
   const t = e.target, tag = t && t.tagName;

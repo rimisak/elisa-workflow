@@ -328,7 +328,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.27.7 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.27.8 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -1425,8 +1425,29 @@ function estimateIC50(xdata, ydata) {
 }
 
 // Fit 4PL with multiple IC50 starting points and return best-SSE result
-function fitBest4PL(xdata, ydata, fc) {
+// `warm` (optional, a fit of nearly the same data) switches to a quick search: start from that fit plus the
+// data-driven and default seeds instead of the whole seed grid. Used by the leave-one-out outlier check,
+// where the refit lands next to the full fit and the grid would cost ~10x as much.
+function fitBest4PL(xdata, ydata, fc, warm) {
   const ic50Est = estimateIC50(xdata, ydata);
+  if (warm) {
+    const clamp = (v, i) => Math.max(fc.lower[i], Math.min(fc.upper[i], v));
+    const starts = [warm.map((v, i) => clamp(v, i)),
+                    [fc.p0[0], fc.p0[1], clamp(ic50Est, 2), fc.p0[3]],
+                    fc.p0.slice(),
+                    warm.map((v, i) => clamp(i === 2 ? v / 4 : v, i)),
+                    warm.map((v, i) => clamp(i === 2 ? v * 4 : v, i)),
+                    [fc.p0[0], fc.p0[1], clamp(xdata[xdata.length >> 1], 2), fc.p0[3]]];
+    let best = null, bestSse = Infinity;
+    for (const p0 of starts) {
+      try {
+        const p = levenbergMarquardt(xdata, ydata, p0, fc.lower, fc.upper);
+        const sse = xdata.reduce((a, x, i) => a + (ydata[i] - model4PL(x, p)) ** 2, 0);
+        if (sse < bestSse) { bestSse = sse; best = p; }
+      } catch(_) {}
+    }
+    if (best) return best;
+  }
 
   // Build a broad candidate set: data-driven estimate, default, data extremes,
   // explicit small values (catches IC50 << min x), and a log-spaced grid across bounds.
@@ -1651,7 +1672,7 @@ function suggestOutliers(pts, fit, fc) {
     for (const j of cands) {
       const rest = cur.filter((_,i)=>i!==j);
       let fit2;
-      try { fit2 = fitBest4PL(rest.map(p=>p.x), rest.map(fy), fc); } catch(_) { continue; }
+      try { fit2 = fitBest4PL(rest.map(p=>p.x), rest.map(fy), fc, fit); } catch(_) { continue; }
       const dev = Math.abs(fy(cur[j]) - model4PL(cur[j].x, fit2));
       const sse2 = rest.reduce((s,p)=>s + (fy(p) - model4PL(p.x, fit2))**2, 0);
       const rms2 = Math.sqrt(sse2 / rest.length);
@@ -2703,7 +2724,7 @@ function plateBlockHtml(pc) {
     banner = `<div class="flag-banner"><div class="flag-head">⚠ Plate flagged.</div>
       <div class="flag-cols">
       ${group(1, 'Standard curve fit', !stdBad.length, stdTxt)}
-      ${group(2, 'Outliers', !nOut, nOut ? `${nOut} suggested` : 'None detected', nOut ? `<button class="btn btn-secondary btn-sm" data-exclplate="${p}" title="Exclude all suggested outliers and show only their curves">Exclude all ${nOut} outlier${nOut > 1 ? 's' : ''} <kbd class="keycap">X</kbd></button>` : '')}
+      ${group(2, 'Outliers', !nOut, nOut ? `${nOut} suggested` : 'None detected', nOut ? `<button class="btn btn-secondary btn-sm" data-exclplate="${p}" title="Exclude all suggested outliers and show only their curves">Exclude ${nOut > 1 ? 'all ' : ''}${nOut} outlier${nOut > 1 ? 's' : ''} <kbd class="keycap">X</kbd></button>` : '')}
       ${group(3, 'Poorly fitted curves', !nFit, nFit ? `${nFit} curve${nFit > 1 ? 's' : ''}` : 'None', nFit ? `<button class="btn btn-secondary btn-sm" data-poorfit="${p}" title="Show only curves with a failed fit, low R² or a parameter at its fit bound">Show only poor fits</button>` : '')}
       </div>
       ${focus ? `<div class="focus-note">Graphs show only the ${focusSamples(pc).size} flagged of ${pc.samples.length} samples — “Show all” reveals the rest.</div>` : ''}</div>`;

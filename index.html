@@ -133,6 +133,8 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .btn-accepted{background:#34c759;color:#fff}
 .btn-accepted:hover{background:#2aa84a}
 .rv-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 8px}
+.rv-toprow{display:flex;flex-wrap:wrap;align-items:center;gap:6px 24px}
+.rv-toprow .row-bar{margin:10px 0 8px}
 .rv-tab{border:1px solid #d1d1d6;background:#fff;border-radius:999px;padding:4px 12px;font-size:12px;cursor:pointer;color:#3a3a3c}
 .rv-tab.on{background:#007aff;border-color:#007aff;color:#fff}
 .keycap{font:inherit;font-size:10px;font-weight:600;margin-left:6px;padding:0 5px;border-radius:4px;border:1px solid currentColor;border-bottom-width:2px;opacity:.85}
@@ -154,7 +156,7 @@ body.rv-lock #secReview{flex:1;min-height:0;display:flex;flex-direction:column;m
 body.rv-lock #secReview .sec-head{flex:none}
 body.rv-lock #secReview .sec-body{flex:1;min-height:0;display:flex;flex-direction:column;margin-top:10px}
 body.rv-lock #chartsSection{flex:1;min-height:0;display:flex!important;flex-direction:column}
-body.rv-lock #reviewHeader,body.rv-lock #reviewFooter{flex:none;padding:12px 16px;margin-bottom:10px}
+body.rv-lock #reviewHeader{flex:none;padding:12px 16px;margin-bottom:10px}
 body.rv-lock #reviewHeader .pt-strip{max-height:60px}
 body.rv-lock #reviewList{flex:1;min-height:0;position:relative;margin-bottom:10px}
 body.rv-lock #reviewList>.plate-charts-block{margin-bottom:0}
@@ -358,7 +360,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.30.0 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.30.1 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -2860,16 +2862,14 @@ function plateTilesHtml() {
   }).join('');
 }
 
-function reviewHeaderHtml(bottom) {
+function reviewHeaderHtml() {
   const r = review, n = r.numPlates;
   const nSug = [...r.suggested].filter(k => !r.excl.has(k)).length;
   const {todo} = triageCounts();
   const tab = (v, label) => `<button class="rv-tab${r.view === v ? ' on' : ''}" data-view="${v}">${label}</button>`;
-  if (!bottom) return `<div class="card-label" style="margin-bottom:10px">Review &amp; accept</div>
-    <div class="rv-tabs">${tab('all', `All plates (${n})`)}${tab('todo', `Show only plates that need review (${todo})`)}</div>
-    <div class="pt-strip" id="plateStrip">${plateTilesHtml()}</div>
-    <div style="margin-top:14px">${rowBarHtml(null)}</div>`;
-  return `<button class="btn btn-primary process-btn" data-act="acceptAll" ${r.accepted.size === n ? 'disabled' : ''}>Accept all remaining plates</button>`;
+  return `<div class="card-label" style="margin-bottom:10px">Review &amp; accept</div>
+    <div class="rv-toprow"><div class="rv-tabs">${tab('all', `All plates (${n})`)}${tab('todo', `Show only plates that need review (${todo})`)}</div>${rowBarHtml(null)}</div>
+    <div class="pt-strip" id="plateStrip">${plateTilesHtml()}</div>`;
 }
 
 function reviewListHtml() {
@@ -2889,8 +2889,7 @@ function renderReview() {
   const sec = document.getElementById('chartsSection');
   if (!sec || !review) return;
   sec.innerHTML = `<div id="reviewHeader" class="card">${reviewHeaderHtml()}</div>`
-    + `<div id="reviewList">${reviewListHtml()}</div>`
-    + `<div id="reviewFooter" class="card">${reviewHeaderHtml(true)}</div>`;
+    + `<div id="reviewList">${reviewListHtml()}</div>`;
   sec.style.display = 'block';
   syncReviewLock();
   saveSession();
@@ -2899,9 +2898,8 @@ function renderReview() {
 
 // Header, strip and footer only (counts / tile colours), leaving the plate list untouched.
 function refreshHeaders() {
-  const h = document.getElementById('reviewHeader'), f = document.getElementById('reviewFooter');
+  const h = document.getElementById('reviewHeader');
   if (h) h.innerHTML = reviewHeaderHtml();
-  if (f) f.innerHTML = reviewHeaderHtml(true);
 }
 
 function refreshReview(plate) {
@@ -3007,10 +3005,8 @@ function acceptPlate(p) {
       if (!document.getElementById('plateBlock' + next)) { r.limit = Math.max(r.limit, idx + 2); document.getElementById('reviewList').innerHTML = reviewListHtml(); }
       setCurrent(next, true);
     } else if (accepting && idx >= 0) {
-      // Last plate: on to the download once everything is accepted (the review section has just
-      // collapsed), otherwise to the footer with the accept-all controls.
-      const target = r.accepted.size === r.numPlates ? 'secDownload' : 'reviewFooter';
-      requestAnimationFrame(() => { const t = document.getElementById(target); if (t) t.scrollIntoView({block: 'start', behavior: 'smooth'}); });
+      // Last plate: on to the download once everything is accepted (the review section has just collapsed).
+      if (r.accepted.size === r.numPlates) requestAnimationFrame(() => { const t = document.getElementById('secDownload'); if (t) t.scrollIntoView({block: 'start', behavior: 'smooth'}); });
     }
   }
 }
@@ -3228,9 +3224,6 @@ document.addEventListener('click', e => {
   switch (act.dataset.act) {
     case 'excludeSuggested': setAllExclusions(ex => new Set([...ex, ...review.suggested])); break;
     case 'clearExcl': setAllExclusions(() => new Set()); break;
-    case 'acceptAll':
-      for (let p = 0; p < review.numPlates; p++) review.accepted.add(p);
-      renderReview(); break;
     case 'toggleShowExcl': review.showExcl = !review.showExcl; renderReview(); break;
     case 'more':
       review.limit += FLAG.BATCH;

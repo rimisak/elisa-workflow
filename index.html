@@ -137,18 +137,18 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .ptile.cur{outline:2px solid #1c1c1e;outline-offset:1px}
 .plate-charts-block.current .plate-charts-header{color:#007aff}
 .plate-charts-block.current{box-shadow:-4px 0 0 #007aff;padding-left:8px}
-.flag-banner{border:1px solid #ff9500;background:#fff6e8;border-radius:10px;padding:10px 14px;margin:6px 0 10px}
+.flag-banner{border:1px solid #ff9500;background:#fff6e8;border-radius:10px;padding:8px 14px;margin:10px 0}
 .hook-note{font-size:12px;color:#0050b3;background:#f3f8ff;border:1px dashed #7fb3ff;border-radius:10px;padding:6px 12px;margin:0 0 10px}
 .std-bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:13px;border:1px dashed #ff9500;border-radius:10px;padding:8px 14px;margin:0 0 10px;background:#fffdf8}
 .std-bar.on{border-color:#007aff;background:#f3f8ff}
 .std-bar select{font-size:13px;padding:3px 6px;border-radius:6px;border:1px solid #c7c7cc}
 .flag-banner.ok{border-color:#34c759;background:#eefaf1}
-.flag-head{font-size:17px;font-weight:600;color:#a35c00;line-height:1.35}
+.flag-head{font-size:15px;font-weight:600;color:#a35c00;line-height:1.35}
 .flag-banner.ok .flag-head{color:#1d7a35;font-size:15px}
 .flag-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-.flag-group{margin-top:10px}
-.flag-group .flag-list{margin-top:4px}
-.flag-group .btn{margin-top:6px}
+.flag-cols{display:flex;flex-wrap:wrap;gap:6px 22px;margin-top:4px}
+.flag-group{flex:1 1 200px;min-width:0;margin-top:4px;display:flex;flex-direction:column;align-items:flex-start;gap:4px}
+.flag-group .btn{margin-top:2px}
 .flag-gtitle{display:block;font-size:12px;font-weight:600;color:#6b4300}
 .flag-item{font-size:12px;background:#fff;border:1px solid #ffd199;border-radius:6px;padding:2px 8px;color:#6b4300}
 .flag-item.ok{border-color:#a8e0b5;color:#1d7a35}
@@ -329,7 +329,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.27.2 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.27.3 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -2690,23 +2690,20 @@ function plateBlockHtml(pc) {
   const nEx = plateExclCount(p);
   let banner = '';
   if (fl.count) {
-    // Grouped by problem, in the order to work through them: standard curve, outliers, poor fits.
-    const item = (n, txt) => `<span class="flag-item">${n ? `<b>${escapeXml(n)}</b> ` : ''}${escapeXml(txt)}</span>`;
-    const okItem = txt => `<span class="flag-item ok">${escapeXml(txt)}</span>`;
+    // Three compact columns (standard curve, outliers, poor fits): a status line plus a button that acts directly.
     const ofKind = kinds => [...fl.samples.entries()].map(([n, w]) => [n, w.filter(x => kinds.includes(x.kind))]).filter(([, w]) => w.length);
     const stdBad = fl.notes.filter(t => !/standard outlier/.test(t));
-    const stdItems = stdBad.length ? stdBad.map(t => item('', t)).join('')
-      : okItem(r.meta.universalStd ? 'OK — universal standard curve' : pc.std.borrowed ? `OK — borrowed from plate ${pc.std.from + 1}` : `OK${fl.stdR2 != null ? ` (R² ${fl.stdR2.toFixed(3)})` : ''}`);
-    const outl = ofKind(['outlier']), nOut = outl.reduce((a, [, w]) => a + w[0].n, 0) + fl.stdOpen;
-    const outItems = (fl.stdOpen ? item('Standard', `${fl.stdOpen} suggested outlier${fl.stdOpen > 1 ? 's' : ''}`) : '')
-      + outl.map(([n, w]) => item(n, w[0].text)).join('');
-    const fits = ofKind(['failed', 'r2', 'bound']);
-    const fitItems = fits.map(([n, w]) => item(n, w.map(x => x.text).join(', '))).join('');
-    const group = (i, title, body, extra = '') => `<div class="flag-group"><span class="flag-gtitle">${i}. ${title}</span><div class="flag-list">${body}</div>${extra}</div>`;
+    const stdTxt = stdBad.length ? stdBad.map(escapeXml).join('; ')
+      : escapeXml(r.meta.universalStd ? 'OK — universal standard curve' : pc.std.borrowed ? `OK — borrowed from plate ${pc.std.from + 1}` : `OK${fl.stdR2 != null ? ` (R² ${fl.stdR2.toFixed(3)})` : ''}`);
+    const nOut = ofKind(['outlier']).reduce((a, [, w]) => a + w[0].n, 0) + fl.stdOpen;
+    const nFit = ofKind(['failed', 'r2', 'bound']).length;
+    const group = (i, title, ok, txt, btn = '') => `<div class="flag-group"><span class="flag-gtitle">${i}. ${title}</span><span class="flag-item${ok ? ' ok' : ''}">${txt}</span>${btn}</div>`;
     banner = `<div class="flag-banner"><div class="flag-head">⚠ Plate flagged.</div>
-      ${group(1, 'Standard curve fit', stdItems)}
-      ${group(2, 'Outliers', nOut ? outItems : okItem('None detected'), nOut ? `<button class="btn btn-secondary btn-sm" data-exclplate="${p}">Exclude all ${nOut} outlier${nOut > 1 ? 's' : ''} <kbd class="keycap">X</kbd></button>` : '')}
-      ${group(3, 'Poorly fitted curves', fits.length ? fitItems : okItem('None'), fits.length ? `<button class="btn btn-secondary btn-sm" data-poorfit="${p}">Show only poor fits</button>` : '')}
+      <div class="flag-cols">
+      ${group(1, 'Standard curve fit', !stdBad.length, stdTxt)}
+      ${group(2, 'Outliers', !nOut, nOut ? `${nOut} suggested` : 'None detected', nOut ? `<button class="btn btn-secondary btn-sm" data-exclplate="${p}" title="Exclude all suggested outliers and show only their curves">Exclude all ${nOut} outlier${nOut > 1 ? 's' : ''} <kbd class="keycap">X</kbd></button>` : '')}
+      ${group(3, 'Poorly fitted curves', !nFit, nFit ? `${nFit} curve${nFit > 1 ? 's' : ''}` : 'None', nFit ? `<button class="btn btn-secondary btn-sm" data-poorfit="${p}" title="Show only curves with a failed fit, low R² or a parameter at its fit bound">Show only poor fits</button>` : '')}
+      </div>
       ${focus ? `<div class="focus-note">Graphs show only the ${focusSamples(pc).size} flagged of ${pc.samples.length} samples — “Show all” reveals the rest.</div>` : ''}</div>`;
   } else if (plateResolved(p)) {
     banner = `<div class="flag-banner ok"><div class="flag-head">✓ Resolved — ${nEx} point${nEx > 1 ? 's' : ''} excluded, no issues remain.</div>${focus ? `<div class="focus-note">Graphs still show only the ${focusSamples(pc).size} sample${focusSamples(pc).size > 1 ? "s" : ""} that ${focusSamples(pc).size > 1 ? "were" : "was"} flagged — “Show all” reveals the rest.</div>` : ''}</div>`;
@@ -2735,7 +2732,6 @@ function plateBlockHtml(pc) {
     <div class="plate-charts-header">${escapeXml(plateLabel(p))}
       <div class="accept-row"><button class="btn ${acc ? 'btn-accepted' : 'btn-accept'}" data-accept="${p}">${acc ? '✓ Accepted' : 'Accept plate and show next <kbd class="keycap">A</kbd>'}</button>${acc ? `<button class="btn btn-accept" data-nextplate="${p}">Next plate → <kbd class="keycap">J</kbd></button>` : ''}</div>
     </div>
-    ${banner}
     ${hookNote}
     ${stdBar}
     ${rowBarHtml(p)}
@@ -2745,6 +2741,7 @@ function plateBlockHtml(pc) {
     </div>
     <div class="chart-legend legend-below">${legend}</div>
     ${chips ? `<div class="chip-row">${chips}</div>` : ''}
+    ${banner}
     <div class="res-wrap">${resultsTableHtml(p)}</div>
   </div>`;
 }
@@ -3066,7 +3063,17 @@ document.addEventListener('click', e => {
   const pt = e.target.closest('[data-k]');
   if (pt) { toggleExclusion(pt.dataset.k); return; }
   const xp = e.target.closest('[data-exclplate]');
-  if (xp) { excludeSuggestedInPlate(Number(xp.dataset.exclplate)); return; }
+  if (xp) {
+    const p = Number(xp.dataset.exclplate), pc = review.analysis.plateCharts[p];
+    const out = new Set(pc.samples.filter(s => s.points.some(q => review.suggested.has(q.key) && !review.excl.has(q.key))).map(s => s.name));
+    if (out.size) {
+      review.focusOff.add(p);
+      review.hidden = new Set([...review.hidden].filter(k => !k.startsWith(p + '|')));
+      for (const s of pc.samples) if (!out.has(s.name)) review.hidden.add(p + '|' + s.name);
+    }
+    excludeSuggestedInPlate(p);
+    return;
+  }
   const rb = e.target.closest('[data-row]');
   if (rb) { toggleRowExclusion(Number(rb.dataset.row), rb.dataset.rowplate === '' ? null : Number(rb.dataset.rowplate)); return; }
   const nx = e.target.closest('[data-nextplate]');

@@ -133,7 +133,8 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .btn-accepted{background:#34c759;color:#fff}
 .btn-accepted:hover{background:#2aa84a}
 .rv-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 8px}
-.rv-toprow{display:flex;flex-wrap:wrap;align-items:center;gap:6px 24px}
+.rv-toprow{display:flex;flex-direction:column;gap:2px}
+.rv-label{font-size:12px;color:#636366}
 #reviewHeader>.row-bar{margin:10px 0 0}
 #reviewHeader>.row-bar>span{flex-basis:100%}
 .rv-tab{border:1px solid #d1d1d6;background:#fff;border-radius:999px;padding:4px 12px;font-size:12px;cursor:pointer;color:#3a3a3c}
@@ -363,7 +364,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.30.7 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.30.8 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -2869,7 +2870,7 @@ function reviewHeaderHtml() {
   const nSug = [...r.suggested].filter(k => !r.excl.has(k)).length;
   const {todo} = triageCounts();
   const tab = (v, label) => `<button class="rv-tab${r.view === v ? ' on' : ''}" data-view="${v}">${label}</button>`;
-  return `<div class="rv-toprow"><div class="rv-tabs">${tab('all', `Show all plates (${n})`)}${tab('todo', `Show only plates that need review (${todo})`)}</div></div>
+  return `<div class="rv-toprow"><span class="rv-label">Filter:</span><div class="rv-tabs">${tab('all', `All plates (${n})`)}${tab('todo', `Needs review (${todo})`)}</div></div>
     <div class="pt-strip" id="plateStrip">${plateTilesHtml()}</div>
     ${rowBarHtml(null)}`;
 }

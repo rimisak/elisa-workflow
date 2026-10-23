@@ -363,7 +363,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.30.10 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.30.11 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -2813,8 +2813,7 @@ function plateBlockHtml(pc) {
       ${group(1, 'Standard curve fit', !stdBad.length, stdTxt)}
       ${group(2, 'Outliers', !nOut, nOut ? `${nOut} suggested` : 'None detected', nOut ? `<button class="btn btn-secondary btn-sm" data-exclplate="${p}" title="Exclude all suggested outliers and show only their curves">Exclude ${nOut > 1 ? 'all ' : ''}${nOut} outlier${nOut > 1 ? 's' : ''} <kbd class="keycap">X</kbd></button>` : '')}
       ${group(3, 'Poorly fitted curves', !nFit, nFit ? `${nFit} curve${nFit > 1 ? 's' : ''}` : 'None', nFit ? (onlyPoor ? `<button class="btn btn-secondary btn-sm" data-showall="${p}" title="Show every dilution curve again">Show all</button>` : `<button class="btn btn-secondary btn-sm" data-poorfit="${p}" title="Show only curves with a failed fit, low R² or a parameter at its fit bound">Show only poor fits</button>`) : '')}
-      </div>
-      ${focus ? `<div class="focus-note">Graphs show only the ${focusSamples(pc).size} flagged of ${pc.samples.length} samples — “Show all” reveals the rest.</div>` : ''}</div>`;
+      </div></div>`;
   } else if (plateResolved(p)) {
     banner = `<div class="flag-banner ok"><div class="flag-head">✓ Resolved — ${nEx} point${nEx > 1 ? 's' : ''} excluded, no issues remain.</div>${focus ? `<div class="focus-note">Graphs still show only the ${focusSamples(pc).size} sample${focusSamples(pc).size > 1 ? "s" : ""} that ${focusSamples(pc).size > 1 ? "were" : "was"} flagged — “Show all” reveals the rest.</div>` : ''}</div>`;
   } else if (nEx) {

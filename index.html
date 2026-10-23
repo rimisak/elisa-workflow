@@ -341,7 +341,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.29.7 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.29.8 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -1759,7 +1759,8 @@ function makeProgress() {
       else if (tFit && pct >= FIT0 + 3 && now - tFit >= 1500) {
         const raw = now + (now - tFit) * (100 - pct) / (pct - FIT0);
         finishAt = finishAt ? finishAt + 0.3 * (raw - finishAt) : raw;
-        eta = `≈ ${fmt(Math.max(0, (finishAt - now) / 1000))} left`;
+        const left = (finishAt - now) / 1000;
+        eta = left < 2 ? 'finishing…' : `≈ ${fmt(left)} left`;
       }
       etaEl.textContent = eta;
     },
@@ -3431,7 +3432,7 @@ async function runProcessing(saved) {
     const tFit = performance.now();
     let screened = false;
     if (pool) {
-      // One job per plate does the fits and the outlier screening; progress covers 5–97 %.
+      // One job per plate does the fits and the outlier screening; progress covers 5–95 %.
       // Outlier screening costs far more than a fit, so ticks are weighted by the measured time per step
       // of each phase (equal until both have been seen) instead of counted alike.
       const total = numPlates * FIT_STEPS_PER_PLATE;
@@ -3445,7 +3446,7 @@ async function runProcessing(saved) {
         if (m && m.ph !== 'pad' && m.dt > 0) { sum[ph] += m.dt; cnt[ph]++; }
         const fc1 = fitCost(), sc1 = sugStart();
         const frac = Math.min(1, (n.fit * fc1 + n.screen * sc1) / (total * (fc1 + sc1)));
-        prog.set(5 + 92 * frac, 'Fitting and screening…');
+        prog.set(5 + 90 * frac, 'Fitting and screening…');
         await prog.yieldMaybe();
       });
       if (sug) { review.suggested = sug; screened = true; }
@@ -3461,6 +3462,10 @@ async function runProcessing(saved) {
         await prog.yieldMaybe();
       });
     }
+    // Assembling the results and drawing the charts run on the main thread after the fits; give them their own
+    // slice of the bar (and let it repaint first) so the ETA doesn't sit at "1 s" while they work.
+    prog.set(screened ? 96 : 70, screened ? 'Building results…' : 'Fitting curves…');
+    await new Promise(r => setTimeout(r, 0));
     review.analysis = buildDataSheet(grid, numPlates, meta, fitConfig, msg => log(msg), review.excl, review.cache, review.stdFrom);
 
     log('Looking for outliers...', 'info');
@@ -3477,7 +3482,8 @@ async function runProcessing(saved) {
     log(`  Fitting and screening took ${((performance.now() - tFit) / 1000).toFixed(1)} s.`);
     log(`  ${review.suggested.size} suggested outlier(s).`);
 
-    prog.set(99, 'Preparing the review…');
+    prog.set(99, 'Drawing the review…');
+    await new Promise(r => setTimeout(r, 0));
 
     renderReview();
     prog.set(100, 'Done');

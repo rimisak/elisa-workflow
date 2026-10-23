@@ -162,11 +162,19 @@ body.rv-lock>*:not(#secReview){display:none!important}
 body.rv-lock #secReview{flex:1;min-height:0;display:flex;flex-direction:column;margin-bottom:0}
 body.rv-lock #secReview .sec-head{flex:none}
 body.rv-lock #secReview .sec-body{flex:1;min-height:0;display:flex;flex-direction:column;margin-top:10px}
-body.rv-lock #chartsSection{flex:1;min-height:0;display:grid!important;grid-template-columns:minmax(0,1fr) 340px;grid-template-rows:auto 1fr;gap:0 14px}
-body.rv-lock #reviewHeader{grid-column:2;grid-row:1;overflow-y:auto;max-height:100%}
-body.rv-lock #reviewActions{grid-column:2;grid-row:2;align-self:end;margin-bottom:10px;display:flex;flex-direction:column;gap:10px}
-body.rv-lock #reviewActions .process-btn{padding:18px 12px;font-size:18px}
-body.rv-lock #reviewActions .process-btn .keycap{font-size:12px}
+body.rv-lock #chartsSection{flex:1;min-height:0;display:grid!important;grid-template-columns:minmax(0,1fr) 48px 340px;grid-template-rows:auto 1fr;gap:0 14px}
+body.rv-lock #reviewHeader{grid-column:3;grid-row:1;overflow-y:auto;max-height:100%}
+/* Accept / next: a narrow strip beside the plate box that widens over it on hover. */
+body.rv-lock #reviewActions{grid-column:2;grid-row:1/3;position:relative;margin-bottom:10px}
+#reviewActions .ra-inner{position:absolute;right:0;top:0;bottom:0;width:48px;display:flex;flex-direction:column;gap:10px;z-index:7;transition:width .18s ease}
+#reviewActions:hover .ra-inner,#reviewActions:focus-within .ra-inner{width:300px}
+#reviewActions .ra-btn{flex:1;display:flex;align-items:center;justify-content:flex-end;gap:12px;padding:0 14px;border-radius:10px;border:none;overflow:hidden;white-space:nowrap;font-size:16px;font-weight:600;color:#fff;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.18)}
+#reviewActions .ra-btn.go{background:#007aff}.ra-btn.go:hover{background:#0062cc}
+#reviewActions .ra-btn.done{background:#34c759}
+#reviewActions .ra-lbl{opacity:0;transition:opacity .12s}
+#reviewActions:hover .ra-lbl,#reviewActions:focus-within .ra-lbl{opacity:1}
+#reviewActions .ra-ico{font-size:22px;line-height:1;flex:none;width:20px;text-align:center}
+#reviewActions .keycap{font-size:12px}
 body.rv-lock #reviewHeader{flex:none;padding:12px 16px;margin-bottom:10px}
 body.rv-lock #reviewList{grid-column:1;grid-row:1/3;min-height:0;position:relative;margin-bottom:10px}
 body.rv-lock #reviewList>.plate-charts-block{margin-bottom:0}
@@ -371,7 +379,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.30.16 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.30.17 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -2903,8 +2911,11 @@ function acceptBarHtml() {
   const r = review, p = r && r.cur;
   if (p == null || !r.analysis.plateCharts[p]) return '';
   const acc = r.accepted.has(p);
-  return `<button class="btn process-btn ${acc ? 'btn-accepted' : 'btn-primary'}" data-accept="${p}">${acc ? '✓ Accepted' : 'Accept plate and show next <kbd class="keycap">A</kbd>'}</button>`
-    + (acc ? `<button class="btn btn-primary process-btn" data-nextplate="${p}">Next plate → <kbd class="keycap">J</kbd></button>` : '');
+  const btn = (cls, attr, lbl, ico, tip) => `<button class="ra-btn ${cls}" ${attr} title="${tip}"><span class="ra-lbl">${lbl}</span><span class="ra-ico">${ico}</span></button>`;
+  return '<div class="ra-inner">'
+    + btn(acc ? 'done' : 'go', `data-accept="${p}"`, acc ? 'Accepted' : 'Accept plate and show next <kbd class="keycap">A</kbd>', '✓', acc ? 'Accepted (click to undo)' : 'Accept plate and show next (A)')
+    + (acc ? btn('go', `data-nextplate="${p}"`, 'Next plate <kbd class="keycap">J</kbd>', '→', 'Next plate (J)') : '')
+    + '</div>';
 }
 
 // Shows the "Scroll for more" pill while the current plate has content below the visible part.

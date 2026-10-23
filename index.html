@@ -328,7 +328,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.26.3 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.27.0 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -2186,7 +2186,7 @@ function buildProtocolSheet(meta, plateFits, plateCharts, fit) {
     const from = plateCharts[i].std.from;
     const used = plateCharts[i].std.points.filter(q => !q.excluded).length;
     data.push([
-      {v: from != null ? `Plate ${i+1} (standard borrowed from plate ${from+1})` : `Plate ${i+1}`, t:'s', s:lblS},
+      {v: from != null ? `${plateLabel(i)} (standard borrowed from ${plateLabel(from)})` : plateLabel(i), t:'s', s:lblS},
       {v:r4(bottom), t:'n'}, {v:r4(top), t:'n'}, {v:r4(ic50), t:'n'}, {v:r4(hill), t:'n'},
       from != null ? {v:`plate ${from+1}`, t:'s'} : {v: used, t:'n'}
     ]);
@@ -2199,7 +2199,7 @@ function buildProtocolSheet(meta, plateFits, plateCharts, fit) {
   plateCharts.forEach((pc, i) => {
     for (const smp of pc.samples) {
       const used = smp.points.filter(q => !q.excluded).length;
-      const head = [{v:`Plate ${i+1}`, t:'s', s:lblS}, {v:smp.name, t:'s'}];
+      const head = [{v:plateLabel(i), t:'s', s:lblS}, {v:smp.name, t:'s'}];
       if (smp.params) {
         const [bottom, top, ic50, hill] = smp.params;
         data.push([...head, {v:r4(bottom), t:'n'}, {v:r4(top), t:'n'}, {v:r4(ic50), t:'n'}, {v:r4(hill), t:'n'}, {v:used, t:'n'}]);
@@ -2217,7 +2217,7 @@ function buildProtocolSheet(meta, plateFits, plateCharts, fit) {
     data.push([{v:'Where the concentrated dilutions were flat and below a peak just before the fall, those points were raised to the peak for fitting only. Their raw values are in italic blue on the Processed Data sheet.', t:'s', s:{font:{sz:9}}}]);
     if (hookRows.length) {
       data.push(['Plate','Sample','Points raised','Plateau OD used'].map(v=>({v,t:'s',s:boldS})));
-      for (const [pl, nm, n, plat] of hookRows) data.push([{v:`Plate ${pl}`, t:'s', s:lblS}, {v:nm, t:'s'}, {v:n, t:'n'}, {v:r4(plat), t:'n'}]);
+      for (const [pl, nm, n, plat] of hookRows) data.push([{v:plateLabel(pl - 1), t:'s', s:lblS}, {v:nm, t:'s'}, {v:n, t:'n'}, {v:r4(plat), t:'n'}]);
     } else data.push([{v:'No series needed it.', t:'s'}]);
   }
 
@@ -2721,7 +2721,7 @@ function plateBlockHtml(pc) {
   let stdBar = '';
   if (pc.std.from != null || fl.noStd) {
     const donors = standardDonors(p);
-    const opts = donors.map(d => `<option value="${d.p}"${pc.std.from === d.p ? ' selected' : ''}>Plate ${d.p + 1}${d.r2 != null ? ` (standard R² ${d.r2.toFixed(3)})` : ''}</option>`).join('');
+    const opts = donors.map(d => `<option value="${d.p}"${pc.std.from === d.p ? ' selected' : ''}>${escapeXml(plateLabel(d.p))}${d.r2 != null ? ` (standard R² ${d.r2.toFixed(3)})` : ''}</option>`).join('');
     stdBar = `<div class="std-bar${pc.std.from != null ? ' on' : ''}">
       ${pc.std.from != null
         ? `<b>Standard curve borrowed from plate ${pc.std.from + 1}.</b> Concentrations on this plate are interpolated on that curve.`
@@ -2731,7 +2731,7 @@ function plateBlockHtml(pc) {
     </div>`;
   }
   return `<div class="plate-charts-block${r.cur === p ? ' current' : ''}" id="plateBlock${p}" data-plate="${p}">
-    <div class="plate-charts-header">Plate ${p + 1}
+    <div class="plate-charts-header">${escapeXml(plateLabel(p))}
       <div class="accept-row"><button class="btn ${acc ? 'btn-accepted' : 'btn-accept'}" data-accept="${p}">${acc ? '✓ Accepted' : 'Accept plate and show next <kbd class="keycap">A</kbd>'}</button>${acc ? `<button class="btn btn-accept" data-nextplate="${p}">Next plate → <kbd class="keycap">J</kbd></button>` : ''}</div>
     </div>
     ${banner}
@@ -2754,7 +2754,7 @@ function plateTilesHtml() {
     const f = plateFlags(r.analysis.plateCharts[p]), ex = plateExclCount(p);
     const res = !r.accepted.has(p) && plateResolved(p);
     const cls = r.accepted.has(p) ? 'acc' : f.count ? 'flag' : res ? 'res' : ex ? 'edit' : 'acc';
-    const tip = `Plate ${p + 1}` + (r.accepted.has(p) ? ' — accepted' : f.count ? ' — ' + f.reasons.slice(0, 4).join('; ') : res ? ' — resolved by exclusion' : ex ? ' — edited' : ' — clean');
+    const tip = plateLabel(p) + (r.accepted.has(p) ? ' — accepted' : f.count ? ' — ' + f.reasons.slice(0, 4).join('; ') : res ? ' — resolved by exclusion' : ex ? ' — edited' : ' — clean');
     return `<button class="ptile ${cls}${r.cur === p ? ' cur' : ''}" data-goto="${p}" title="${escapeXml(tip)}">${p + 1}${r.accepted.has(p) ? '✓' : ''}</button>`;
   }).join('');
 }
@@ -3134,6 +3134,13 @@ function plateIdValue(grid, p, n) {
     if (m) return m[1].trim();
   }
   return '';
+}
+
+// "Plate 3: ID1, ID2, ID3" — plate number plus whichever of the ID1-3 fields the plate carries.
+function plateLabel(p) {
+  const g = review && review.grid;
+  const ids = g ? [1, 2, 3].map(n => plateIdValue(g, p, n)).filter(Boolean) : [];
+  return `Plate ${p + 1}` + (ids.length ? ': ' + ids.join(', ') : '');
 }
 
 // One row per sample column: ID1-3, sample name, ED50 and interpolated concentration.

@@ -328,7 +328,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.26.2 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.26.3 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -2767,7 +2767,7 @@ function reviewHeaderHtml(bottom) {
   if (!bottom) return `<div class="card-label" style="margin-bottom:10px">Review &amp; accept</div>
     <div class="rv-tabs">${tab('all', `All plates (${n})`)}${tab('todo', `Show only plates that need review (${todo})`)}</div>
     <div class="pt-strip" id="plateStrip">${plateTilesHtml()}</div>
-    ${rowBarHtml(null)}
+    ${rowBarHtml(null)}`;
   return `<button class="btn btn-primary process-btn" data-act="acceptAll" ${r.accepted.size === n ? 'disabled' : ''}>Accept all remaining plates</button>`;
 }
 

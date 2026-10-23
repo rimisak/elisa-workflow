@@ -360,7 +360,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.30.1 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.30.2 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -2867,8 +2867,7 @@ function reviewHeaderHtml() {
   const nSug = [...r.suggested].filter(k => !r.excl.has(k)).length;
   const {todo} = triageCounts();
   const tab = (v, label) => `<button class="rv-tab${r.view === v ? ' on' : ''}" data-view="${v}">${label}</button>`;
-  return `<div class="card-label" style="margin-bottom:10px">Review &amp; accept</div>
-    <div class="rv-toprow"><div class="rv-tabs">${tab('all', `All plates (${n})`)}${tab('todo', `Show only plates that need review (${todo})`)}</div>${rowBarHtml(null)}</div>
+  return `<div class="rv-toprow"><div class="rv-tabs">${tab('all', `All plates (${n})`)}${tab('todo', `Show only plates that need review (${todo})`)}</div>${rowBarHtml(null)}</div>
     <div class="pt-strip" id="plateStrip">${plateTilesHtml()}</div>`;
 }
 

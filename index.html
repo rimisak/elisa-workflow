@@ -166,15 +166,19 @@ body.rv-lock #chartsSection{flex:1;min-height:0;display:grid!important;grid-temp
 body.rv-lock #reviewHeader{grid-column:3;grid-row:1;overflow-y:auto;max-height:100%}
 /* Accept / next: a narrow strip beside the plate box that widens over it on hover. */
 body.rv-lock #reviewActions{grid-column:2;grid-row:1/3;position:relative;margin-bottom:10px}
-#reviewActions .ra-inner{position:absolute;right:0;top:0;bottom:0;width:48px;display:flex;flex-direction:column;gap:10px;z-index:7;interpolate-size:allow-keywords;transition:width .18s ease}
-#reviewActions:hover .ra-inner,#reviewActions:focus-within .ra-inner{width:max-content}
-#reviewActions .ra-btn{flex:1;display:flex;align-items:center;justify-content:flex-end;gap:12px;padding:0 14px;border-radius:10px;border:none;overflow:hidden;white-space:nowrap;font-size:16px;font-weight:600;color:#fff;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.18)}
-#reviewActions .ra-btn.go{background:#007aff}.ra-btn.go:hover{background:#0062cc}
-#reviewActions .ra-btn.done{background:#34c759}
-#reviewActions .ra-lbl{opacity:0;transition:opacity .12s}
-#reviewActions:hover .ra-lbl,#reviewActions:focus-within .ra-lbl{opacity:1}
-#reviewActions .ra-ico{font-size:22px;line-height:1;flex:none;width:20px;text-align:center}
-#reviewActions .keycap{font-size:12px}
+body.rv-lock #reviewBack{grid-column:1;grid-row:1/3;position:relative;margin-bottom:10px;width:48px;z-index:7}
+#reviewBack .ra-inner{right:auto;left:0}
+#reviewBack .ra-btn{justify-content:flex-start}
+#reviewBack:empty{display:none}
+.ra-wrap .ra-inner{position:absolute;right:0;top:0;bottom:0;width:48px;display:flex;flex-direction:column;gap:10px;z-index:7;interpolate-size:allow-keywords;transition:width .18s ease}
+.ra-wrap:hover .ra-inner,.ra-wrap:focus-within .ra-inner{width:max-content}
+.ra-wrap .ra-btn{flex:1;display:flex;align-items:center;justify-content:flex-end;gap:12px;padding:0 14px;border-radius:10px;border:none;overflow:hidden;white-space:nowrap;font-size:16px;font-weight:600;color:#fff;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.18)}
+.ra-wrap .ra-btn.go{background:#007aff}.ra-btn.go:hover{background:#0062cc}
+.ra-wrap .ra-btn.done{background:#34c759}
+.ra-wrap .ra-lbl{opacity:0;transition:opacity .12s}
+.ra-wrap:hover .ra-lbl,.ra-wrap:focus-within .ra-lbl{opacity:1}
+.ra-wrap .ra-ico{font-size:22px;line-height:1;flex:none;width:20px;text-align:center}
+.ra-wrap .keycap{font-size:12px}
 body.rv-lock #reviewHeader{flex:none;padding:12px 16px;margin-bottom:10px}
 body.rv-lock #reviewList{grid-column:1;grid-row:1/3;min-height:0;position:relative;margin-bottom:10px}
 body.rv-lock #reviewList>.plate-charts-block{margin-bottom:0}
@@ -379,7 +383,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.30.18 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.30.19 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -2907,6 +2911,19 @@ function reviewListHtml() {
 }
 
 // Accept / next buttons for the plate being reviewed; they live beside the plate box, outside its scroll area.
+// Back strip: previous plate in the current filter (empty on the first one).
+function backBarHtml() {
+  const r = review, p = r && r.cur, list = visiblePlates(), i = list.indexOf(p);
+  if (p == null || i <= 0) return '';
+  return `<div class="ra-inner"><button class="ra-btn go" data-prevplate="${p}" title="Previous plate (K)"><span class="ra-ico">←</span><span class="ra-lbl">Previous plate <kbd class="keycap">K</kbd></span></button></div>`;
+}
+
+function refreshActions() {
+  const a = document.getElementById('reviewActions'), b = document.getElementById('reviewBack');
+  if (a) a.innerHTML = acceptBarHtml();
+  if (b) b.innerHTML = backBarHtml();
+}
+
 function acceptBarHtml() {
   const r = review, p = r && r.cur;
   if (p == null || !r.analysis.plateCharts[p]) return '';
@@ -2946,7 +2963,8 @@ function renderReview() {
   if (!sec || !review) return;
   sec.innerHTML = `<div id="reviewHeader" class="card">${reviewHeaderHtml()}</div>`
     + `<div id="reviewList">${reviewListHtml()}</div>`
-    + `<div id="reviewActions">${acceptBarHtml()}</div>`
+    + `<div id="reviewBack" class="ra-wrap">${backBarHtml()}</div>`
+    + `<div id="reviewActions" class="ra-wrap">${acceptBarHtml()}</div>`
     + `<div id="scrollHint">↓ Scroll for more</div>`;
   sec.style.display = 'block';
   syncReviewLock();
@@ -2959,8 +2977,7 @@ function renderReview() {
 function refreshHeaders() {
   const h = document.getElementById('reviewHeader');
   if (h) h.innerHTML = reviewHeaderHtml();
-  const a = document.getElementById('reviewActions');
-  if (a) a.innerHTML = acceptBarHtml();
+  refreshActions();
 }
 
 function refreshReview(plate) {
@@ -2992,8 +3009,7 @@ function setCurrent(p, scroll) {
     document.getElementById('reviewList').innerHTML = reviewListHtml();
   }
   r.cur = p;
-  const actions = document.getElementById('reviewActions');
-  if (actions) actions.innerHTML = acceptBarHtml();
+  refreshActions();
   document.querySelectorAll('.plate-charts-block.current').forEach(e => e.classList.remove('current'));
   const el = document.getElementById('plateBlock' + p);
   if (el) { el.classList.add('current'); if (scroll) el.scrollIntoView({block: 'center', behavior: 'smooth'}); }
@@ -3268,6 +3284,12 @@ document.addEventListener('click', e => {
   }
   const rb = e.target.closest('[data-row]');
   if (rb) { toggleRowExclusion(Number(rb.dataset.row), rb.dataset.rowplate === '' ? null : Number(rb.dataset.rowplate)); return; }
+  const pv = e.target.closest('[data-prevplate]');
+  if (pv) {
+    const list = visiblePlates(), i = list.indexOf(Number(pv.dataset.prevplate));
+    if (i > 0) setCurrent(list[i - 1], true);
+    return;
+  }
   const nx = e.target.closest('[data-nextplate]');
   if (nx) {
     const list = visiblePlates(), i = list.indexOf(Number(nx.dataset.nextplate));

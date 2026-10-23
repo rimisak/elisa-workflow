@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Working rules for every change
 
-- **Update the footer on every change.** The page footer in `index.html` (`.page-footer`, near the end of the markup) reads `Kasimir Reich · v<version> · <DD/MM/YYYY>`. Set the date to today's date and bump the version in the same edit. Version scheme: `MAJOR.MINOR.PATCH` — patch for fixes and tweaks, minor for new features, major for breaking changes to the workflow or output layout. Current: v1.29.0.
+- **Update the footer on every change.** The page footer in `index.html` (`.page-footer`, near the end of the markup) reads `Kasimir Reich · v<version> · <DD/MM/YYYY>`. Set the date to today's date and bump the version in the same edit. Version scheme: `MAJOR.MINOR.PATCH` — patch for fixes and tweaks, minor for new features, major for breaking changes to the workflow or output layout. Current: v1.29.1.
 - **Commit after each edit.** When a change is finished, commit it straight away (small, focused commits; message explains the why). Don't let edits pile up uncommitted.
 
 ## What this is
@@ -44,7 +44,7 @@ Four collapsible sections (`.sec`): **1 Upload** (CSV + metadata), **2 Processin
 
 ## Progress bar
 
-Processing shows a progress bar with percentage and an ETA (pace so far). Fitting is written as generators (`ec50Gen`, `plateEntryGen`) that yield after every series: `buildDataSheet` drains them synchronously (`drain`), while `runProcessing` first fills the per-plate cache through `warmCache`, awaiting a tick per series (`makeProgress().yieldMaybe()` repaints every ~30 ms). `computeSuggestions` ticks per series too. Bands: 5–70 % fitting, 70–97 % outlier screening. A cancelled run (New analysis) throws `CANCELLED` from a tick.
+Processing shows a progress bar with percentage and an ETA (pace so far). Fitting is written as generators (`ec50Gen`, `plateEntryGen`) that yield after every series: `buildDataSheet` drains them synchronously (`drain`), while `runProcessing` first fills the per-plate cache through `warmCache`, awaiting a tick per series (`makeProgress().yieldMaybe()` repaints every ~30 ms). `computeSuggestions` ticks per series too. Bands: 5–70 % fitting, 70–97 % outlier screening. The bar displays an eased value (`ease`, p^1.6) that glides toward its target each animation frame, so it starts slow and finishes briskly; the ETA uses the real pace. A cancelled run (New analysis) throws `CANCELLED` from a tick.
 
 ## Parallel fitting (Web Workers)
 

@@ -33,7 +33,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .toolbar-title{display:flex;align-items:center;gap:10px}
 .app-icon{width:40px;height:40px;flex-shrink:0;line-height:0}
 .progress-track{height:10px;background:#e5e5ea;border-radius:999px;overflow:hidden}
-.progress-fill{height:100%;width:0;background:linear-gradient(90deg,#007aff,#5ac8fa);border-radius:999px;transition:width .12s linear}
+.progress-fill{height:100%;width:0;background:linear-gradient(90deg,#007aff,#5ac8fa);border-radius:999px;}
 .progress-meta{display:flex;justify-content:space-between;gap:12px;margin-top:6px;font-size:12px;color:#6e6e73}
 .sec{margin-bottom:14px}
 .sec-head{display:flex;align-items:center;gap:10px;background:#fff;border-radius:14px;padding:14px 20px;box-shadow:0 1px 3px rgba(0,0,0,.08);cursor:pointer;user-select:none}
@@ -339,7 +339,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.29.0 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.29.1 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -1721,12 +1721,30 @@ function makeProgress() {
   wrap.style.display = 'block';
   fill.style.width = '0%'; pctEl.textContent = '0%'; lblEl.textContent = ''; etaEl.textContent = 'estimating…';
   const fmt = sec => sec < 90 ? `${Math.max(1, Math.round(sec))} s` : `${Math.floor(sec / 60)} min ${Math.round(sec % 60)} s`;
+  // The bar shows an eased value (slow start, brisk finish) that glides toward its target each frame,
+  // so it feels like it speeds up; the ETA still uses the real pace.
+  const ease = p => 100 * Math.pow(p / 100, 1.6);
+  let target = 0, shown = 0, last = t0, raf = 0, stopped = false;
+  const paint = () => {
+    fill.style.width = shown.toFixed(1) + '%';
+    pctEl.textContent = Math.floor(shown) + '%';
+  };
+  const frame = now => {
+    raf = 0;
+    if (stopped) return;
+    const dt = Math.min(0.1, (now - last) / 1000); last = now;
+    // Glide: close ~12 %/frame of the gap, but never slower than 4 %/s; when the work is done, finish fast.
+    const gap = target - shown;
+    shown = Math.min(target, shown + Math.max(gap * (1 - Math.exp(-dt * (target >= 100 ? 14 : 7))), Math.min(gap, 4 * dt)));
+    paint();
+    if (target - shown > 0.05) raf = requestAnimationFrame(frame); else { shown = target; paint(); }
+  };
   return {
     set(pct, label) {
       pct = Math.max(0, Math.min(100, pct));
       const el = (performance.now() - t0) / 1000;
-      fill.style.width = pct.toFixed(1) + '%';
-      pctEl.textContent = pct.toFixed(1) + '%';
+      target = Math.max(target, ease(pct));
+      if (!raf) { last = performance.now(); raf = requestAnimationFrame(frame); }
       if (label) lblEl.textContent = label;
       etaEl.textContent = pct >= 100 ? `done in ${fmt(el)}`
         : (pct >= 3 && el >= 1.5) ? `≈ ${fmt(el * (100 - pct) / pct)} left` : 'estimating…';
@@ -3411,7 +3429,7 @@ async function runProcessing(saved) {
         if (m && m.ph !== 'pad' && m.dt > 0) { sum[ph] += m.dt; cnt[ph]++; }
         const fc1 = fitCost(), sc1 = sugStart();
         const frac = Math.min(1, (n.fit * fc1 + n.screen * sc1) / (total * (fc1 + sc1)));
-        prog.set(5 + 92 * frac, `Fitting and screening… ${Math.min(100, Math.round(100 * frac))} %`);
+        prog.set(5 + 92 * frac, 'Fitting and screening…');
         await prog.yieldMaybe();
       });
       if (sug) { review.suggested = sug; screened = true; }

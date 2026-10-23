@@ -116,7 +116,9 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .res-table tbody th{background:#eef2ff;text-align:left;font-weight:600}
 .page-footer{text-align:center;font-size:11px;color:#aeaeb2;padding:12px 0 4px;letter-spacing:.2px}
 /* Per-plate charts */
-.plate-charts-block{margin-bottom:18px}
+.plate-charts-block{margin-bottom:18px;padding:10px 12px;border-radius:10px}
+.plate-charts-block.is-acc{background:#e6f7ea}
+.plate-charts-block.is-flag{background:#fff8d6}
 .plate-charts-header{font-size:15px;font-weight:600;color:#1c1c1e;margin:6px 0 4px}
 .plate-charts-row{display:flex;gap:14px;flex-wrap:wrap}
 .chart-card{background:#fff;border-radius:14px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.08);flex:1;min-width:360px}
@@ -142,7 +144,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .ptile.acc{background:#dff6e5;border-color:#34c759;color:#1d7a35}
 .ptile.cur{outline:2px solid #1c1c1e;outline-offset:1px}
 .plate-charts-block.current .plate-charts-header{color:#007aff}
-.plate-charts-block.current{box-shadow:-4px 0 0 #007aff;padding-left:8px}
+.plate-charts-block.current{box-shadow:-4px 0 0 #007aff}
 .flag-banner{border:1px solid #ff9500;background:#fff6e8;border-radius:10px;padding:6px 12px;margin:8px 0}
 .hook-note{font-size:12px;color:#0050b3;background:#f3f8ff;border:1px dashed #7fb3ff;border-radius:10px;padding:6px 12px;margin:0 0 10px}
 .std-bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:13px;border:1px dashed #ff9500;border-radius:10px;padding:8px 14px;margin:0 0 10px;background:#fffdf8}
@@ -339,7 +341,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.29.1 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.29.2 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -2793,7 +2795,7 @@ function plateBlockHtml(pc) {
       ${pc.std.from != null ? `<button class="btn btn-secondary btn-sm" data-stdown="${p}">Use this plate's own standard</button>` : ''}
     </div>`;
   }
-  return `<div class="plate-charts-block${r.cur === p ? ' current' : ''}" id="plateBlock${p}" data-plate="${p}">
+  return `<div class="plate-charts-block${r.cur === p ? ' current' : ''}${acc ? ' is-acc' : fl.count ? ' is-flag' : ''}" id="plateBlock${p}" data-plate="${p}">
     <div class="plate-charts-header">${escapeXml(plateLabel(p))}
       <div class="accept-row"><button class="btn ${acc ? 'btn-accepted' : 'btn-accept'}" data-accept="${p}">${acc ? '✓ Accepted' : 'Accept plate and show next <kbd class="keycap">A</kbd>'}</button>${acc ? `<button class="btn btn-accept" data-nextplate="${p}">Next plate → <kbd class="keycap">J</kbd></button>` : ''}</div>
     </div>

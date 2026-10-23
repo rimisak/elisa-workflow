@@ -147,7 +147,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .ptile.res{background:#eefaf1;border:1px dashed #34c759;color:#1d7a35}
 .ptile.acc{background:#dff6e5;border-color:#34c759;color:#1d7a35}
 .ptile.cur{outline:2px solid #1c1c1e;outline-offset:1px}
-.ptile.pend{background:repeating-linear-gradient(135deg,#f2f2f7 0 6px,#e5e5ea 6px 12px);color:#aeaeb2;cursor:default}
+.ptile.pend{background:#e5e5ea;border-color:#d1d1d6;color:#aeaeb2;cursor:default}
 .rv-fitting{display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:7px 10px;border-radius:7px;background:#e4f0ff;color:#0050b3;font-size:12px}
 .rv-fitting .spin{flex:none;width:12px;height:12px;border-radius:50%;border:2px solid #007aff;border-top-color:transparent;animation:rvspin .8s linear infinite}
 @keyframes rvspin{to{transform:rotate(360deg)}}
@@ -339,7 +339,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
 
 <!-- Process -->
 <div class="card">
-  <button class="btn btn-primary process-btn" id="processBtn" onclick="runProcessing()" disabled>Process</button>
+  <button class="btn btn-primary process-btn" id="processBtn" onclick="runProcessing()" disabled>Process and start review</button>
   <div class="status-row" id="statusRow">
     <span id="statusText">Load CSV files and a metadata file to begin.</span>
   </div>
@@ -2928,7 +2928,7 @@ function reviewHeaderHtml() {
 function reviewListHtml() {
   const r = review, list = visiblePlates();
   if (!list.length) {
-    return `<div class="card rv-empty">${r.view === 'todo'
+    return `<div class="card rv-empty">${r.fitting ? 'Waiting for the first plate to finish fitting…' : r.view === 'todo'
       ? 'Nothing left to review.'
       : 'No plates in this view.'}</div>`;
   }
@@ -3578,6 +3578,14 @@ async function runProcessing(saved) {
               accepted: new Set(saved && saved.accepted || []), analysis: null, cache: new Map(),
               files, view: 'all', cur: null, limit: FLAG.BATCH, focusOff: new Set(), flagCache: null, stdFrom: saved && saved.stdFrom || {},
               ready: new Set(), fitting: false, shown: false};
+    // Open the review right away: every plate is a grey tile until its fit is done.
+    review.fitting = true;
+    review.analysis = {plateCharts: Array(numPlates).fill(null), ec50Rows: [], conRows: [], plateFits: []};
+    review.shown = true;
+    renderReview();
+    setSection('secProcessing', false);
+    setSection('secReview', true);
+    await new Promise(r => setTimeout(r, 0));
     pool = numPlates >= 2 ? createFitPool(grid, meta, fitConfig, numPlates) : null;
     log(pool ? `  Fitting in parallel on ${pool.size} worker(s).` : '  Fitting on the main thread.');
     const tFit = performance.now();
@@ -3602,10 +3610,9 @@ async function runProcessing(saved) {
       if (gen !== runGen) return;
       sug.forEach(k => review.suggested.add(k));
       if (!(review.stdFrom && review.stdFrom[p] != null)) review.ready.add(p);
-      if (!uiTimer) uiTimer = setTimeout(showReady, review.shown ? 600 : 0);
+      if (!uiTimer) uiTimer = setTimeout(showReady, document.querySelector('#reviewList .plate-charts-block') ? 600 : 0);
     };
     if (pool) {
-      review.fitting = true;
       // One job per plate does the fits and the outlier screening; progress covers 5–95 %.
       // Outlier screening costs far more than a fit, so ticks are weighted by the measured time per step
       // of each phase (equal until both have been seen) instead of counted alike.
@@ -3684,7 +3691,7 @@ async function runProcessing(saved) {
 
   if (pool) pool.close();
   btn.disabled = false;
-  btn.textContent = 'Process';
+  btn.textContent = 'Process and start review';
   updateProcessBtn();
 }
 restoreFiles();

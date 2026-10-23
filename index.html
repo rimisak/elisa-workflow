@@ -332,7 +332,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.26.0 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.26.1 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -2787,7 +2787,7 @@ function reviewListHtml() {
   if (r.cur == null || !list.includes(r.cur)) r.cur = list[0];
   const shown = list.slice(0, Math.max(r.limit, list.indexOf(r.cur) + 1));
   return shown.map(p => plateBlockHtml(r.analysis.plateCharts[p])).join('')
-    + (shown.length < list.length ? `<div class="card rv-empty"><button class="btn btn-secondary btn-sm" data-act="more">Show ${Math.min(FLAG.BATCH, list.length - shown.length)} more (${list.length - shown.length} not shown)</button></div>` : '');
+    + (shown.length < list.length ? `<div class="card rv-empty"><button class="btn btn-secondary process-btn" data-act="more">Show ${Math.min(FLAG.BATCH, list.length - shown.length)} more (${list.length - shown.length} not shown)</button></div>` : '');
 }
 
 function renderReview() {

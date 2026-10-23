@@ -80,6 +80,12 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .text-input{padding:8px 12px;border-radius:8px;border:1px solid #c7c7cc;font-size:14px;flex:1;outline:none;transition:border .15s}
 .text-input:focus{border-color:#007aff}
 .process-btn{width:100%;padding:12px;font-size:16px;font-weight:600;border-radius:10px}
+.log-row{display:flex;gap:12px;align-items:stretch;margin-top:12px}
+.run-info{flex:0 0 240px;background:var(--card,#f5f5f7);border:1px solid rgba(128,128,128,.25);border-radius:10px;padding:14px 16px;font-size:12px;line-height:1.6}
+.run-info h4{margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.04em;opacity:.65}
+.run-info div+h4{margin-top:10px}
+.log-row .log-box{flex:1;min-width:0}
+@media(max-width:640px){.log-row{flex-direction:column}.run-info{flex:none}}
 .log-box{background:#1c1c1e;border-radius:10px;padding:14px 16px;min-height:120px;max-height:280px;overflow-y:auto;font-family:'SF Mono',Menlo,Monaco,monospace;font-size:12px;line-height:1.6}
 .log-line{color:#d1d1d6;white-space:pre-wrap;word-break:break-word}
 .log-line.success{color:#30d158}
@@ -291,7 +297,10 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
     <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
     <div class="progress-meta"><span id="progressLabel"></span><span><b id="progressPct">0%</b> · <span id="progressEta"></span></span></div>
   </div>
-  <div class="log-box" id="logBox" style="margin-top:12px;display:none"></div>
+  <div class="log-row" id="logRow" style="display:none">
+    <div class="run-info" id="runInfo"></div>
+    <div class="log-box" id="logBox"></div>
+  </div>
 </div>
 
 
@@ -330,7 +339,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.28.0 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.29.0 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -713,7 +722,7 @@ function newAnalysis() {
   const sec = document.getElementById('chartsSection');
   sec.style.display = 'none'; sec.innerHTML = '';
   const box = document.getElementById('logBox');
-  box.innerHTML = ''; box.style.display = 'none';
+  box.innerHTML = ''; document.getElementById('logRow').style.display = 'none';
   document.getElementById('progressWrap').style.display = 'none';
   document.getElementById('progressFill').style.width = '0%';
   document.getElementById('progressPct').textContent = '0%';
@@ -729,7 +738,7 @@ function newAnalysis() {
 function clearLog() {
   const box = document.getElementById('logBox');
   box.innerHTML = '';
-  box.style.display = 'block';
+  document.getElementById('logRow').style.display = 'flex';
 }
 function log(msg, cls='') {
   const box = document.getElementById('logBox');
@@ -3354,6 +3363,10 @@ async function runProcessing(saved) {
     log(`  Standard: ${meta.stdStart} ng/mL, 1:${meta.stdDil} dilution.`);
     log(`  Samples: 1:${meta.sampleStart} start, 1:${meta.sampleDil} dilution.`);
     fitConfig = meta.fit;
+    document.getElementById('runInfo').innerHTML =
+      `<h4>Standard</h4><div>${meta.stdStart} ng/mL, 1:${meta.stdDil} dilution</div>` +
+      `<h4>Samples</h4><div>1:${meta.sampleStart} start, 1:${meta.sampleDil} dilution</div>` +
+      `<h4>Curve-fit settings</h4><div>${meta.fitSource}</div>`;
     log(`  Curve-fit settings: ${meta.fitSource}.`);
     for (const w of meta.fitWarnings) log(`  Settings: ${w}`, 'warn');
     if (meta.universalStd) log('  Universal standard curve from the Settings sheet is used for all plates.');

@@ -328,7 +328,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.27.6 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.27.7 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -2736,6 +2736,7 @@ function plateBlockHtml(pc) {
     <div class="plate-charts-header">${escapeXml(plateLabel(p))}
       <div class="accept-row"><button class="btn ${acc ? 'btn-accepted' : 'btn-accept'}" data-accept="${p}">${acc ? '✓ Accepted' : 'Accept plate and show next <kbd class="keycap">A</kbd>'}</button>${acc ? `<button class="btn btn-accept" data-nextplate="${p}">Next plate → <kbd class="keycap">J</kbd></button>` : ''}</div>
     </div>
+    ${banner}
     ${hookNote}
     ${stdBar}
     ${rowBarHtml(p)}
@@ -2745,7 +2746,6 @@ function plateBlockHtml(pc) {
     </div>
     <div class="chart-legend legend-below">${legend}</div>
     ${chips ? `<div class="chip-row">${chips}</div>` : ''}
-    ${banner}
     <div class="res-wrap">${resultsTableHtml(p)}</div>
   </div>`;
 }

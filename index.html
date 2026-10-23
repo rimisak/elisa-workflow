@@ -155,24 +155,25 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .plate-charts-block::-webkit-scrollbar-thumb{background:#8e8e93;border-radius:6px;border:2px solid transparent;background-clip:content-box}
 .plate-charts-block::-webkit-scrollbar-thumb:hover{background:#636366;background-clip:content-box}
 #scrollHint{display:none;cursor:pointer;z-index:6;background:#1c1c1e;color:#fff;font-size:12px;font-weight:600;padding:6px 14px;border-radius:999px;box-shadow:0 2px 10px rgba(0,0,0,.3);opacity:.9}
-body.rv-lock #scrollHint.show{display:block;grid-column:1;grid-row:1/3;align-self:end;justify-self:center;margin-bottom:22px}
+body.rv-lock #scrollHint.show{display:block;grid-column:2;grid-row:1/3;align-self:end;justify-self:center;margin-bottom:22px}
 /* Review mode: the page itself does not scroll; the open Review section fills the window and shows one plate at a time. */
 body.rv-lock{height:100vh;overflow:hidden;display:flex;flex-direction:column;padding:8px 24px 12px}
 body.rv-lock>*:not(#secReview){display:none!important}
 body.rv-lock #secReview{flex:1;min-height:0;display:flex;flex-direction:column;margin-bottom:0}
 body.rv-lock #secReview .sec-head{flex:none}
 body.rv-lock #secReview .sec-body{flex:1;min-height:0;display:flex;flex-direction:column;margin-top:10px}
-body.rv-lock #chartsSection{flex:1;min-height:0;display:grid!important;grid-template-columns:minmax(0,1fr) 48px 340px;grid-template-rows:auto 1fr;gap:0 14px}
-body.rv-lock #reviewHeader{grid-column:3;grid-row:1;overflow-y:auto;max-height:100%}
+body.rv-lock #chartsSection{flex:1;min-height:0;display:grid!important;grid-template-columns:auto minmax(0,1fr) auto 340px;grid-template-rows:auto 1fr;gap:0 14px}
+body.rv-lock #reviewHeader{grid-column:4;grid-row:1;overflow-y:auto;max-height:100%}
 /* Accept / next: a narrow strip beside the plate box that widens over it on hover. */
-body.rv-lock #reviewActions{grid-column:2;grid-row:1/3;position:relative;margin-bottom:10px}
-body.rv-lock #reviewBack{grid-column:1;grid-row:1/3;position:relative;margin-bottom:10px;width:48px;z-index:7}
-#reviewBack .ra-inner{right:auto;left:0}
+body.rv-lock #reviewActions{grid-column:3}
+body.rv-lock #reviewBack{grid-column:1}
 #reviewBack .ra-btn{justify-content:flex-start}
 #reviewBack:empty{display:none}
 .ra-btn.off,.ra-btn.off:hover{background:#c7c7cc;cursor:default;box-shadow:none}
-.ra-wrap .ra-inner{position:absolute;right:0;top:0;bottom:0;width:48px;display:flex;flex-direction:column;gap:10px;z-index:7;interpolate-size:allow-keywords;transition:width .18s ease}
-.ra-wrap:hover .ra-inner,.ra-wrap:focus-within .ra-inner{width:max-content}
+/* The strips are real grid columns: widening one narrows the plate box beside it. */
+body.rv-lock .ra-wrap{grid-row:1/3;margin-bottom:10px;width:48px;overflow:hidden;interpolate-size:allow-keywords;transition:width .18s ease}
+body.rv-lock .ra-wrap:hover,body.rv-lock .ra-wrap:focus-within{width:max-content}
+.ra-wrap .ra-inner{height:100%;display:flex;flex-direction:column;gap:10px}
 .ra-wrap .ra-btn{flex:1;display:flex;align-items:center;justify-content:flex-end;gap:12px;padding:0 14px;border-radius:10px;border:none;overflow:hidden;white-space:nowrap;font-size:16px;font-weight:600;color:#fff;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.18)}
 .ra-wrap .ra-btn.go{background:#007aff}.ra-btn.go:hover{background:#0062cc}
 .ra-wrap .ra-btn.done{background:#34c759}
@@ -181,7 +182,7 @@ body.rv-lock #reviewBack{grid-column:1;grid-row:1/3;position:relative;margin-bot
 .ra-wrap .ra-ico{font-size:22px;line-height:1;flex:none;width:20px;text-align:center}
 .ra-wrap .keycap{font-size:12px}
 body.rv-lock #reviewHeader{flex:none;padding:12px 16px;margin-bottom:10px}
-body.rv-lock #reviewList{grid-column:1;grid-row:1/3;min-height:0;position:relative;margin-bottom:10px}
+body.rv-lock #reviewList{grid-column:2;grid-row:1/3;min-height:0;position:relative;margin-bottom:10px}
 body.rv-lock #reviewList>.plate-charts-block{margin-bottom:0}
 body.rv-lock #reviewList>.plate-charts-block:not(.current){display:none}
 body.rv-lock #reviewList>.plate-charts-block.current{height:100%;max-height:none}
@@ -384,7 +385,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.30.20 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.30.21 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';

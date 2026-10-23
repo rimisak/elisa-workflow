@@ -58,8 +58,8 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .drop-zone-icon{font-size:28px;opacity:.5}
 .drop-zone-text{font-size:14px;color:#6e6e73}
 .drop-zone-sub{font-size:12px;color:#aeaeb2}
-.file-list{margin-top:8px;text-align:left;width:100%}
-.file-item{font-size:12px;color:#3a3a3c;padding:2px 0;display:flex;align-items:center;gap:4px}
+.file-list{margin-top:8px;text-align:left;width:100%;display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));column-gap:20px}
+.file-item{font-size:12px;color:#3a3a3c;padding:2px 0;display:flex;align-items:center;gap:4px;min-width:0;overflow-wrap:anywhere}
 .file-item::before{content:"📄";font-size:11px}
 .meta-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .meta-drop-zone{flex:1;min-width:200px}
@@ -389,7 +389,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.32.8 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.32.9 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';

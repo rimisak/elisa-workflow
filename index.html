@@ -171,6 +171,8 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .chip-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
 .chip{border:1px solid;border-radius:999px;padding:3px 10px;font-size:12px;cursor:pointer;background:#fff}
 .chip-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:baseline}
+.chip-sec{margin-bottom:6px}.chip-sec-title{display:block;font-size:12px;font-weight:600;color:#636366;margin-bottom:4px}
+.chip.poor{border-color:#c7c7cc;color:#1c1c1e}
 .chip.suggested{border-color:#ff9500;color:#a35c00;background:#fff6e8}
 .chip.excluded{border-color:#8e8e93;color:#636366;background:#f2f2f7;text-decoration:line-through}
 .pt:hover circle:last-child{fill:rgba(0,0,0,.08)}
@@ -328,7 +330,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.27.8 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.28.0 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -2698,17 +2700,28 @@ function plateBlockHtml(pc) {
     <button class="btn btn-secondary btn-sm" data-act="toggleShowExcl" title="Applies to all graphs">${review.showExcl ? 'Hide' : 'Show'} excluded points</button></span>`;
   if (!legend) legend = '<span class="legend-item" style="color:#aeaeb2">No sample curves for this plate</span>';
 
-  // Chips directly under the legend: every excluded or suggested point, labelled by dilution step.
-  // The dot carries the sample colour; the tooltip has the details.
-  let chips = '';
-  const allPts = [...pc.samples.map((s, i) => [s.name, s.points, sampleColor(i), 'Dilution']),
-                  ['Standard', pc.std.points, '#1c1c1e', 'Conc.']];
-  for (const [name, pts, col, word] of allPts) for (const q of pts) {
+  // Three sections under the legend: poorly fitted curves, suggested outliers, already excluded points.
+  // Clicking an entry shows only that sample's curve (excluded entries also reveal the excluded points).
+  // Standard-curve points have no sample curve, so their chips still toggle the exclusion.
+  const poor = poorNames(pc);
+  const sections = [[], [], []];
+  const only = (name, extra) => `data-only="${p}|${escapeXml(name)}"${extra || ''}`;
+  pc.samples.forEach((s, i) => {
+    const col = sampleColor(i);
+    if (poor.has(s.name)) sections[0].push(`<button class="chip poor" ${only(s.name)} title="Show only ${escapeXml(s.name)}"><span class="chip-dot" style="background:${col}"></span>${escapeXml(s.name)}</button>`);
+    for (const q of s.points) {
+      if (!q.excluded && !q.suggested) continue;
+      const ex = q.excluded;
+      sections[ex ? 2 : 1].push(`<button class="chip ${ex ? 'excluded' : 'suggested'}" ${only(s.name, ex ? ' data-showexcl="1"' : '')} title="${escapeXml(`${s.name} · ${'ABCDEFGH'[q.i]} · OD ${q.y.toFixed(3)} — click to show only this curve`)}"><span class="chip-dot" style="background:${col}"></span>${escapeXml(s.name)} · Dilution ${Math.round(q.x * 100) / 100}</button>`);
+    }
+  });
+  for (const q of pc.std.points) {
     if (!q.excluded && !q.suggested) continue;
-    const cls = q.excluded ? 'excluded' : 'suggested';
-    const tip = `${name} · ${'ABCDEFGH'[q.i]} · OD ${q.y.toFixed(3)} — click to ${q.excluded ? 'restore' : 'exclude'}`;
-    chips += `<button class="chip ${cls}" data-k="${q.key}" title="${escapeXml(tip)}"><span class="chip-dot" style="background:${col}"></span>${word} ${Math.round(q.x * 100) / 100}</button>`;
+    const ex = q.excluded;
+    sections[ex ? 2 : 1].push(`<button class="chip ${ex ? 'excluded' : 'suggested'}" data-k="${q.key}" title="${escapeXml(`Standard · ${'ABCDEFGH'[q.i]} · OD ${q.y.toFixed(3)} — click to ${ex ? 'restore' : 'exclude'}`)}"><span class="chip-dot" style="background:#1c1c1e"></span>Standard · Conc. ${Math.round(q.x * 100) / 100}</button>`);
   }
+  const chips = ['Poorly fit curves', 'Suggested outliers', 'Already excluded points'].map((t, i) =>
+    `<div class="chip-sec"><span class="chip-sec-title">${i + 1}. ${t}</span><div class="chip-row">${sections[i].join('') || '<span class="focus-note">None</span>'}</div></div>`).join('');
   const acc = r.accepted.has(p);
   const nEx = plateExclCount(p);
   let banner = '';
@@ -2766,7 +2779,7 @@ function plateBlockHtml(pc) {
       <div class="chart-card"><div class="chart-title">Standard curve &amp; interpolation${pc.std.from != null ? ` (plate ${pc.std.from + 1}'s standard)` : ''}</div>${renderStandardChart(pc)}</div>
     </div>
     <div class="chart-legend legend-below">${legend}</div>
-    ${chips ? `<div class="chip-row">${chips}</div>` : ''}
+    <div class="chip-secs">${chips}</div>
     <div class="res-wrap">${resultsTableHtml(p)}</div>
   </div>`;
 }
@@ -3082,6 +3095,17 @@ document.addEventListener('click', e => {
     const p = Number(ha.dataset.hideall);
     review.focusOff.add(p);
     for (const s of review.analysis.plateCharts[p].samples) review.hidden.add(p + '|' + s.name);
+    refreshReview(p);
+    return;
+  }
+  const on = e.target.closest('[data-only]');
+  if (on) {
+    const [ps, ...rest] = on.dataset.only.split('|'), p = Number(ps), name = rest.join('|');
+    const pc = review.analysis.plateCharts[p];
+    review.focusOff.add(p);
+    review.hidden = new Set([...review.hidden].filter(k => !k.startsWith(p + '|')));
+    for (const s of pc.samples) if (s.name !== name) review.hidden.add(p + '|' + s.name);
+    if (on.dataset.showexcl && !review.showExcl) { review.showExcl = true; saveSession(); renderReview(); return; }
     refreshReview(p);
     return;
   }

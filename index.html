@@ -364,7 +364,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.30.8 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.30.9 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -2764,10 +2764,14 @@ function plateBlockHtml(pc) {
   });
   const nHid = pc.samples.filter(s => isHidden(pc, s)).length;
   const fl = plateFlags(pc), focus = focusActive(pc);
+  const poorSet = poorNames(pc);
+  const onlyPoor = poorSet.size > 0 && pc.samples.every(s => poorSet.has(s.name) === !isHidden(pc, s)) && poorSet.size < pc.samples.length;
   if (pc.samples.length) legend += `<span class="legend-all">
     <button class="btn btn-secondary btn-sm" data-showall="${p}" ${nHid ? '' : 'disabled'}>Show all dilution curves</button>
     <button class="btn btn-secondary btn-sm" data-hideall="${p}" ${nHid === pc.samples.length ? 'disabled' : ''}>Hide all dilution curves</button>
-    <button class="btn btn-secondary btn-sm" data-poorfit="${p}" ${poorNames(pc).size ? '' : 'disabled'} title="Show only curves with a failed fit, low R² or a parameter at its fit bound">Show only poor fits</button>
+    ${onlyPoor
+      ? `<button class="btn btn-secondary btn-sm" data-showall="${p}" title="Show every dilution curve again">Show all</button>`
+      : `<button class="btn btn-secondary btn-sm" data-poorfit="${p}" ${poorSet.size ? '' : 'disabled'} title="Show only curves with a failed fit, low R² or a parameter at its fit bound">Show only poor fits</button>`}
     <button class="btn btn-secondary btn-sm" data-act="toggleShowExcl" title="Applies to all graphs">${review.showExcl ? 'Hide' : 'Show'} excluded points</button></span>`;
   if (!legend) legend = '<span class="legend-item" style="color:#aeaeb2">No sample curves for this plate</span>';
 

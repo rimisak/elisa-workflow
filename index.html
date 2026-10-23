@@ -166,8 +166,8 @@ body.rv-lock #chartsSection{flex:1;min-height:0;display:grid!important;grid-temp
 body.rv-lock #reviewHeader{grid-column:3;grid-row:1;overflow-y:auto;max-height:100%}
 /* Accept / next: a narrow strip beside the plate box that widens over it on hover. */
 body.rv-lock #reviewActions{grid-column:2;grid-row:1/3;position:relative;margin-bottom:10px}
-#reviewActions .ra-inner{position:absolute;right:0;top:0;bottom:0;width:48px;display:flex;flex-direction:column;gap:10px;z-index:7;transition:width .18s ease}
-#reviewActions:hover .ra-inner,#reviewActions:focus-within .ra-inner{width:300px}
+#reviewActions .ra-inner{position:absolute;right:0;top:0;bottom:0;width:48px;display:flex;flex-direction:column;gap:10px;z-index:7;interpolate-size:allow-keywords;transition:width .18s ease}
+#reviewActions:hover .ra-inner,#reviewActions:focus-within .ra-inner{width:max-content}
 #reviewActions .ra-btn{flex:1;display:flex;align-items:center;justify-content:flex-end;gap:12px;padding:0 14px;border-radius:10px;border:none;overflow:hidden;white-space:nowrap;font-size:16px;font-weight:600;color:#fff;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.18)}
 #reviewActions .ra-btn.go{background:#007aff}.ra-btn.go:hover{background:#0062cc}
 #reviewActions .ra-btn.done{background:#34c759}
@@ -379,7 +379,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.30.17 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.30.18 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';

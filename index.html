@@ -329,7 +329,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.27.1 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.27.2 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -3295,9 +3295,18 @@ async function runProcessing(saved) {
     log('Fitting curves and calculating results...', 'info');
     prog.set(5, 'Fitting curves…');
     await new Promise(r => setTimeout(r, 10));
+    // A saved session is mapped onto these plates first, so its exclusions and borrowed standards are
+    // already part of the first fit instead of triggering a second refit afterwards.
+    if (saved) {
+      saved = remapSession(saved, files);
+      if (saved.lost != null) {
+        log(`Carrying over the previous review: ${saved.kept} unchanged plate(s)${saved.lost ? `, ${saved.lost} changed or removed (their edits are dropped)` : ''}.`, 'info');
+      }
+    }
     review = {grid, numPlates, meta, outputName,
-              excl: new Set(), suggested: new Set(), hidden: new Set(), accepted: new Set(), analysis: null, cache: new Map(),
-              files, view: 'all', cur: null, limit: FLAG.BATCH, focusOff: new Set(), flagCache: null, stdFrom: {}};
+              excl: new Set(saved && saved.excl || []), suggested: new Set(), hidden: new Set(saved && saved.hidden || []),
+              accepted: new Set(saved && saved.accepted || []), analysis: null, cache: new Map(),
+              files, view: 'all', cur: null, limit: FLAG.BATCH, focusOff: new Set(), flagCache: null, stdFrom: saved && saved.stdFrom || {}};
     pool = numPlates >= 2 ? createFitPool(grid, meta, fitConfig, numPlates) : null;
     log(pool ? `  Fitting in parallel on ${pool.size} worker(s).` : '  Fitting on the main thread.');
     const tFit = performance.now();
@@ -3325,7 +3334,7 @@ async function runProcessing(saved) {
         await prog.yieldMaybe();
       });
     }
-    review.analysis = buildDataSheet(grid, numPlates, meta, fitConfig, msg => log(msg), review.excl, review.cache);
+    review.analysis = buildDataSheet(grid, numPlates, meta, fitConfig, msg => log(msg), review.excl, review.cache, review.stdFrom);
 
     log('Looking for outliers...', 'info');
     if (!screened) {
@@ -3341,22 +3350,6 @@ async function runProcessing(saved) {
     log(`  Fitting and screening took ${((performance.now() - tFit) / 1000).toFixed(1)} s.`);
     log(`  ${review.suggested.size} suggested outlier(s).`);
 
-    if (saved) {
-      saved = remapSession(saved, files);
-      if (saved.lost != null) {
-        log(`Carrying over the previous review: ${saved.kept} unchanged plate(s)${saved.lost ? `, ${saved.lost} changed or removed (their edits are dropped)` : ''}.`, 'info');
-      }
-      review.excl = new Set(saved.excl || []);
-      review.accepted = new Set(saved.accepted || []);
-      review.hidden = new Set(saved.hidden || []);
-      review.stdFrom = saved.stdFrom || {};
-      if (review.excl.size || Object.keys(review.stdFrom).length) {
-        log('Restoring previous session...', 'info');
-        prog.set(97, 'Restoring previous session…');
-        await new Promise(r => setTimeout(r, 0));
-        await reanalyzeAsync();
-      }
-    }
     prog.set(99, 'Preparing the review…');
 
     renderReview();

@@ -168,18 +168,21 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .plate-charts-block::-webkit-scrollbar-thumb{background:#8e8e93;border-radius:6px;border:2px solid transparent;background-clip:content-box}
 .plate-charts-block::-webkit-scrollbar-thumb:hover{background:#636366;background-clip:content-box}
 #scrollHint{display:none;cursor:pointer;z-index:6;background:#1c1c1e;color:#fff;font-size:12px;font-weight:600;padding:6px 14px;border-radius:999px;box-shadow:0 2px 10px rgba(0,0,0,.3);opacity:.9}
-body.rv-lock #scrollHint.show{display:block;grid-column:1;grid-row:1/3;align-self:end;justify-self:center;margin-bottom:22px}
+body.rv-lock #scrollHint.show{display:block;grid-column:1;grid-row:1/4;align-self:end;justify-self:center;margin-bottom:22px}
 /* Review mode: the page itself does not scroll; the open Review section fills the window and shows one plate at a time. */
 body.rv-lock{height:100vh;overflow:hidden;display:flex;flex-direction:column;padding:8px 24px 12px}
 body.rv-lock>*:not(#secReview){display:none!important}
 body.rv-lock #secReview{flex:1;min-height:0;display:flex;flex-direction:column;margin-bottom:0}
 body.rv-lock #secReview .sec-head{flex:none}
 body.rv-lock #secReview .sec-body{flex:1;min-height:0;display:flex;flex-direction:column;margin-top:10px}
-body.rv-lock #chartsSection{flex:1;min-height:0;display:grid!important;grid-template-columns:minmax(0,1fr) 340px;grid-template-rows:auto 1fr;gap:0 14px}
-body.rv-lock #reviewHeader{grid-column:2;grid-row:1;overflow-y:auto;max-height:100%}
+body.rv-lock #chartsSection{flex:1;min-height:0;display:grid!important;grid-template-columns:minmax(0,1fr) 340px;grid-template-rows:auto auto 1fr;gap:0 14px}
+body.rv-lock #reviewRunInfo{grid-column:2;grid-row:1;margin-bottom:14px}
+body.rv-lock #reviewRunInfo:empty{display:none}
+#reviewRunInfo{background:#fff;border:none;box-shadow:0 1px 3px rgba(0,0,0,.08);flex:none}
+body.rv-lock #reviewHeader{grid-column:2;grid-row:2;overflow-y:auto;max-height:100%}
 /* Accept / next: a narrow strip beside the plate box that widens over it on hover. */
 /* Back / accept / next stack at the bottom of the right-hand column, beside the plate box. */
-body.rv-lock #reviewActions{grid-column:2;grid-row:2;align-self:end;margin-bottom:10px;display:flex;flex-direction:column;gap:10px}
+body.rv-lock #reviewActions{grid-column:2;grid-row:3;align-self:end;margin-bottom:10px;display:flex;flex-direction:column;gap:10px}
 #reviewActions .process-btn{padding:18px 12px;font-size:18px}
 #reviewActions .process-btn .keycap{font-size:12px}
 #reviewActions .ra-row{display:flex;gap:10px}
@@ -188,7 +191,7 @@ body.rv-lock #reviewActions{grid-column:2;grid-row:2;align-self:end;margin-botto
 #reviewActions .btn-back:hover{background:#d1d1d6}
 #reviewActions .btn-back:disabled{background:#c7c7cc;color:#f2f2f7;cursor:default}
 body.rv-lock #reviewHeader{flex:none;padding:12px 16px;margin-bottom:10px}
-body.rv-lock #reviewList{grid-column:1;grid-row:1/3;min-height:0;position:relative;margin-bottom:10px}
+body.rv-lock #reviewList{grid-column:1;grid-row:1/4;min-height:0;position:relative;margin-bottom:10px}
 body.rv-lock #reviewList>.plate-charts-block{margin-bottom:0}
 body.rv-lock #reviewList>.plate-charts-block:not(.current){display:none}
 body.rv-lock #reviewList>.plate-charts-block.current{height:100%;max-height:none}
@@ -350,7 +353,6 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
     <div class="progress-meta"><span id="progressLabel"></span><span><b id="progressPct">0%</b> · <span id="progressEta"></span></span></div>
   </div>
   <div class="log-row" id="logRow" style="display:none">
-    <div class="run-info" id="runInfo"></div>
     <div class="log-box" id="logBox"></div>
   </div>
 </div>
@@ -391,7 +393,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.32.4 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.32.5 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -3001,10 +3003,14 @@ function observeReviewList() {
   requestAnimationFrame(updateScrollHint);
 }
 
+// Run parameters shown above the review header (filled in by runProcessing).
+let runInfoHtml = '';
+
 function renderReview(animate) {
   const sec = document.getElementById('chartsSection');
   if (!sec || !review) return;
-  sec.innerHTML = `<div id="reviewHeader" class="card">${reviewHeaderHtml()}</div>`
+  sec.innerHTML = `<div id="reviewRunInfo" class="run-info">${runInfoHtml}</div>`
+    + `<div id="reviewHeader" class="card">${reviewHeaderHtml()}</div>`
     + `<div id="reviewList">${reviewListHtml()}</div>`
     + `<div id="reviewActions">${acceptBarHtml()}</div>`
     + `<div id="scrollHint">↓ Scroll for more</div>`;
@@ -3543,10 +3549,12 @@ async function runProcessing(saved) {
     log(`  Standard: ${meta.stdStart} ng/mL, 1:${meta.stdDil} dilution.`);
     log(`  Samples: 1:${meta.sampleStart} start, 1:${meta.sampleDil} dilution.`);
     fitConfig = meta.fit;
-    document.getElementById('runInfo').innerHTML =
+    runInfoHtml =
       `<h4>Standard</h4><div>${meta.stdStart} ng/mL, 1:${meta.stdDil} dilution</div>` +
       `<h4>Samples</h4><div>1:${meta.sampleStart} start, 1:${meta.sampleDil} dilution</div>` +
       `<h4>Curve-fit settings</h4><div>${meta.fitSource}</div>`;
+    const ri = document.getElementById('reviewRunInfo');
+    if (ri) ri.innerHTML = runInfoHtml;
     log(`  Curve-fit settings: ${meta.fitSource}.`);
     for (const w of meta.fitWarnings) log(`  Settings: ${w}`, 'warn');
     if (meta.universalStd) log('  Universal standard curve from the Settings sheet is used for all plates.');

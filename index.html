@@ -329,7 +329,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.27.3 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.27.4 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -2712,6 +2712,8 @@ function plateBlockHtml(pc) {
   } else {
     banner = `<div class="flag-banner ok"><div class="flag-head">✓ Clean — no issues found.</div></div>`;
   }
+  if (r.undo && r.undo.p === p && r.undo.keys.some(k => r.excl.has(k)))
+    banner = banner.replace(/<\/div>$/, `<button class="btn btn-secondary btn-sm" data-undoexcl="${p}" style="margin-top:6px">↶ Undo excluding outliers</button></div>`);
   const hooked = pc.samples.filter(q => q.hook);
   const hookNote = hooked.length
     ? `<div class="hook-note">↗ <b>Saturation hunch corrected in ${hooked.length} sample${hooked.length > 1 ? 's' : ''}</b> (${hooked.slice(0, 8).map(q => escapeXml(q.name) + ' · ' + q.hook.n + ' pt' + (q.hook.n > 1 ? 's' : '') + ' → OD ' + q.hook.plateau.toFixed(2)).join(', ')}${hooked.length > 8 ? ` and ${hooked.length - 8} more` : ''}). Dashed rings on the graph show where the fit treated those points; exclude the peak point to undo it for one sample.</div>`
@@ -3062,10 +3064,26 @@ document.addEventListener('click', e => {
   }
   const pt = e.target.closest('[data-k]');
   if (pt) { toggleExclusion(pt.dataset.k); return; }
+  const ux = e.target.closest('[data-undoexcl]');
+  if (ux) {
+    const u = review.undo, p = Number(ux.dataset.undoexcl);
+    if (!u || u.p !== p) return;
+    u.keys.forEach(k => review.excl.delete(k));
+    review.hidden = new Set(u.hidden);
+    if (!u.focusOff) review.focusOff.delete(p);
+    review.undo = null;
+    review.accepted.delete(p);
+    review.out = null; review.prepFailed = false; review.blobTok = (review.blobTok || 0) + 1;
+    reanalyze();
+    refreshReview(p);
+    return;
+  }
   const xp = e.target.closest('[data-exclplate]');
   if (xp) {
     const p = Number(xp.dataset.exclplate), pc = review.analysis.plateCharts[p];
     const out = new Set(pc.samples.filter(s => s.points.some(q => review.suggested.has(q.key) && !review.excl.has(q.key))).map(s => s.name));
+    review.undo = {p, keys: [...review.suggested].filter(k => k.startsWith(p + '|') && !review.excl.has(k)),
+      hidden: new Set(review.hidden), focusOff: review.focusOff.has(p)};
     if (out.size) {
       review.focusOff.add(p);
       review.hidden = new Set([...review.hidden].filter(k => !k.startsWith(p + '|')));

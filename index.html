@@ -121,7 +121,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .plate-charts-block.is-flag{background:#fff0d6}
 .plate-charts-header{font-size:15px;font-weight:600;color:#1c1c1e;margin:6px 0 4px}
 .plate-charts-row{display:flex;gap:14px;flex-wrap:wrap}
-.chart-card{background:#fff;border-radius:14px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.08);flex:1;min-width:360px}
+.chart-card{position:relative;background:#fff;border-radius:14px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.08);flex:1;min-width:360px}
 .chart-title{font-size:13px;font-weight:600;color:#3a3a3c;margin-bottom:8px}
 .chart-legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin-bottom:8px}
 .chart-legend.legend-below{margin:10px 0 8px}
@@ -182,6 +182,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
 .flag-item{font-size:12px;background:#fff;border:1px solid #ffd199;border-radius:6px;padding:2px 8px;color:#6b4300}
 .flag-item.ok{border-color:#a8e0b5;color:#1d7a35}
 .flag-banner .focus-note{margin:8px 0 0}
+.chart-note{position:absolute;top:10px;right:14px;font-size:11px;color:#8e8e93}
 .focus-note{font-size:12px;color:#8e8e93;margin:2px 0 6px}
 .rv-empty{padding:18px;text-align:center;color:#636366;font-size:13px}
 #reviewBusy{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#1c1c1e;color:#fff;border-radius:999px;padding:8px 18px;font-size:13px;z-index:50;display:none;box-shadow:0 4px 16px rgba(0,0,0,.25)}
@@ -363,7 +364,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.30.11 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.30.12 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -2847,7 +2848,7 @@ function plateBlockHtml(pc) {
     ${stdBar}
     ${rowBarHtml(p)}
     <div class="plate-charts-row">
-      <div class="chart-card"><div class="chart-title">Sample dose–response &amp; ED50</div>${renderSampleChart(pc)}</div>
+      <div class="chart-card"><div class="chart-title">Sample dose–response &amp; ED50</div>${nHid && nHid < pc.samples.length ? `<span class="chart-note">Showing ${pc.samples.length - nHid} of ${pc.samples.length} curves</span>` : ''}${renderSampleChart(pc)}</div>
       <div class="chart-card"><div class="chart-title">Standard curve &amp; interpolation${pc.std.from != null ? ` (plate ${pc.std.from + 1}'s standard)` : ''}</div>${renderStandardChart(pc)}</div>
     </div>
     <div class="chart-legend legend-below">${legend}</div>

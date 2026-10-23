@@ -137,7 +137,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .ptile.cur{outline:2px solid #1c1c1e;outline-offset:1px}
 .plate-charts-block.current .plate-charts-header{color:#007aff}
 .plate-charts-block.current{box-shadow:-4px 0 0 #007aff;padding-left:8px}
-.flag-banner{border:1px solid #ff9500;background:#fff6e8;border-radius:10px;padding:8px 14px;margin:10px 0}
+.flag-banner{border:1px solid #ff9500;background:#fff6e8;border-radius:10px;padding:6px 12px;margin:8px 0}
 .hook-note{font-size:12px;color:#0050b3;background:#f3f8ff;border:1px dashed #7fb3ff;border-radius:10px;padding:6px 12px;margin:0 0 10px}
 .std-bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:13px;border:1px dashed #ff9500;border-radius:10px;padding:8px 14px;margin:0 0 10px;background:#fffdf8}
 .std-bar.on{border-color:#007aff;background:#f3f8ff}
@@ -146,9 +146,8 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .flag-head{font-size:15px;font-weight:600;color:#a35c00;line-height:1.35}
 .flag-banner.ok .flag-head{color:#1d7a35;font-size:15px}
 .flag-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-.flag-cols{display:flex;flex-wrap:wrap;gap:6px 22px;margin-top:4px}
-.flag-group{flex:1 1 200px;min-width:0;margin-top:4px;display:flex;flex-direction:column;align-items:flex-start;gap:4px}
-.flag-group .btn{margin-top:2px}
+.flag-cols{display:flex;flex-wrap:wrap;gap:4px 18px;margin-top:2px}
+.flag-group{flex:1 1 150px;min-width:0;margin-top:2px;display:flex;flex-direction:column;align-items:flex-start;gap:4px}
 .flag-gtitle{display:block;font-size:12px;font-weight:600;color:#6b4300}
 .flag-item{font-size:12px;background:#fff;border:1px solid #ffd199;border-radius:6px;padding:2px 8px;color:#6b4300}
 .flag-item.ok{border-color:#a8e0b5;color:#1d7a35}
@@ -329,7 +328,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.27.4 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.27.5 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -2697,7 +2696,7 @@ function plateBlockHtml(pc) {
       : escapeXml(r.meta.universalStd ? 'OK — universal standard curve' : pc.std.borrowed ? `OK — borrowed from plate ${pc.std.from + 1}` : `OK${fl.stdR2 != null ? ` (R² ${fl.stdR2.toFixed(3)})` : ''}`);
     const nOut = ofKind(['outlier']).reduce((a, [, w]) => a + w[0].n, 0) + fl.stdOpen;
     const nFit = ofKind(['failed', 'r2', 'bound']).length;
-    const group = (i, title, ok, txt, btn = '') => `<div class="flag-group"><span class="flag-gtitle">${i}. ${title}</span><span class="flag-item${ok ? ' ok' : ''}">${txt}</span>${btn}</div>`;
+    const group = (i, title, ok, txt, btn = '') => `<div class="flag-group"><span class="flag-gtitle">${i}. ${title}</span>${btn || `<span class="flag-item${ok ? ' ok' : ''}">${txt}</span>`}</div>`;
     banner = `<div class="flag-banner"><div class="flag-head">⚠ Plate flagged.</div>
       <div class="flag-cols">
       ${group(1, 'Standard curve fit', !stdBad.length, stdTxt)}

@@ -147,6 +147,10 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .ptile.res{background:#eefaf1;border:1px dashed #34c759;color:#1d7a35}
 .ptile.acc{background:#dff6e5;border-color:#34c759;color:#1d7a35}
 .ptile.cur{outline:2px solid #1c1c1e;outline-offset:1px}
+.ptile.pend{background:repeating-linear-gradient(135deg,#f2f2f7 0 6px,#e5e5ea 6px 12px);color:#aeaeb2;cursor:default}
+.rv-fitting{display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:7px 10px;border-radius:7px;background:#e4f0ff;color:#0050b3;font-size:12px}
+.rv-fitting .spin{flex:none;width:12px;height:12px;border-radius:50%;border:2px solid #007aff;border-top-color:transparent;animation:rvspin .8s linear infinite}
+@keyframes rvspin{to{transform:rotate(360deg)}}
 .plate-charts-block.current .plate-charts-header{color:#007aff}
 .plate-charts-block.current{border-color:#007aff}
 /* Always-visible scrollbar and a "more below" hint, so it is clear the plate box scrolls. */
@@ -385,7 +389,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.30.21 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.31.0 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -419,7 +423,7 @@ function updateSections() {
     hint.textContent = 'Accept all plates in the review step to enable the download.';
     return;
   }
-  const n = r.numPlates, acc = r.accepted.size, all = acc === n;
+  const n = r.numPlates, acc = r.accepted.size, all = acc === n && !r.fitting;
   setBadge('badgeReview', all ? '✓ All plates accepted' : `${acc}/${n} plates accepted`, all ? 'done' : 'busy');
   if (!all) {
     r.dlOpened = false;
@@ -1855,6 +1859,7 @@ function fitWorkerSource() {
                plateEntryGen, suggestOutliers, applyHookCorrection];
   return `const OUTLIER = ${JSON.stringify(OUTLIER)};
 const HOOK = ${JSON.stringify(HOOK)};
+const STD_CON_FLOOR = ${STD_CON_FLOOR};
 ${fns.map(f => f.toString()).join('\n')}
 let ctx = null;
 self.onmessage = e => {
@@ -1967,14 +1972,16 @@ async function warmCacheParallel(pool, grid, numPlates, meta, fc, excl, cache, l
 // First run: fits every plate and screens it for outlier suggestions in one worker job (no barrier
 // between the two phases, so the pool stays busy). Ticks: FIT_STEPS_PER_PLATE per phase and plate.
 // Returns the Set of suggested exKeys, or null when the pool failed (nothing is cached then).
-async function fitAndScreenParallel(pool, numPlates, excl, cache, logFn, tick) {
+async function fitAndScreenParallel(pool, numPlates, excl, cache, logFn, tick, onPlate) {
   try {
     const found = new Set();
     let chain = Promise.resolve();
     const tickSoon = m => { chain = chain.then(() => tick(m)); chain.catch(() => {}); return chain; };
-    await Promise.all([...Array(numPlates).keys()].map(p =>
-      pool.run({type: 'plate', p, excl: [...excl].filter(k => k.startsWith(p + '|')), screen: true}, tickSoon, logFn)
-        .then(r => { cache.set(plateSig(p, excl), r.entry); r.sug.forEach(k => found.add(k)); })));
+    await Promise.all([...Array(numPlates).keys()].map(p => {
+      const sig = plateSig(p, excl);   // as dispatched: the user may edit other plates while this one fits
+      return pool.run({type: 'plate', p, excl: [...excl].filter(k => k.startsWith(p + '|')), screen: true}, tickSoon, logFn)
+        .then(r => { cache.set(sig, r.entry); r.sug.forEach(k => found.add(k)); if (onPlate) onPlate(p, r.sug); });
+    }));
     await chain;
     return found;
   } catch (err) {
@@ -2100,7 +2107,9 @@ function* plateEntryGen(grid, p, meta, fc, excl, logFn, stdOverride) {
 }
 
 // `excl`: Set of exKeys excluded from every fit (kept, struck through, in the output).
-function buildDataSheet(grid, numPlates, meta, fc, logFn, excl, cache, stdFrom) {
+// `only` (optional Set of plate indices): build just those plates; the others get null charts and blank rows.
+// Used while the remaining plates are still being fitted in the background.
+function buildDataSheet(grid, numPlates, meta, fc, logFn, excl, cache, stdFrom, only) {
   excl = excl || new Set();
   const {names, colors, seriesST, seriesSA} = meta;
 
@@ -2135,9 +2144,10 @@ function buildDataSheet(grid, numPlates, meta, fc, logFn, excl, cache, stdFrom) 
   };
   const entries = new Array(numPlates);
   const borrows = p => stdFrom && stdFrom[p] != null && stdFrom[p] !== p && stdFrom[p] < numPlates;
-  for (let p = 0; p < numPlates; p++) if (!borrows(p)) entries[p] = getEntry(p, null);
+  const want = p => !only || only.has(p);
+  for (let p = 0; p < numPlates; p++) if (!borrows(p) && want(p)) entries[p] = getEntry(p, null);
   for (let p = 0; p < numPlates; p++) {
-    if (!borrows(p)) continue;
+    if (!borrows(p) || !want(p)) continue;
     const src = entries[stdFrom[p]];
     if (!src) { entries[p] = getEntry(p, null); continue; }   // source itself borrows: ignore the request
     const e = getEntry(p, src.plateChart.std.params);
@@ -2145,6 +2155,12 @@ function buildDataSheet(grid, numPlates, meta, fc, logFn, excl, cache, stdFrom) 
   }
   for (let p=0; p<numPlates; p++) {
     const entry = entries[p];
+    if (!entry) {
+      const blank = new Array(14).fill(null);
+      allEC50Rows.push(...blank); allConRows.push(...blank); allCVRows.push(...blank); allCDRows.push(...blank);
+      plateFits.push(null); plateCharts.push(null);
+      continue;
+    }
     allEC50Rows.push(...entry.ec50Row); allConRows.push(...entry.conRow);
     allCVRows.push(...entry.choValRow); allCDRows.push(...entry.choDilRow);
     plateFits.push(entry.plateFit); plateCharts.push(entry.plateChart);
@@ -2152,7 +2168,7 @@ function buildDataSheet(grid, numPlates, meta, fc, logFn, excl, cache, stdFrom) 
 
   // Wells whose value the hunch correction replaced for fitting (raw value stays in the sheet).
   const hookKeys = new Set();
-  for (const pc of plateCharts) for (const smp of pc.samples) for (const q of smp.points) if (q.fy !== undefined) hookKeys.add(q.key);
+  for (const pc of plateCharts) if (pc) for (const smp of pc.samples) for (const q of smp.points) if (q.fy !== undefined) hookKeys.add(q.key);
 
   // Full grid: 29 original rows + blank + EC50 + blank + choVal + choDil + con
   const fullData = [...grid.map(r=>[...r])];
@@ -2584,6 +2600,7 @@ function standardMissing(pc) {
 function standardDonors(exceptPlate) {
   const r = review, out = [];
   for (const pc of r.analysis.plateCharts) {
+    if (!pc) continue;
     const p = pc.plateIndex;
     if (p === exceptPlate || pc.std.borrowed || (r.stdFrom && r.stdFrom[p] != null) || standardMissing(pc)) continue;
     const r2 = r2Of(pc.std.points.filter(q => !q.excluded), pc.std.params);
@@ -2655,7 +2672,7 @@ function needsReview(p) {
   return !review.accepted.has(p) && (plateFlags(review.analysis.plateCharts[p]).count > 0 || plateExclCount(p) > 0);
 }
 function visiblePlates() {
-  const r = review, all = [...Array(r.numPlates).keys()];
+  const r = review, all = [...Array(r.numPlates).keys()].filter(p => r.analysis.plateCharts[p]);   // plates still fitting are not listed
   if (r.view === 'all') return all;
   return all.filter(needsReview);
 }
@@ -2663,7 +2680,7 @@ function triageCounts() {
   const r = review;
   let todo = 0, clean = 0;
   for (let p = 0; p < r.numPlates; p++) {
-    if (r.accepted.has(p)) continue;
+    if (!r.analysis.plateCharts[p] || r.accepted.has(p)) continue;
     if (needsReview(p)) todo++; else clean++;
   }
   return {todo, clean, acc: r.accepted.size};
@@ -2704,7 +2721,7 @@ function pointLabel(key) {
 function reanalyze() {
   const r = review;
   r.flagCache = null;
-  r.analysis = buildDataSheet(r.grid, r.numPlates, r.meta, fitConfig, () => {}, r.excl, r.cache, r.stdFrom);
+  r.analysis = buildDataSheet(r.grid, r.numPlates, r.meta, fitConfig, () => {}, r.excl, r.cache, r.stdFrom, r.fitting ? r.ready : null);
 }
 
 // Refits plates whose exclusions changed. Many plates at once (bulk exclude / restore) go through the
@@ -2715,9 +2732,16 @@ function setBusy(text) {
   el.textContent = text || '';
   el.style.display = text ? 'block' : 'none';
 }
+// Changes that touch every plate wait until the background fitting has finished.
+function waitForFitting() {
+  if (!review.fitting) return false;
+  setBusy('Some plates are still being fitted — try again in a moment.');
+  setTimeout(() => setBusy(''), 2000);
+  return true;
+}
 async function reanalyzeAsync() {
   const r = review;
-  const todo = [...Array(r.numPlates).keys()].filter(p => !(r.stdFrom && r.stdFrom[p] != null) && !r.cache.has(plateSig(p, r.excl)));
+  const todo = [...Array(r.numPlates).keys()].filter(p => !(r.stdFrom && r.stdFrom[p] != null) && (!r.fitting || r.ready.has(p)) && !r.cache.has(plateSig(p, r.excl)));
   if (todo.length >= 3) {
     const pool = createFitPool(r.grid, r.meta, fitConfig, todo.length);
     if (pool) {
@@ -2881,6 +2905,7 @@ function plateBlockHtml(pc) {
 function plateTilesHtml() {
   const r = review;
   return [...Array(r.numPlates).keys()].map(p => {
+    if (!r.analysis.plateCharts[p]) return `<button class="ptile pend" disabled title="${escapeXml(plateLabel(p))} — still fitting…">${p + 1}</button>`;
     const f = plateFlags(r.analysis.plateCharts[p]), ex = plateExclCount(p);
     const res = !r.accepted.has(p) && plateResolved(p);
     const cls = r.accepted.has(p) ? 'acc' : f.count ? 'flag' : res ? 'res' : ex ? 'edit' : 'acc';
@@ -2894,7 +2919,8 @@ function reviewHeaderHtml() {
   const nSug = [...r.suggested].filter(k => !r.excl.has(k)).length;
   const {todo} = triageCounts();
   const tab = (v, label) => `<button class="rv-tab${r.view === v ? ' on' : ''}" data-view="${v}">${label}</button>`;
-  return `<div class="rv-toprow"><span class="rv-label">Filter:</span><div class="rv-tabs">${tab('all', `All plates (${n})`)}${tab('todo', `Needs review (${todo})`)}</div></div>
+  const fitting = r.fitting ? `<div class="rv-fitting"><span class="spin"></span>Still fitting in the background — ${r.ready.size} of ${n} plates ready. You can start reviewing the finished ones; the rest appear as they complete.</div>` : '';
+  return `${fitting}<div class="rv-toprow"><span class="rv-label">Filter:</span><div class="rv-tabs">${tab('all', `All plates (${n})`)}${tab('todo', `Needs review (${todo})`)}</div></div>
     <div class="pt-strip" id="plateStrip">${plateTilesHtml()}</div>
     ${rowBarHtml(null)}`;
 }
@@ -2908,8 +2934,27 @@ function reviewListHtml() {
   }
   if (r.cur == null || !list.includes(r.cur)) r.cur = list[0];
   const shown = list.slice(0, Math.max(r.limit, list.indexOf(r.cur) + 1));
-  return shown.map(p => plateBlockHtml(r.analysis.plateCharts[p])).join('')
-    + (shown.length < list.length ? `<div class="card rv-empty"><button class="btn btn-secondary process-btn" data-act="more">Show ${Math.min(FLAG.BATCH, list.length - shown.length)} more (${list.length - shown.length} not shown)</button></div>` : '');
+  return shown.map(p => plateBlockHtml(r.analysis.plateCharts[p])).join('') + moreCardHtml(shown.length, list.length);
+}
+function moreCardHtml(shown, total) {
+  return shown < total ? `<div class="card rv-empty" id="rvMore"><button class="btn btn-secondary process-btn" data-act="more">Show ${Math.min(FLAG.BATCH, total - shown)} more (${total - shown} not shown)</button></div>` : '';
+}
+
+// Plates that finished fitting in the background are added to the list without redrawing the plates
+// already on screen (which would reset the one being reviewed). Falls back to a full redraw when a
+// new plate would land between existing ones.
+function refreshListIncremental() {
+  const r = review, box = document.getElementById('reviewList');
+  if (!box) return;
+  const vis = visiblePlates();
+  const have = [...box.querySelectorAll(':scope > .plate-charts-block')].map(e => +e.dataset.plate);
+  if (!have.length || !vis.length) { renderReview(); return; }
+  const want = vis.slice(0, Math.max(r.limit, vis.indexOf(r.cur) + 1));
+  const add = want.filter(p => !have.includes(p));
+  if (add.some(p => p < Math.max(...have))) { renderReview(); return; }
+  const more = document.getElementById('rvMore');
+  if (more) more.remove();
+  box.insertAdjacentHTML('beforeend', add.map(p => plateBlockHtml(r.analysis.plateCharts[p])).join('') + moreCardHtml(want.length, vis.length));
 }
 
 // Accept / next buttons for the plate being reviewed; they live beside the plate box, outside its scroll area.
@@ -3113,7 +3158,7 @@ function rowBarHtml(p) {
 }
 async function toggleRowExclusion(i, p) {
   const r = review;
-  if (r.busy) return;
+  if (r.busy || (p == null && waitForFitting())) return;
   const plates = p == null ? [...Array(r.numPlates).keys()] : [p];
   const on = rowExcluded(i, p);
   const touched = plates.filter(q => rowKeys(q, i).length);
@@ -3144,7 +3189,7 @@ function toggleExclusion(key) {
 
 async function setAllExclusions(mutate) {
   const r = review;
-  if (r.busy) return;
+  if (r.busy || waitForFitting()) return;
   r.busy = true;
   r.excl = mutate(r.excl);
   r.accepted.clear();
@@ -3531,12 +3576,36 @@ async function runProcessing(saved) {
     review = {grid, numPlates, meta, outputName,
               excl: new Set(saved && saved.excl || []), suggested: new Set(), hidden: new Set(saved && saved.hidden || []),
               accepted: new Set(saved && saved.accepted || []), analysis: null, cache: new Map(),
-              files, view: 'all', cur: null, limit: FLAG.BATCH, focusOff: new Set(), flagCache: null, stdFrom: saved && saved.stdFrom || {}};
+              files, view: 'all', cur: null, limit: FLAG.BATCH, focusOff: new Set(), flagCache: null, stdFrom: saved && saved.stdFrom || {},
+              ready: new Set(), fitting: false, shown: false};
     pool = numPlates >= 2 ? createFitPool(grid, meta, fitConfig, numPlates) : null;
     log(pool ? `  Fitting in parallel on ${pool.size} worker(s).` : '  Fitting on the main thread.');
     const tFit = performance.now();
-    let screened = false;
+    let screened = false, uiTimer = 0;
+    // Plates finish one by one in the workers. The review opens with the first of them and picks up the
+    // others as they arrive, so the user can start while the rest is still being fitted. Plates that borrow
+    // a standard are fitted last, on the main thread, once their source is known.
+    const showReady = () => {
+      uiTimer = 0;
+      if (gen !== runGen || !review.ready.size) return;
+      reanalyze();
+      if (!review.shown) {
+        review.shown = true;
+        renderReview();
+        setSection('secProcessing', false);
+        if (review.accepted.size < numPlates) setSection('secReview', true);
+      } else {
+        refreshHeaders(); refreshListIncremental(); updateSections();
+      }
+    };
+    const onPlate = (p, sug) => {
+      if (gen !== runGen) return;
+      sug.forEach(k => review.suggested.add(k));
+      if (!(review.stdFrom && review.stdFrom[p] != null)) review.ready.add(p);
+      if (!uiTimer) uiTimer = setTimeout(showReady, review.shown ? 600 : 0);
+    };
     if (pool) {
+      review.fitting = true;
       // One job per plate does the fits and the outlier screening; progress covers 5–95 %.
       // Outlier screening costs far more than a fit, so ticks are weighted by the measured time per step
       // of each phase (equal until both have been seen) instead of counted alike.
@@ -3553,9 +3622,11 @@ async function runProcessing(saved) {
         const frac = Math.min(1, (n.fit * fc1 + n.screen * sc1) / (total * (fc1 + sc1)));
         prog.set(5 + 90 * frac, 'Fitting and screening…');
         await prog.yieldMaybe();
-      });
+      }, onPlate);
       if (sug) { review.suggested = sug; screened = true; }
+      clearTimeout(uiTimer); uiTimer = 0;
     }
+    review.fitting = false;
     if (!screened) {
       // Progress: 5–70 % fitting (one step per series), 70–97 % outlier screening.
       const fitTotal = numPlates * FIT_STEPS_PER_PLATE;
@@ -3590,12 +3661,16 @@ async function runProcessing(saved) {
     prog.set(99, 'Drawing the review…');
     await new Promise(r => setTimeout(r, 0));
 
-    renderReview();
+    const wasShown = review.shown;
+    review.shown = true;
+    if (wasShown && !Object.keys(review.stdFrom || {}).length) {
+      refreshHeaders(); refreshListIncremental(); saveSession(); updateSections();
+    } else renderReview();
     prog.set(100, 'Done');
     setBadge('badgeProcessing', '✓ Done', 'done');
     setSection('secProcessing', false);
     // When every plate was already accepted (restored session), updateSections already collapsed Review and opened Download.
-    if (review.accepted.size < numPlates) setSection('secReview', true);
+    if (!wasShown && review.accepted.size < numPlates) setSection('secReview', true);
     log('Review the graphs, exclude outliers if needed, accept each plate, then download.', 'success');
   } catch (err) {
     if (err !== CANCELLED) {

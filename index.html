@@ -116,6 +116,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .chart-card{background:#fff;border-radius:14px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.08);flex:1;min-width:360px}
 .chart-title{font-size:13px;font-weight:600;color:#3a3a3c;margin-bottom:8px}
 .chart-legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin-bottom:8px}
+.chart-legend.legend-below{margin:10px 0 8px}
 .legend-item{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#3a3a3c}
 .plate-charts-header{display:flex;flex-direction:column;align-items:flex-start;gap:8px}
 .btn-accept{background:#007aff;color:#fff;padding:9px 22px;font-size:14px;font-weight:600}
@@ -328,7 +329,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.27.0 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.27.1 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -2737,13 +2738,13 @@ function plateBlockHtml(pc) {
     ${banner}
     ${hookNote}
     ${stdBar}
-    <div class="chart-legend">${legend}</div>
-    ${chips ? `<div class="chip-row">${chips}</div>` : ''}
     ${rowBarHtml(p)}
     <div class="plate-charts-row">
       <div class="chart-card"><div class="chart-title">Sample dose–response &amp; ED50</div>${renderSampleChart(pc)}</div>
       <div class="chart-card"><div class="chart-title">Standard curve &amp; interpolation${pc.std.from != null ? ` (plate ${pc.std.from + 1}'s standard)` : ''}</div>${renderStandardChart(pc)}</div>
     </div>
+    <div class="chart-legend legend-below">${legend}</div>
+    ${chips ? `<div class="chip-row">${chips}</div>` : ''}
     <div class="res-wrap">${resultsTableHtml(p)}</div>
   </div>`;
 }

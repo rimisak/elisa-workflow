@@ -389,7 +389,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.33.0 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.33.1 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -1748,11 +1748,13 @@ function applyHookCorrection(vals) {
 
 // Edge effect: the outer wells (the last two rows, G and H = the most diluted points) read high from
 // evaporation/temperature drift. A dilution series only falls, so a point in those rows that sits above
-// the lowest reading of the rows before it is suggested as an outlier. No fit needed.
+// the lowest reading of the rows before it is suggested as an outlier. Likewise the first two rows
+// (A and B) must not read below the highest of the remaining rows (saturation dip). No fit needed.
 const EDGE = {
   FIRST_ROW: 6,     // dose index of row G; rows G and H are scanned
+  HEAD_ROWS: 2,     // rows A and B are checked against the highest later reading
   MIN_PRE: 3,       // readings needed in the earlier rows
-  MIN_RISE: 0.04,   // OD: the point must exceed the lowest earlier reading by this much...
+  MIN_RISE: 0.04,   // OD: the point must differ from the reference reading by this much...
   REL_RISE: 0.15    // ...and by this fraction of that reading (plate noise scales with OD)
 };
 function suggestEdgeEffect(pts) {
@@ -1765,6 +1767,12 @@ function suggestEdgeEffect(pts) {
     if (q.i < EDGE.FIRST_ROW) continue;
     if (q.y - ref >= Math.max(EDGE.MIN_RISE, EDGE.REL_RISE * ref)) out.push(q);
     else ref = Math.min(ref, q.y);   // a clean row G lowers the bar for row H
+  }
+  const rest = live.filter(q => q.i >= EDGE.HEAD_ROWS && !out.includes(q));
+  if (rest.length >= EDGE.MIN_PRE) {
+    const top = Math.max(...rest.map(q => q.y));
+    for (const q of live)
+      if (q.i < EDGE.HEAD_ROWS && top - q.y >= Math.max(EDGE.MIN_RISE, EDGE.REL_RISE * top)) out.push(q);
   }
   return out;
 }

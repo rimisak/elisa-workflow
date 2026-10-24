@@ -389,7 +389,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.32.11 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.32.12 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -2994,11 +2994,11 @@ function acceptBarHtml() {
   if (p == null || !r.analysis.plateCharts[p]) return '';
   const acc = r.accepted.has(p);
   const list = visiblePlates(), i = list.indexOf(p), first = i <= 0, last = i < 0 || i >= list.length - 1;
-  return `<button class="btn process-btn ${acc ? 'btn-accepted' : 'btn-primary'}" data-accept="${p}">${acc ? '✓ Accepted' : 'Accept plate and show next <kbd class="keycap">A</kbd>'}</button>`
-    + `<div class="ra-row"><button class="btn btn-primary process-btn" ${first ? 'disabled' : `data-prevplate="${p}"`} title="${first ? 'This is the first plate' : 'Previous plate (←)'}">Back <kbd class="keycap">←</kbd></button>`
-    + `<button class="btn btn-primary process-btn" ${last ? 'disabled' : `data-nextplate="${p}"`} title="${last ? 'This is the last plate' : 'Next plate (→)'}">Next <kbd class="keycap">→</kbd></button>`
+  return `<button class="btn process-btn ${acc ? 'btn-accepted' : 'btn-black'}" data-accept="${p}">${acc ? '✓ Accepted' : 'Accept plate and show next <kbd class="keycap">A</kbd>'}</button>`
+    + `<div class="ra-row"><button class="btn btn-black process-btn" ${first ? 'disabled' : `data-prevplate="${p}"`} title="${first ? 'This is the first plate' : 'Previous plate (←)'}">Back <kbd class="keycap">←</kbd></button>`
+    + `<button class="btn btn-black process-btn" ${last ? 'disabled' : `data-nextplate="${p}"`} title="${last ? 'This is the last plate' : 'Next plate (→)'}">Next <kbd class="keycap">→</kbd></button>`
     + '</div>'
-    + (last && r.accepted.size < r.numPlates ? `<button class="btn process-btn btn-primary" data-act="acceptAll" ${r.fitting ? 'disabled' : ''}>Accept all remaining plates (${r.numPlates - r.accepted.size})</button>` : '');
+    + (last && r.accepted.size < r.numPlates ? `<button class="btn process-btn btn-black" data-act="acceptAll" ${r.fitting ? 'disabled' : ''}>Accept all remaining plates (${r.numPlates - r.accepted.size})</button>` : '');
 }
 
 // Shows the "Scroll for more" pill while the current plate has content below the visible part.

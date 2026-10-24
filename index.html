@@ -389,7 +389,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.32.12 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.33.0 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -1746,12 +1746,36 @@ function applyHookCorrection(vals) {
   return {vals: out, plateau: peak, n: pre.length};
 }
 
+// Edge effect: the outer wells (the last two rows, G and H = the most diluted points) read high from
+// evaporation/temperature drift. A dilution series only falls, so a point in those rows that sits above
+// the lowest reading of the rows before it is suggested as an outlier. No fit needed.
+const EDGE = {
+  FIRST_ROW: 6,     // dose index of row G; rows G and H are scanned
+  MIN_PRE: 3,       // readings needed in the earlier rows
+  MIN_RISE: 0.04,   // OD: the point must exceed the lowest earlier reading by this much...
+  REL_RISE: 0.15    // ...and by this fraction of that reading (plate noise scales with OD)
+};
+function suggestEdgeEffect(pts) {
+  const live = pts.filter(q => !q.excluded).sort((a, b) => a.i - b.i);
+  const early = live.filter(q => q.i < EDGE.FIRST_ROW);
+  if (early.length < EDGE.MIN_PRE) return [];
+  let ref = Math.min(...early.map(q => q.y));
+  const out = [];
+  for (const q of live) {
+    if (q.i < EDGE.FIRST_ROW) continue;
+    if (q.y - ref >= Math.max(EDGE.MIN_RISE, EDGE.REL_RISE * ref)) out.push(q);
+    else ref = Math.min(ref, q.y);   // a clean row G lowers the bar for row H
+  }
+  return out;
+}
+
 // Leave-one-out check on the two largest residuals of an existing fit; returns the points
 // to suggest. Clean series cost nothing — refits only happen for series with a large residual.
 function suggestOutliers(pts, fit, fc) {
-  const out = [];
+  const edge = suggestEdgeEffect(pts);
+  const out = edge.slice();
   const fy = p => p.fy !== undefined ? p.fy : p.y;   // value the fit saw (hunch-corrected points differ from the raw reading)
-  let cur = pts.slice();
+  let cur = pts.filter(p => !edge.includes(p));
   for (let k = 0; k < OUTLIER.MAX_PER_SERIES; k++) {
     if (!fit || cur.length < OUTLIER.MIN_POINTS) break;
     const y = cur.map(fy);
@@ -1881,8 +1905,9 @@ function plateSig(p, excl, std) {
 function fitWorkerSource() {
   const fns = [model4PL, solveGaussian, levenbergMarquardt, inverse4PL, exKey, getSeries, estimateIC50,
                fitBest4PL, ec50Gen, stdFitPoints, sampleChoicePoint, stdFitConfig, calculateConcentrations,
-               plateEntryGen, suggestOutliers, applyHookCorrection];
+               plateEntryGen, suggestOutliers, suggestEdgeEffect, applyHookCorrection];
   return `const OUTLIER = ${JSON.stringify(OUTLIER)};
+const EDGE = ${JSON.stringify(EDGE)};
 const HOOK = ${JSON.stringify(HOOK)};
 const STD_CON_FLOOR = ${STD_CON_FLOOR};
 ${fns.map(f => f.toString()).join('\n')}

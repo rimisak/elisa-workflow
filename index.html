@@ -389,7 +389,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.32.10 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.32.11 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -797,6 +797,30 @@ function clearLog() {
   box.innerHTML = '';
   document.getElementById('logRow').style.display = 'flex';
 }
+// Turns a raw exception into a console message that says where it happened and what usually causes it.
+function logError(err, stage) {
+  const raw = String((err && err.message) || err);
+  const hints = [];
+  if (/no 96-well plate data|no 384-well plate data|384-well plate/.test(raw))
+    hints.push('The CSV is not a plate export this tool can read. Export the plate as a grid (header row 1…12, rows A–H) from the reader software, and check the 384-well checkbox matches the plate format.');
+  else if (/all fits failed|insufficient|No data/.test(raw))
+    hints.push('A curve could not be fitted. Likely causes: wells left empty or not pipetted, a flat curve (no OD change over the dilution series), the Dilutions values in the metadata not matching the plate, or fit bounds on the Settings sheet that exclude the data.');
+  else if (/Cannot read prop|undefined|null|is not iterable|reading '/.test(raw) && /metadata/i.test(stage))
+    hints.push('The metadata workbook does not match the expected layout. It needs the sheets Names (header "Plate" in A1, one row per plate) and Dilutions (values in B2/B3 and B6/B7). Use "Create a template file" and copy your values into it.');
+  else if (/Cannot read prop|undefined|null|is not iterable|reading '/.test(raw))
+    hints.push('An input file is missing data this step expects. Check that the CSVs are complete exports (both the 450 nm and the reference-wavelength block) and that the metadata has one Names row per plate (' + (csvFiles ? csvFiles.length : '?') + ' plate(s) loaded).');
+  else if (/worker|Worker/.test(raw))
+    hints.push('The background fitting workers failed. Reload the page; if it persists, use a current Chrome, Edge, Firefox or Safari.');
+  else if (/Invalid array length|out of memory|Maximum call stack/.test(raw))
+    hints.push('The browser ran out of resources. Try fewer plates per run, or close other tabs.');
+  else if (/zip|xlsx|XLSX|Unsupported|corrupt|End of data|signature/i.test(raw))
+    hints.push('The workbook could not be read or written. Re-save the metadata as .xlsx (not .xls/.csv) and make sure the file is not open or password-protected.');
+  else
+    hints.push('Unexpected error. Check that the CSVs and the metadata match each other (same number of plates), then try again; the browser console (F12) has the full details.');
+  log(`❌ Error${stage ? ' while ' + stage : ''}: ${raw}`, 'error');
+  for (const h of hints) log('   Possible cause: ' + h, 'warn');
+}
+
 function log(msg, cls='') {
   const box = document.getElementById('logBox');
   const line = document.createElement('div');
@@ -3477,7 +3501,7 @@ async function prepareDownload() {
     if (review === r && (r.blobTok || 0) === tok && r.accepted.size === r.numPlates) r.out = bytes;
   } catch (err) {
     r.prepFailed = true;
-    log(`❌ Error: ${err.message}`, 'error');
+    logError(err, 'building the results workbook');
     console.error(err);
   }
   r.preparing = false;
@@ -3512,6 +3536,7 @@ async function runProcessing(saved) {
   updateSections();
 
   const CANCELLED = new Error('cancelled');
+  let stage = 'starting';
   let pool = null;
   const prog = makeProgress();
   prog.set(0, 'Starting…');
@@ -3520,6 +3545,7 @@ async function runProcessing(saved) {
   await new Promise(r => setTimeout(r, 50));
 
   try {
+    stage = 'parsing the CSV files';
     log('Parsing CSV files...', 'info');
     prog.set(1, 'Parsing files…');
     const files = csvFiles.map(f => ({name: f.name, sig: textSig(f.text)}));
@@ -3527,6 +3553,7 @@ async function runProcessing(saved) {
     const numPlates = csvArrays.length;
     log(`  ${numPlates} plate(s) parsed.`);
 
+    stage = 'merging the plates';
     log('Merging plates...', 'info');
     prog.set(2, 'Merging plates…');
     const grid = mergePlates(csvArrays);
@@ -3534,6 +3561,7 @@ async function runProcessing(saved) {
 
     if (document.getElementById('subtractBgChk').checked) {
       const { sig, ref } = readWavelengths();
+      stage = 'subtracting the background';
       log(`Subtracting ${ref ? ref + ' nm ' : 'reference-read '}background${sig && ref ? ` (${sig} − ${ref})` : ''}...`, 'info');
       const n = subtractBackground(grid, numPlates);
       log(`  Corrected ${n} well(s) across ${numPlates} plate(s).`);
@@ -3541,6 +3569,7 @@ async function runProcessing(saved) {
     }
 
 
+    stage = 'reading the metadata workbook';
     log('Reading metadata...', 'info');
     prog.set(4, 'Reading metadata…');
     const meta = parseMetadata(metaBytes);
@@ -3565,6 +3594,7 @@ async function runProcessing(saved) {
       for (let c = 0; c < 12; c++) grid[7][p*14+1+c] = plateNames[c] || '';
     }
 
+    stage = 'fitting curves and calculating results';
     log('Fitting curves and calculating results...', 'info');
     prog.set(5, 'Fitting curves…');
     await new Promise(r => setTimeout(r, 10));
@@ -3693,7 +3723,7 @@ async function runProcessing(saved) {
     log('Review the graphs, exclude outliers if needed, accept each plate, then download.', 'success');
   } catch (err) {
     if (err !== CANCELLED) {
-      log(`❌ Error: ${err.message}`, 'error');
+      logError(err, stage);
       console.error(err);
       setBadge('badgeProcessing', 'Error', 'err');
       setSection('secProcessing', true); setSection('secUpload', true);

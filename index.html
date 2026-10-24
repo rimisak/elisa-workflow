@@ -389,7 +389,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.33.1 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.33.2 &nbsp;·&nbsp; 23/10/2026</div>
 
 <script>
 'use strict';
@@ -1754,7 +1754,7 @@ const EDGE = {
   FIRST_ROW: 6,     // dose index of row G; rows G and H are scanned
   HEAD_ROWS: 2,     // rows A and B are checked against the highest later reading
   MIN_PRE: 3,       // readings needed in the earlier rows
-  MIN_RISE: 0.04,   // OD: the point must differ from the reference reading by this much...
+  MIN_RISE: 0.04,   // OD: a G/H point must exceed the lowest earlier reading by this much...
   REL_RISE: 0.15    // ...and by this fraction of that reading (plate noise scales with OD)
 };
 function suggestEdgeEffect(pts) {
@@ -1773,7 +1773,7 @@ function suggestEdgeEffect(pts) {
     for (const q of rest) {
       if (q.i >= EDGE.HEAD_ROWS) break;
       const top = Math.max(...rest.filter(r => r.i > q.i).map(r => r.y));
-      if (top - q.y >= Math.max(EDGE.MIN_RISE, EDGE.REL_RISE * top)) out.push(q);
+      if (q.y < top) out.push(q);
     }
   return out;
 }

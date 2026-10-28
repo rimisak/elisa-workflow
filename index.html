@@ -2614,6 +2614,7 @@ function renderSampleChart(pc) {
   const S = makeScales(xd, yd);
   let body = axisSvg(xd, yd, S, 'Sample dilution factor (log)', 'OD');
   let pts = ''; // points are drawn after every line so guide lines never cover them
+  const poor = poorNames(pc);
   pc.samples.forEach((s, i) => {
     if (isHidden(pc, s)) return;
     const col = sampleColor(i);
@@ -2623,7 +2624,10 @@ function renderSampleChart(pc) {
       body += `<line class="dash-hit" x1="${px.toFixed(1)}" y1="${CPAD.t}" x2="${px.toFixed(1)}" y2="${CHART_H-CPAD.b}" stroke="${col}" stroke-width="12" data-tip="${escapeXml(`${s.name} · ED50 ≈ ${Math.max(10, Math.round(s.ed50))}`)}"/>`;
     }
     if (s.params) {
-      body += `<path d="${curvePath(s.params, xd, S)}" fill="none" stroke="${col}" stroke-width="1.6"/>`;
+      const d = curvePath(s.params, xd, S);
+      // Poorly fitted curves get a red glow (wide, soft red stroke under the curve; pointer-events off).
+      if (poor.has(s.name)) body += `<path d="${d}" fill="none" stroke="#ff3b30" stroke-width="7" stroke-linecap="round" opacity=".35" style="filter:blur(2.5px)" pointer-events="none"/>`;
+      body += `<path d="${d}" fill="none" stroke="${col}" stroke-width="1.6"/>`;
     }
     for (const p of s.points) pts += pointSvg(p, S, col, 2.8, `${s.name}, 1:${fmtTick(p.x)}`);
     // Hunch-corrected points: a dashed ring where the fit treated the reading (pointer-events off).

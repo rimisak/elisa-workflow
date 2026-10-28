@@ -410,7 +410,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.37.0 &nbsp;·&nbsp; 28/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.38.0 &nbsp;·&nbsp; 28/10/2026</div>
 
 <script>
 'use strict';
@@ -686,6 +686,7 @@ async function loadCSVFiles(files, force) {  // force: true/false from the 384 t
       let text;
       if (/\.xlsx?$/i.test(f.name)) {
         const bytes = new Uint8Array(await f.arrayBuffer());
+        if (hasSessionSheet(bytes)) { await restoreFromWorkbook(bytes); return; }
         if (XLSX.read(bytes, { type: 'array', bookSheets: true }).SheetNames.includes('Names')) { metaFile = f; continue; }
         text = workbookToText(bytes);
       } else {
@@ -764,7 +765,9 @@ function onDropMeta(e) {
 function loadMetaFile(f) {
   const r = new FileReader();
   r.onload = ev => {
-    metaBytes = new Uint8Array(ev.target.result);
+    const bytes = new Uint8Array(ev.target.result);
+    if (hasSessionSheet(bytes)) { restoreFromWorkbook(bytes); return; }
+    metaBytes = bytes;
     metaName  = f.name;
     storeSet('meta', {name: metaName, bytes: metaBytes});
     staleSession();
@@ -3566,6 +3569,64 @@ function buildExcludedSheet() {
   return ws;
 }
 
+// Everything needed to rebuild the review is stored in a very hidden sheet of the downloaded workbook:
+// the plate files, the metadata workbook, exclusions, accepted plates, hidden samples, borrowed standards,
+// the options and any manual fit bounds. Dropping the workbook back into the app restores it (`restoreFromWorkbook`).
+// The JSON is split over rows because a cell holds at most 32 767 characters.
+const SESSION_SHEET = 'ElisaSession';
+function bytesToB64(u8) {
+  let s = '';
+  for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+function b64ToBytes(b) {
+  const s = atob(b), u8 = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) u8[i] = s.charCodeAt(i);
+  return u8;
+}
+function buildSessionSheet() {
+  const r = review;
+  const payload = JSON.stringify({
+    app: 'elisa', v: 1,
+    csv: csvFiles, meta: {name: metaName, b64: bytesToB64(metaBytes)},
+    plate384: document.getElementById('plate384Chk').checked,
+    sess: {excl: [...r.excl], accepted: [...r.accepted], hidden: [...r.hidden], stdFrom: r.stdFrom || {}, files: r.files,
+           opts: {subtractBg: document.getElementById('subtractBgChk').checked, hookFix: document.getElementById('hookChk').checked,
+                  detectOutliers: document.getElementById('detectChk').checked, outputName: document.getElementById('outputName').value}},
+    fit: /manual/.test(r.meta.fitSource || '') ? fitConfig : null
+  });
+  const rows = [];
+  for (let i = 0; i < payload.length; i += 30000) rows.push([payload.slice(i, i + 30000)]);
+  return XLSX.utils.aoa_to_sheet(rows);
+}
+function hasSessionSheet(bytes) {
+  try { return XLSX.read(bytes, {type: 'array', bookSheets: true}).SheetNames.includes(SESSION_SHEET); } catch (e) { return false; }
+}
+async function restoreFromWorkbook(bytes) {
+  try {
+    const wb = XLSX.read(bytes, {type: 'array'});
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[SESSION_SHEET], {header: 1});
+    const d = JSON.parse(rows.map(x => x[0]).join(''));
+    if (d.app !== 'elisa') throw new Error('not an ELISA results workbook');
+    if (review) { review.stale = true; runGen++; }
+    csvFiles = d.csv; metaBytes = b64ToBytes(d.meta.b64); metaName = d.meta.name;
+    storeSet('csvFiles', csvFiles); storeSet('meta', {name: metaName, bytes: metaBytes});
+    const o = d.sess.opts || {};
+    document.getElementById('plate384Chk').checked = !!d.plate384;
+    render384Pattern();
+    document.getElementById('subtractBgChk').checked = !!o.subtractBg;
+    document.getElementById('hookChk').checked = o.hookFix !== false;
+    document.getElementById('detectChk').checked = o.detectOutliers !== false;
+    if (o.outputName) document.getElementById('outputName').value = o.outputName;
+    lastPlateFiles = [];
+    showCSVState(); showMetaState();
+    storeSet('session', d.sess);
+    await runProcessing({...d.sess, fit: d.fit});
+  } catch (err) {
+    alert('Could not restore this workbook: ' + err.message);
+  }
+}
+
 // The workbook bytes are built ahead of the click: Safari only honours a download that starts
 // synchronously inside the user's click, not after awaits (it opens the blob instead).
 async function buildResultsBytes() {
@@ -3576,6 +3637,9 @@ async function buildResultsBytes() {
   XLSX.utils.book_append_sheet(wb, buildResultsTableSheet(), 'Results Table');
   XLSX.utils.book_append_sheet(wb, buildProtocolSheet(r.meta, plateFits, r.analysis.plateCharts, fitConfig), 'Protocol Parameters');
   if (r.excl.size) XLSX.utils.book_append_sheet(wb, buildExcludedSheet(), 'Excluded Points');
+  XLSX.utils.book_append_sheet(wb, buildSessionSheet(), SESSION_SHEET);
+  wb.Workbook = wb.Workbook || {};
+  wb.Workbook.Sheets = wb.SheetNames.map(n => ({Hidden: n === SESSION_SHEET ? 2 : 0}));  // very hidden
   let buf = XLSX.write(wb, {bookType:'xlsx', type:'array'});
   return await injectConditionalFormatting(buf, condfmt);
 }
@@ -3667,8 +3731,9 @@ async function runProcessing(saved) {
     log(`  ${meta.names.length} plate name row(s) found.`);
     log(`  Standard: ${meta.stdStart} ng/mL, 1:${meta.stdDil} dilution.`);
     log(`  Samples: 1:${meta.sampleStart} start, 1:${meta.sampleDil} dilution.`);
-    fitConfig = meta.fit;
     meta.fitDefault = JSON.parse(JSON.stringify(meta.fit));
+    if (saved && saved.fit) { meta.fit = saved.fit; meta.fitSource = 'manual override (Review)'; }
+    fitConfig = meta.fit;
     runInfoHtml =
       `<h4>Standard</h4><div>${meta.stdStart} ng/mL, 1:${meta.stdDil} dilution</div>` +
       `<h4>Samples</h4><div>1:${meta.sampleStart} start, 1:${meta.sampleDil} dilution</div>` +

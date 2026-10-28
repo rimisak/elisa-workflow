@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Working rules for every change
 
-- **Update the footer on every change.** The page footer in `index.html` (`.page-footer`, near the end of the markup) reads `Kasimir Reich · v<version> · <DD/MM/YYYY>`. Set the date to today's date and bump the version in the same edit. Version scheme: `MAJOR.MINOR.PATCH` — patch for fixes and tweaks, minor for new features, major for breaking changes to the workflow or output layout. Current: v1.37.0
+- **Update the footer on every change.** The page footer in `index.html` (`.page-footer`, near the end of the markup) reads `Kasimir Reich · v<version> · <DD/MM/YYYY>`. Set the date to today's date and bump the version in the same edit. Version scheme: `MAJOR.MINOR.PATCH` — patch for fixes and tweaks, minor for new features, major for breaking changes to the workflow or output layout. Current: v1.38.0
 - **Commit after each edit.** When a change is finished, commit it straight away (small, focused commits; message explains the why). Don't let edits pile up uncommitted.
 
 ## What this is
@@ -74,6 +74,10 @@ Processing shows a progress bar with percentage and an ETA (pace so far). Fittin
 - **`parseCsvText` uses `Number()`, not `parseFloat()`** — deliberately, so labels like `"1. Raw Data (450 1)"` stay strings instead of becoming `1`.
 - **Reading vs writing styles differ in `xlsx-js-style`.** When reading the metadata Names sheet, fill info is on `cell.s` directly (`s.patternType`, `s.fgColor`); when writing, it's nested under `s.fill`. `parseMetadata` handles both forms.
 - **Metadata format is positional.** `Dilutions` sheet reads fixed cells `B2/B3` (standard start/dilution) and `B6/B7` (sample start/dilution). `Settings` sheet (optional) holds the 4PL bounds. `Names` sheet has one row per plate; header row is detected by `A1 === 'Plate'`. `createTemplate` generates a matching blank workbook (one Names row per loaded CSV, 6 if none).
+
+## Restoring from a downloaded workbook
+
+`buildResultsBytes` appends a very hidden sheet `ElisaSession` (`buildSessionSheet`): JSON of the plate files, the metadata workbook (base64), exclusions, accepted plates, hidden samples, borrowed standards, options and manual fit bounds, split over rows of 30 000 characters. Dropping that workbook on either upload zone (`loadCSVFiles` / `loadMetaFile` check `hasSessionSheet`) calls `restoreFromWorkbook`, which reloads both inputs and re-runs processing with the saved session, so the review comes back exactly as downloaded. Anything new that the session should keep must be added to both `saveSession` and `buildSessionSheet`.
 
 ## Example data
 

@@ -204,6 +204,8 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
 .adv-fit th{font-weight:500;color:#636366;text-align:left;padding:2px 4px}
 .adv-fit td{padding:2px 4px}
 .adv-fit input{width:100%;box-sizing:border-box;font-size:12px;padding:3px 5px;border:1px solid #c7c7cc;border-radius:6px}
+.adv-fit .adv-impact{font-size:12px;margin-top:8px}
+.adv-fit .adv-impact input{width:64px;margin-left:6px}
 .adv-fit .adv-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .adv-fit .adv-note{font-size:11px;color:#636366;margin-top:6px}
 .adv-fit .adv-err{font-size:12px;color:#c0392b;margin-top:6px}
@@ -357,6 +359,13 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
       <span class="slider"></span>
     </label>
   </div>
+  <div class="option-row" style="margin-top:14px;border-top:1px solid #f0f0f0;padding-top:14px">
+    <span class="option-text">
+      <span class="option-title">Suggestion impact threshold (%)</span>
+      <span class="option-sub">A suggested outlier or edge-effect point is only shown if excluding it shifts the ED50 (for a standard: the interpolated concentrations) by at least this much. Lower = more suggestions, 0 = suggest everything. Can also be changed during review.</span>
+    </span>
+    <input type="number" id="minImpactInp" value="10" min="0" max="100" step="1" style="width:64px;font-size:13px;padding:4px 6px;border:1px solid #c7c7cc;border-radius:6px">
+  </div>
 </div>
 
 <!-- Process -->
@@ -410,7 +419,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.41.0 &nbsp;·&nbsp; 28/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.41.1 &nbsp;·&nbsp; 28/10/2026</div>
 
 <script>
 'use strict';
@@ -575,7 +584,7 @@ function saveSession() {
     opts: {
       subtractBg: document.getElementById('subtractBgChk').checked,
       hookFix: document.getElementById('hookChk').checked,
-      detectOutliers: document.getElementById('detectChk').checked,
+      detectOutliers: document.getElementById('detectChk').checked, minImpact: document.getElementById('minImpactInp').value,
       outputName: document.getElementById('outputName').value
     }
   });
@@ -623,6 +632,7 @@ async function restoreFiles() {
     document.getElementById('subtractBgChk').checked = !!o.subtractBg;
     document.getElementById('hookChk').checked = o.hookFix !== false;
     document.getElementById('detectChk').checked = o.detectOutliers !== false;
+    if (o.minImpact !== undefined && o.minImpact !== '') document.getElementById('minImpactInp').value = o.minImpact;
     if (o.outputName) document.getElementById('outputName').value = o.outputName;
     setSection('secUpload', false); setSection('secProcessing', true);
     // Not re-run on reload: the saved session is picked up when Process is pressed (runProcessing reads it).
@@ -3122,6 +3132,12 @@ function observeReviewList() {
   requestAnimationFrame(updateScrollHint);
 }
 
+// Impact threshold (fraction) from the Processing option; invalid input falls back to the default 10 %.
+function readMinImpact() {
+  const v = Number(document.getElementById('minImpactInp').value);
+  return document.getElementById('minImpactInp').value !== '' && isFinite(v) && v >= 0 && v <= 100 ? v / 100 : 0.10;
+}
+
 // Run parameters shown above the review header (filled in by runProcessing).
 let runInfoHtml = '';
 
@@ -3132,12 +3148,13 @@ function advFitHtml(err) {
     `<td><input type="number" step="any" data-fit="${k}|${i}" value="${fitConfig[k][i]}"></td>`).join('') + '</tr>';
   return `<summary>Advanced: curve-fit settings</summary>
     <table><tr><th></th><th>Lower</th><th>Initial</th><th>Upper</th></tr>${[0, 1, 2, 3].map(row).join('')}</table>
+    <div class="adv-impact"><label>Suggestion impact threshold (%) <input type="number" min="0" max="100" step="1" data-impact value="${+(OUTLIER.MIN_IMPACT * 100).toFixed(2)}"></label></div>
     <div class="adv-btns"><button class="btn btn-secondary btn-sm" data-act="applyFit">Apply &amp; refit all plates</button>
     <button class="btn btn-secondary btn-sm" data-act="resetFit">Reset</button></div>
     ${err ? `<div class="adv-err">${escapeXml(err)}</div>` : ''}
-    <div class="adv-note">Hill is entered positive (the standard curve mirrors it). Applying refits all plates, recomputes outlier suggestions and un-accepts every plate. Your excluded points are kept. Settings last until the next Process run.</div>`;
+    <div class="adv-note">Hill is entered positive (the standard curve mirrors it). Applying refits all plates, recomputes outlier suggestions and un-accepts every plate. Your excluded points are kept. Settings last until the next Process run. The impact threshold decides which suggested outliers are worth showing: lower it to see more, raise it to see fewer.</div>`;
 }
-async function applyFitSettings(fc) {
+async function applyFitSettings(fc, impact) {
   const r = review;
   if (!r || waitForFitting()) return;
   const adv = document.getElementById('reviewAdv');
@@ -3147,6 +3164,9 @@ async function applyFitSettings(fc) {
     if (!(lo <= p0 && p0 <= hi)) return adv.innerHTML = advFitHtml('Each row needs lower ≤ initial ≤ upper.');
   }
   if (fc.lower[3] <= 0) return adv.innerHTML = advFitHtml('Hill must be positive.');
+  if (!(impact >= 0 && impact <= 100)) return adv.innerHTML = advFitHtml('The impact threshold must be between 0 and 100 %.');
+  OUTLIER.MIN_IMPACT = impact / 100;
+  document.getElementById('minImpactInp').value = impact;
   fitConfig = fc; r.meta.fit = fc; r.meta.fitSource = 'manual override (Review)';
   runInfoHtml = runInfoHtml.replace(/(<h4>Curve-fit settings<\/h4><div>)[^<]*/, '$1manual override (Review)');
   r.cache.clear(); r.accepted.clear(); r.flagCache = null; r.busy = true;
@@ -3515,7 +3535,12 @@ document.addEventListener('click', e => {
       const fc = act.dataset.act === 'resetFit' ? JSON.parse(JSON.stringify(review.meta.fitDefault || DEFAULT_FIT)) : JSON.parse(JSON.stringify(fitConfig));
       if (act.dataset.act === 'applyFit')
         document.querySelectorAll('#reviewAdv input[data-fit]').forEach(inp => { const [k, i] = inp.dataset.fit.split('|'); fc[k][+i] = inp.value === '' ? NaN : Number(inp.value); });
-      applyFitSettings(fc); break;
+      let impact = 10;
+      if (act.dataset.act === 'applyFit') {
+        const inp = document.querySelector('#reviewAdv input[data-impact]');
+        impact = inp.value === '' ? NaN : Number(inp.value);
+      }
+      applyFitSettings(fc, impact); break;
     }
     case 'toggleShowExcl': review.showExcl = !review.showExcl; renderReview(); break;
     case 'more':
@@ -3657,7 +3682,8 @@ function buildSessionSheet() {
     plate384: document.getElementById('plate384Chk').checked,
     sess: {excl: [...r.excl], accepted: [...r.accepted], hidden: [...r.hidden], stdFrom: r.stdFrom || {}, files: r.files,
            opts: {subtractBg: document.getElementById('subtractBgChk').checked, hookFix: document.getElementById('hookChk').checked,
-                  detectOutliers: document.getElementById('detectChk').checked, outputName: document.getElementById('outputName').value}},
+                  detectOutliers: document.getElementById('detectChk').checked, minImpact: document.getElementById('minImpactInp').value,
+                  outputName: document.getElementById('outputName').value}},
     fit: /manual/.test(r.meta.fitSource || '') ? fitConfig : null
   });
   const rows = [];
@@ -3682,6 +3708,7 @@ async function restoreFromWorkbook(bytes) {
     document.getElementById('subtractBgChk').checked = !!o.subtractBg;
     document.getElementById('hookChk').checked = o.hookFix !== false;
     document.getElementById('detectChk').checked = o.detectOutliers !== false;
+    if (o.minImpact !== undefined && o.minImpact !== '') document.getElementById('minImpactInp').value = o.minImpact;
     if (o.outputName) document.getElementById('outputName').value = o.outputName;
     lastPlateFiles = [];
     showCSVState(); showMetaState();
@@ -3793,6 +3820,7 @@ async function runProcessing(saved) {
     const meta = parseMetadata(metaBytes);
     meta.hookFix = document.getElementById('hookChk').checked;
     meta.detectOutliers = document.getElementById('detectChk').checked;
+    OUTLIER.MIN_IMPACT = readMinImpact();
     log(`  ${meta.names.length} plate name row(s) found.`);
     log(`  Standard: ${meta.stdStart} ng/mL, 1:${meta.stdDil} dilution.`);
     log(`  Samples: 1:${meta.sampleStart} start, 1:${meta.sampleDil} dilution.`);

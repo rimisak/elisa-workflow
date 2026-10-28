@@ -407,7 +407,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.41.3 &nbsp;·&nbsp; 28/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.41.4 &nbsp;·&nbsp; 28/10/2026</div>
 
 <script>
 'use strict';
@@ -3859,7 +3859,8 @@ async function runProcessing(saved) {
       logError(err, stage);
       console.error(err);
       setBadge('badgeProcessing', 'Error', 'err');
-      setSection('secProcessing', true); setSection('secUpload', true);
+      setSection('secProcessing', true); setSection('secUpload', false);
+      setSection('secReview', false); setSection('secDownload', false);
       document.getElementById('progressLabel').textContent = 'Stopped by an error';
     }
   }

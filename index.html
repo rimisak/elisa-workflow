@@ -407,7 +407,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.41.2 &nbsp;·&nbsp; 28/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.41.3 &nbsp;·&nbsp; 28/10/2026</div>
 
 <script>
 'use strict';
@@ -1809,7 +1809,7 @@ function suggestOutliers(pts, fit, fc, isStd) {
     let harmless = false;
     if (rest.length >= OUTLIER.MIN_POINTS - 1 && !(choice && edge.includes(choice))) {
       try {
-        const fit2 = fitBest4PL(rest.map(p => p.x), rest.map(fy), fc, fit);
+        const fit2 = fitBest4PL(rest.map(p => p.x), rest.map(p => p.y), fc, fit);
         harmless = fitImpact(fit, fit2, isStd) < OUTLIER.MIN_IMPACT;
       } catch(_) {}
     }
@@ -1819,7 +1819,7 @@ function suggestOutliers(pts, fit, fc, isStd) {
   let cur = pts.filter(p => !edge.includes(p));
   for (let k = 0; k < OUTLIER.MAX_PER_SERIES; k++) {
     if (!fit || cur.length < OUTLIER.MIN_POINTS) break;
-    const y = cur.map(fy);
+    const y = cur.map(p => p.y);
     const res = cur.map(p=>p.y - model4PL(p.x, fit));
     const sse = res.reduce((s,r)=>s+r*r, 0);
     const floor = Math.max(OUTLIER.MIN_DEV, OUTLIER.REL_DEV * (Math.max(...y) - Math.min(...y)));
@@ -1829,7 +1829,7 @@ function suggestOutliers(pts, fit, fc, isStd) {
     for (const j of cands) {
       const rest = cur.filter((_,i)=>i!==j);
       let fit2;
-      try { fit2 = fitBest4PL(rest.map(p=>p.x), rest.map(fy), fc, fit); } catch(_) { continue; }
+      try { fit2 = fitBest4PL(rest.map(p=>p.x), rest.map(p => p.y), fc, fit); } catch(_) { continue; }
       const dev = Math.abs(cur[j].y - model4PL(cur[j].x, fit2));
       const sse2 = rest.reduce((s,p)=>s + (p.y - model4PL(p.x, fit2))**2, 0);
       const rms2 = Math.sqrt(sse2 / rest.length);

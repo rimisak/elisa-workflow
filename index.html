@@ -167,28 +167,30 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .plate-charts-block::-webkit-scrollbar-thumb{background:#8e8e93;border-radius:6px;border:2px solid transparent;background-clip:content-box}
 .plate-charts-block::-webkit-scrollbar-thumb:hover{background:#636366;background-clip:content-box}
 #scrollHint{display:none;cursor:pointer;z-index:6;background:#1c1c1e;color:#fff;font-size:12px;font-weight:600;padding:6px 14px;border-radius:999px;box-shadow:0 2px 10px rgba(0,0,0,.3);opacity:.9}
-body.rv-lock #scrollHint.show{display:block;grid-column:1;grid-row:1/6;align-self:end;justify-self:center;margin-bottom:22px}
+body.rv-lock #scrollHint.show{display:block;grid-column:1;grid-row:1;align-self:end;justify-self:center;margin-bottom:22px}
 /* Review mode: the page itself does not scroll; the open Review section fills the window and shows one plate at a time. */
 body.rv-lock{height:100vh;overflow:hidden;display:flex;flex-direction:column;padding:8px 24px 12px}
 body.rv-lock>*:not(#secReview){display:none!important}
 body.rv-lock #secReview{flex:1;min-height:0;display:flex;flex-direction:column;margin-bottom:0}
 body.rv-lock #secReview .sec-head{flex:none}
 body.rv-lock #secReview .sec-body{flex:1;min-height:0;display:flex;flex-direction:column;margin-top:10px}
-body.rv-lock #chartsSection{flex:1;min-height:0;display:grid!important;grid-template-columns:minmax(0,1fr) 340px;grid-template-rows:auto auto auto auto 1fr;gap:0 14px}
-body.rv-lock #reviewRunInfo{grid-column:2;grid-row:1;margin-bottom:14px}
+body.rv-lock #chartsSection{flex:1;min-height:0;display:grid!important;grid-template-columns:minmax(0,1fr) 340px;grid-template-rows:minmax(0,1fr);gap:0 14px}
+/* Right column: the cards scroll together; the accept / back / next buttons stay pinned below them. */
+body.rv-lock #reviewSide{grid-column:2;grid-row:1;display:flex;flex-direction:column;min-height:0}
+body.rv-lock #reviewSideScroll{flex:1;min-height:0;overflow-y:auto;padding:1px 1px 0}
+body.rv-lock #reviewRunInfo{margin-bottom:14px}
 body.rv-lock #reviewRunInfo:empty{display:none}
 #reviewRunInfo{background:#fff;border:none;box-shadow:0 1px 3px rgba(0,0,0,.08);flex:none}
-body.rv-lock #reviewHeader{grid-column:2;grid-row:2;overflow-y:auto;max-height:100%}
 /* Accept / next: a narrow strip beside the plate box that widens over it on hover. */
 /* Back / accept / next stack at the bottom of the right-hand column, beside the plate box. */
-body.rv-lock #reviewImpact{grid-column:2;grid-row:3;margin-bottom:10px}
-body.rv-lock #reviewAdv{grid-column:2;grid-row:4;margin-bottom:10px;max-height:46vh;overflow-y:auto}
-body.rv-lock #reviewActions{grid-column:2;grid-row:5;align-self:end;margin-bottom:10px;display:flex;flex-direction:column;gap:10px}
+body.rv-lock #reviewImpact{margin-bottom:10px}
+body.rv-lock #reviewAdv{margin-bottom:10px}
+body.rv-lock #reviewActions{flex:none;margin-top:4px;margin-bottom:10px;display:flex;flex-direction:column;gap:10px}
 #reviewActions .process-btn .keycap{font-size:12px}
 #reviewActions .ra-row{display:flex;gap:10px}
 #reviewActions .ra-row .process-btn{flex:1;width:auto}
 body.rv-lock #reviewHeader{flex:none;padding:12px 16px;margin-bottom:10px}
-body.rv-lock #reviewList{grid-column:1;grid-row:1/6;min-height:0;position:relative;margin-bottom:10px}
+body.rv-lock #reviewList{grid-column:1;grid-row:1;min-height:0;position:relative;margin-bottom:10px}
 body.rv-lock #reviewList>.plate-charts-block{margin-bottom:0}
 body.rv-lock #reviewList>.plate-charts-block:not(.current){display:none}
 body.rv-lock #reviewList>.plate-charts-block.current{height:100%;max-height:none}
@@ -3101,13 +3103,16 @@ async function applyFitSettings(fc) {
 function renderReview(animate) {
   const sec = document.getElementById('chartsSection');
   if (!sec || !review) return;
-  sec.innerHTML = `<div id="reviewRunInfo" class="run-info">${runInfoHtml}</div>`
+  const keep = document.getElementById('reviewSideScroll'), top = keep ? keep.scrollTop : 0;
+  sec.innerHTML = `<div id="reviewSide"><div id="reviewSideScroll">`
+    + `<div id="reviewRunInfo" class="run-info">${runInfoHtml}</div>`
     + `<div id="reviewHeader" class="card">${reviewHeaderHtml()}</div>`
     + `<div id="reviewImpact" class="card imp-card">${impactCardHtml()}</div>`
     + `<details id="reviewAdv" class="card adv-fit"${review.advOpen ? ' open' : ''}>${advFitHtml()}</details>`
+    + `</div><div id="reviewActions">${acceptBarHtml()}</div></div>`
     + `<div id="reviewList">${reviewListHtml()}</div>`
-    + `<div id="reviewActions">${acceptBarHtml()}</div>`
     + `<div id="scrollHint">↓ Scroll for more</div>`;
+  const sc = document.getElementById('reviewSideScroll'); if (sc) sc.scrollTop = top;
   sec.style.display = 'block';
   if (animate) sec.querySelectorAll('.plate-charts-block').forEach(el => { el.classList.add('enter'); el.addEventListener('animationend', () => el.classList.remove('enter'), {once: true}); });
   syncReviewLock();

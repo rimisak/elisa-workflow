@@ -168,26 +168,27 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .plate-charts-block::-webkit-scrollbar-thumb{background:#8e8e93;border-radius:6px;border:2px solid transparent;background-clip:content-box}
 .plate-charts-block::-webkit-scrollbar-thumb:hover{background:#636366;background-clip:content-box}
 #scrollHint{display:none;cursor:pointer;z-index:6;background:#1c1c1e;color:#fff;font-size:12px;font-weight:600;padding:6px 14px;border-radius:999px;box-shadow:0 2px 10px rgba(0,0,0,.3);opacity:.9}
-body.rv-lock #scrollHint.show{display:block;grid-column:1;grid-row:1/4;align-self:end;justify-self:center;margin-bottom:22px}
+body.rv-lock #scrollHint.show{display:block;grid-column:1;grid-row:1/5;align-self:end;justify-self:center;margin-bottom:22px}
 /* Review mode: the page itself does not scroll; the open Review section fills the window and shows one plate at a time. */
 body.rv-lock{height:100vh;overflow:hidden;display:flex;flex-direction:column;padding:8px 24px 12px}
 body.rv-lock>*:not(#secReview){display:none!important}
 body.rv-lock #secReview{flex:1;min-height:0;display:flex;flex-direction:column;margin-bottom:0}
 body.rv-lock #secReview .sec-head{flex:none}
 body.rv-lock #secReview .sec-body{flex:1;min-height:0;display:flex;flex-direction:column;margin-top:10px}
-body.rv-lock #chartsSection{flex:1;min-height:0;display:grid!important;grid-template-columns:minmax(0,1fr) 340px;grid-template-rows:auto auto 1fr;gap:0 14px}
+body.rv-lock #chartsSection{flex:1;min-height:0;display:grid!important;grid-template-columns:minmax(0,1fr) 340px;grid-template-rows:auto auto auto 1fr;gap:0 14px}
 body.rv-lock #reviewRunInfo{grid-column:2;grid-row:1;margin-bottom:14px}
 body.rv-lock #reviewRunInfo:empty{display:none}
 #reviewRunInfo{background:#fff;border:none;box-shadow:0 1px 3px rgba(0,0,0,.08);flex:none}
 body.rv-lock #reviewHeader{grid-column:2;grid-row:2;overflow-y:auto;max-height:100%}
 /* Accept / next: a narrow strip beside the plate box that widens over it on hover. */
 /* Back / accept / next stack at the bottom of the right-hand column, beside the plate box. */
-body.rv-lock #reviewActions{grid-column:2;grid-row:3;align-self:end;margin-bottom:10px;display:flex;flex-direction:column;gap:10px}
+body.rv-lock #reviewAdv{grid-column:2;grid-row:3;margin-bottom:10px;max-height:46vh;overflow-y:auto}
+body.rv-lock #reviewActions{grid-column:2;grid-row:4;align-self:end;margin-bottom:10px;display:flex;flex-direction:column;gap:10px}
 #reviewActions .process-btn .keycap{font-size:12px}
 #reviewActions .ra-row{display:flex;gap:10px}
 #reviewActions .ra-row .process-btn{flex:1;width:auto}
 body.rv-lock #reviewHeader{flex:none;padding:12px 16px;margin-bottom:10px}
-body.rv-lock #reviewList{grid-column:1;grid-row:1/4;min-height:0;position:relative;margin-bottom:10px}
+body.rv-lock #reviewList{grid-column:1;grid-row:1/5;min-height:0;position:relative;margin-bottom:10px}
 body.rv-lock #reviewList>.plate-charts-block{margin-bottom:0}
 body.rv-lock #reviewList>.plate-charts-block:not(.current){display:none}
 body.rv-lock #reviewList>.plate-charts-block.current{height:100%;max-height:none}
@@ -197,6 +198,15 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
 .hook-note{font-size:12px;color:#0050b3;background:#f3f8ff;border:1px dashed #7fb3ff;border-radius:10px;padding:6px 12px;margin:0 0 10px}
 .std-bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:13px;border:1px dashed #ff9500;border-radius:10px;padding:8px 14px;margin:0 0 10px;background:#fffdf8}
 .std-bar.on{border-color:#007aff;background:#f3f8ff}
+.adv-fit{padding:10px 16px;flex:none}
+.adv-fit summary{cursor:pointer;font-size:13px;font-weight:600;color:#3a3a3c}
+.adv-fit table{border-collapse:collapse;width:100%;margin:10px 0 6px;font-size:12px}
+.adv-fit th{font-weight:500;color:#636366;text-align:left;padding:2px 4px}
+.adv-fit td{padding:2px 4px}
+.adv-fit input{width:100%;box-sizing:border-box;font-size:12px;padding:3px 5px;border:1px solid #c7c7cc;border-radius:6px}
+.adv-fit .adv-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.adv-fit .adv-note{font-size:11px;color:#636366;margin-top:6px}
+.adv-fit .adv-err{font-size:12px;color:#c0392b;margin-top:6px}
 .std-bar select{font-size:13px;padding:3px 6px;border-radius:6px;border:1px solid #c7c7cc}
 .flag-banner.ok{border-color:#34c759;background:#eefaf1}
 .flag-head{font-size:15px;font-weight:600;color:#a35c00;line-height:1.35}
@@ -400,7 +410,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.36.0 &nbsp;·&nbsp; 28/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.37.0 &nbsp;·&nbsp; 28/10/2026</div>
 
 <script>
 'use strict';
@@ -3074,11 +3084,48 @@ function observeReviewList() {
 // Run parameters shown above the review header (filled in by runProcessing).
 let runInfoHtml = '';
 
+// Advanced: manual 4PL bounds / starting values. Applying refits every plate against the new settings.
+function advFitHtml(err) {
+  const names = ['Bottom', 'Top', 'ED50', 'Hill (slope)'];
+  const row = (i) => `<tr><td>${names[i]}</td>` + ['lower', 'p0', 'upper'].map(k =>
+    `<td><input type="number" step="any" data-fit="${k}|${i}" value="${fitConfig[k][i]}"></td>`).join('') + '</tr>';
+  return `<summary>Advanced: curve-fit settings</summary>
+    <table><tr><th></th><th>Lower</th><th>Initial</th><th>Upper</th></tr>${[0, 1, 2, 3].map(row).join('')}</table>
+    <div class="adv-btns"><button class="btn btn-secondary btn-sm" data-act="applyFit">Apply &amp; refit all plates</button>
+    <button class="btn btn-secondary btn-sm" data-act="resetFit">Reset</button></div>
+    ${err ? `<div class="adv-err">${escapeXml(err)}</div>` : ''}
+    <div class="adv-note">Hill is entered positive (the standard curve mirrors it). Applying refits all plates, recomputes outlier suggestions and un-accepts every plate. Your excluded points are kept. Settings last until the next Process run.</div>`;
+}
+async function applyFitSettings(fc) {
+  const r = review;
+  if (!r || waitForFitting()) return;
+  const adv = document.getElementById('reviewAdv');
+  for (let i = 0; i < 4; i++) {
+    const [lo, p0, hi] = [fc.lower[i], fc.p0[i], fc.upper[i]];
+    if (![lo, p0, hi].every(Number.isFinite)) return adv.innerHTML = advFitHtml('Every field needs a number.');
+    if (!(lo <= p0 && p0 <= hi)) return adv.innerHTML = advFitHtml('Each row needs lower ≤ initial ≤ upper.');
+  }
+  if (fc.lower[3] <= 0) return adv.innerHTML = advFitHtml('Hill must be positive.');
+  fitConfig = fc; r.meta.fit = fc; r.meta.fitSource = 'manual override (Review)';
+  runInfoHtml = runInfoHtml.replace(/(<h4>Curve-fit settings<\/h4><div>)[^<]*/, '$1manual override (Review)');
+  r.cache.clear(); r.accepted.clear(); r.flagCache = null; r.busy = true;
+  try {
+    setBusy('Refitting all plates with the new settings…');
+    await reanalyzeAsync();
+    if (r.meta.detectOutliers !== false) {
+      setBusy('Screening for outliers…');
+      r.suggested = await computeSuggestions(r.analysis.plateCharts, fitConfig, !!r.meta.universalStd, () => new Promise(res => setTimeout(res, 0)));
+    }
+  } finally { r.busy = false; setBusy(''); }
+  renderReview();
+}
+
 function renderReview(animate) {
   const sec = document.getElementById('chartsSection');
   if (!sec || !review) return;
   sec.innerHTML = `<div id="reviewRunInfo" class="run-info">${runInfoHtml}</div>`
     + `<div id="reviewHeader" class="card">${reviewHeaderHtml()}</div>`
+    + `<details id="reviewAdv" class="card adv-fit"${review.advOpen ? ' open' : ''}>${advFitHtml()}</details>`
     + `<div id="reviewList">${reviewListHtml()}</div>`
     + `<div id="reviewActions">${acceptBarHtml()}</div>`
     + `<div id="scrollHint">↓ Scroll for more</div>`;
@@ -3415,6 +3462,13 @@ document.addEventListener('click', e => {
     case 'acceptAll':
       for (let p = 0; p < review.numPlates; p++) review.accepted.add(p);
       renderReview(); break;
+    case 'applyFit': case 'resetFit': {
+      if (!review) break;
+      const fc = act.dataset.act === 'resetFit' ? JSON.parse(JSON.stringify(review.meta.fitDefault || DEFAULT_FIT)) : JSON.parse(JSON.stringify(fitConfig));
+      if (act.dataset.act === 'applyFit')
+        document.querySelectorAll('#reviewAdv input[data-fit]').forEach(inp => { const [k, i] = inp.dataset.fit.split('|'); fc[k][+i] = inp.value === '' ? NaN : Number(inp.value); });
+      applyFitSettings(fc); break;
+    }
     case 'toggleShowExcl': review.showExcl = !review.showExcl; renderReview(); break;
     case 'more':
       review.limit += FLAG.BATCH;
@@ -3422,6 +3476,8 @@ document.addEventListener('click', e => {
       break;
   }
 });
+
+document.addEventListener('toggle', e => { if (review && e.target.id === 'reviewAdv') review.advOpen = e.target.open; }, true);
 
 document.addEventListener('change', e => {
   const sel = e.target.closest && e.target.closest('select[data-stdfrom]');
@@ -3612,6 +3668,7 @@ async function runProcessing(saved) {
     log(`  Standard: ${meta.stdStart} ng/mL, 1:${meta.stdDil} dilution.`);
     log(`  Samples: 1:${meta.sampleStart} start, 1:${meta.sampleDil} dilution.`);
     fitConfig = meta.fit;
+    meta.fitDefault = JSON.parse(JSON.stringify(meta.fit));
     runInfoHtml =
       `<h4>Standard</h4><div>${meta.stdStart} ng/mL, 1:${meta.stdDil} dilution</div>` +
       `<h4>Samples</h4><div>1:${meta.sampleStart} start, 1:${meta.sampleDil} dilution</div>` +

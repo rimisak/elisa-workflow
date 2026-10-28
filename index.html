@@ -407,7 +407,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.41.4 &nbsp;·&nbsp; 28/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.41.5 &nbsp;·&nbsp; 28/10/2026</div>
 
 <script>
 'use strict';
@@ -1927,7 +1927,7 @@ async function computeSuggestions(plateCharts, fc, universal, tick) {
     for (let si = 0; si < series.length; si++) {
       const [pts, params] = series[si];
       const isStd = !universal && si === series.length - 1;
-      for (const q of suggestOutliers(pts, params, isStd ? std : fc, isStd)) found.add(q.key);
+      if (!isStd) for (const q of suggestOutliers(pts, params, fc, false)) found.add(q.key);
       if (tick) await tick(1);
     }
   }
@@ -1970,7 +1970,7 @@ self.onmessage = e => {
       if (!ctx.meta.universalStd) series.push([pc.std.points, pc.std.params, true]);
       const sug = [];
       for (const [pts, params, isStd] of series) {
-        for (const q of suggestOutliers(pts, params, isStd ? ctx.stdFc : ctx.fc, isStd)) sug.push(q.key);
+        if (!isStd) for (const q of suggestOutliers(pts, params, ctx.fc, false)) sug.push(q.key);
         tk('screen');
       }
       for (let k = series.length; k < ${FIT_STEPS_PER_PLATE}; k++) tk('pad');

@@ -167,27 +167,28 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .plate-charts-block::-webkit-scrollbar-thumb{background:#8e8e93;border-radius:6px;border:2px solid transparent;background-clip:content-box}
 .plate-charts-block::-webkit-scrollbar-thumb:hover{background:#636366;background-clip:content-box}
 #scrollHint{display:none;cursor:pointer;z-index:6;background:#1c1c1e;color:#fff;font-size:12px;font-weight:600;padding:6px 14px;border-radius:999px;box-shadow:0 2px 10px rgba(0,0,0,.3);opacity:.9}
-body.rv-lock #scrollHint.show{display:block;grid-column:1;grid-row:1/5;align-self:end;justify-self:center;margin-bottom:22px}
+body.rv-lock #scrollHint.show{display:block;grid-column:1;grid-row:1/6;align-self:end;justify-self:center;margin-bottom:22px}
 /* Review mode: the page itself does not scroll; the open Review section fills the window and shows one plate at a time. */
 body.rv-lock{height:100vh;overflow:hidden;display:flex;flex-direction:column;padding:8px 24px 12px}
 body.rv-lock>*:not(#secReview){display:none!important}
 body.rv-lock #secReview{flex:1;min-height:0;display:flex;flex-direction:column;margin-bottom:0}
 body.rv-lock #secReview .sec-head{flex:none}
 body.rv-lock #secReview .sec-body{flex:1;min-height:0;display:flex;flex-direction:column;margin-top:10px}
-body.rv-lock #chartsSection{flex:1;min-height:0;display:grid!important;grid-template-columns:minmax(0,1fr) 340px;grid-template-rows:auto auto auto 1fr;gap:0 14px}
+body.rv-lock #chartsSection{flex:1;min-height:0;display:grid!important;grid-template-columns:minmax(0,1fr) 340px;grid-template-rows:auto auto auto auto 1fr;gap:0 14px}
 body.rv-lock #reviewRunInfo{grid-column:2;grid-row:1;margin-bottom:14px}
 body.rv-lock #reviewRunInfo:empty{display:none}
 #reviewRunInfo{background:#fff;border:none;box-shadow:0 1px 3px rgba(0,0,0,.08);flex:none}
 body.rv-lock #reviewHeader{grid-column:2;grid-row:2;overflow-y:auto;max-height:100%}
 /* Accept / next: a narrow strip beside the plate box that widens over it on hover. */
 /* Back / accept / next stack at the bottom of the right-hand column, beside the plate box. */
-body.rv-lock #reviewAdv{grid-column:2;grid-row:3;margin-bottom:10px;max-height:46vh;overflow-y:auto}
-body.rv-lock #reviewActions{grid-column:2;grid-row:4;align-self:end;margin-bottom:10px;display:flex;flex-direction:column;gap:10px}
+body.rv-lock #reviewImpact{grid-column:2;grid-row:3;margin-bottom:10px}
+body.rv-lock #reviewAdv{grid-column:2;grid-row:4;margin-bottom:10px;max-height:46vh;overflow-y:auto}
+body.rv-lock #reviewActions{grid-column:2;grid-row:5;align-self:end;margin-bottom:10px;display:flex;flex-direction:column;gap:10px}
 #reviewActions .process-btn .keycap{font-size:12px}
 #reviewActions .ra-row{display:flex;gap:10px}
 #reviewActions .ra-row .process-btn{flex:1;width:auto}
 body.rv-lock #reviewHeader{flex:none;padding:12px 16px;margin-bottom:10px}
-body.rv-lock #reviewList{grid-column:1;grid-row:1/5;min-height:0;position:relative;margin-bottom:10px}
+body.rv-lock #reviewList{grid-column:1;grid-row:1/6;min-height:0;position:relative;margin-bottom:10px}
 body.rv-lock #reviewList>.plate-charts-block{margin-bottom:0}
 body.rv-lock #reviewList>.plate-charts-block:not(.current){display:none}
 body.rv-lock #reviewList>.plate-charts-block.current{height:100%;max-height:none}
@@ -196,14 +197,18 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
 .flag-banner{border:1px solid #ff9500;background:#fff6e8;border-radius:10px;padding:6px 12px;margin:8px 0}
 .std-bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:13px;border:1px dashed #ff9500;border-radius:10px;padding:8px 14px;margin:0 0 10px;background:#fffdf8}
 .std-bar.on{border-color:#007aff;background:#f3f8ff}
+.imp-card{padding:10px 16px;flex:none}
+.imp-card .imp-title{font-size:13px;font-weight:600;color:#3a3a3c}
+.imp-card .imp-row{display:flex;align-items:center;gap:10px;margin-top:8px}
+.imp-card input[type=range]{flex:1;min-width:0}
+.imp-card input[type=number]{width:56px;font-size:12px;padding:3px 5px;border:1px solid #c7c7cc;border-radius:6px}
+.imp-card .imp-note{font-size:11px;color:#636366;margin-top:6px}
 .adv-fit{padding:10px 16px;flex:none}
 .adv-fit summary{cursor:pointer;font-size:13px;font-weight:600;color:#3a3a3c}
 .adv-fit table{border-collapse:collapse;width:100%;margin:10px 0 6px;font-size:12px}
 .adv-fit th{font-weight:500;color:#636366;text-align:left;padding:2px 4px}
 .adv-fit td{padding:2px 4px}
 .adv-fit input{width:100%;box-sizing:border-box;font-size:12px;padding:3px 5px;border:1px solid #c7c7cc;border-radius:6px}
-.adv-fit .adv-impact{font-size:12px;margin-top:8px}
-.adv-fit .adv-impact input{width:64px;margin-left:6px}
 .adv-fit .adv-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .adv-fit .adv-note{font-size:11px;color:#636366;margin-top:6px}
 .adv-fit .adv-err{font-size:12px;color:#c0392b;margin-top:6px}
@@ -347,13 +352,6 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
       <span class="slider"></span>
     </label>
   </div>
-  <div class="option-row" style="margin-top:14px;border-top:1px solid #f0f0f0;padding-top:14px">
-    <span class="option-text">
-      <span class="option-title">Suggestion impact threshold (%)</span>
-      <span class="option-sub">A suggested outlier or edge-effect point is only shown if excluding it shifts the ED50 (for a standard: the interpolated concentrations) by at least this much. Lower = more suggestions, 0 = suggest everything. Can also be changed during review.</span>
-    </span>
-    <input type="number" id="minImpactInp" value="10" min="0" max="100" step="1" style="width:64px;font-size:13px;padding:4px 6px;border:1px solid #c7c7cc;border-radius:6px">
-  </div>
 </div>
 
 <!-- Process -->
@@ -407,7 +405,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.41.5 &nbsp;·&nbsp; 28/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.42.0 &nbsp;·&nbsp; 28/10/2026</div>
 
 <script>
 'use strict';
@@ -571,7 +569,7 @@ function saveSession() {
     files: r.files,
     opts: {
       subtractBg: document.getElementById('subtractBgChk').checked,
-      detectOutliers: document.getElementById('detectChk').checked, minImpact: document.getElementById('minImpactInp').value,
+      detectOutliers: document.getElementById('detectChk').checked, minImpact: Math.round(OUTLIER.MIN_IMPACT * 100),
       outputName: document.getElementById('outputName').value
     }
   });
@@ -618,7 +616,7 @@ async function restoreFiles() {
     const o = sess.opts || {};
     document.getElementById('subtractBgChk').checked = !!o.subtractBg;
     document.getElementById('detectChk').checked = o.detectOutliers !== false;
-    if (o.minImpact !== undefined && o.minImpact !== '') document.getElementById('minImpactInp').value = o.minImpact;
+    if (Number.isFinite(+o.minImpact) && o.minImpact !== '' && o.minImpact !== null) OUTLIER.MIN_IMPACT = Math.max(0, Math.min(100, +o.minImpact)) / 100;
     if (o.outputName) document.getElementById('outputName').value = o.outputName;
     setSection('secUpload', false); setSection('secProcessing', true);
     // Not re-run on reload: the saved session is picked up when Process is pressed (runProcessing reads it).
@@ -1746,7 +1744,7 @@ const OUTLIER = {
   SSE_DROP: 0.35,   // ...and removing it must cut the fit's squared error to below this fraction
   MIN_POINTS: 6,    // never suggest when fewer than this many points remain
   MAX_PER_SERIES: 2,
-  MIN_IMPACT: 0.10  // a suggestion is only worth the reviewer's time if removing it moves the ED50 (or, for a standard, the interpolated concentrations) by this fraction
+  MIN_IMPACT: 0.10  // review level (slider): suggestions whose impact (see fitImpact) is below this fraction stay hidden; every candidate is computed and carries its impact
 };
 
 // Edge effect: the outer wells (the last two rows, G and H = the most diluted points) read high from
@@ -1781,7 +1779,7 @@ function suggestEdgeEffect(pts) {
   return out;
 }
 
-// How much a refit without some points moves the result, as a fraction: the ED50 shift (log ratio) and, for a
+// How much a refit without some points moves the result, as a fraction: the relative ED50 shift and, for a
 // standard curve, the shift of the concentration read off at typical ODs. Samples are interpolated against the
 // standard, so their own fit only matters through its ED50.
 function fitImpact(a, b, isStd) {
@@ -1792,30 +1790,27 @@ function fitImpact(a, b, isStd) {
     const r = Math.abs(Math.log(cb / ca));
     if (isFinite(r) && r > d) d = r;
   }
-  return d;
+  return Math.expm1(d);
 }
 
 // Leave-one-out check on the two largest residuals of an existing fit; returns the points
 // to suggest. Clean series cost nothing — refits only happen for series with a large residual.
 function suggestOutliers(pts, fit, fc, isStd) {
-  let edge = suggestEdgeEffect(pts);
-  // Impact gate: edge points sit on the plateaus where they barely move the curve. Only suggest them when
-  // refitting without them shifts the ED50 (or the standard's concentrations) noticeably, or when one is the
-  // reading a sample's concentration is interpolated from.
-  if (edge.length && fit) {
+  const edge = suggestEdgeEffect(pts);
+  const out = [];   // {key, impact}: every candidate, with how much removing it moves the result; the review level filters them
+  // Edge points sit on the plateaus where they barely move the curve. Their impact is that of removing the
+  // whole group; it is unbounded when one is the reading a sample's concentration is interpolated from.
+  if (edge.length) {
+    let impact = Infinity;
     const rest = pts.filter(p => !edge.includes(p));
     const live = pts.filter(p => !p.excluded).sort((a, b) => a.i - b.i);
     const choice = isStd ? null : live.find(p => p.y <= 1.5);
-    let harmless = false;
-    if (rest.length >= OUTLIER.MIN_POINTS - 1 && !(choice && edge.includes(choice))) {
-      try {
-        const fit2 = fitBest4PL(rest.map(p => p.x), rest.map(p => p.y), fc, fit);
-        harmless = fitImpact(fit, fit2, isStd) < OUTLIER.MIN_IMPACT;
-      } catch(_) {}
+    if (fit && rest.length >= OUTLIER.MIN_POINTS - 1 && !(choice && edge.includes(choice))) {
+      try { impact = fitImpact(fit, fitBest4PL(rest.map(p => p.x), rest.map(p => p.y), fc, fit), isStd); } catch(_) {}
     }
-    if (harmless) edge = [];
+    for (const q of edge) out.push({key: q.key, impact});
   }
-  const out = edge.slice();
+  const fit0 = fit;
   let cur = pts.filter(p => !edge.includes(p));
   for (let k = 0; k < OUTLIER.MAX_PER_SERIES; k++) {
     if (!fit || cur.length < OUTLIER.MIN_POINTS) break;
@@ -1833,12 +1828,11 @@ function suggestOutliers(pts, fit, fc, isStd) {
       const dev = Math.abs(cur[j].y - model4PL(cur[j].x, fit2));
       const sse2 = rest.reduce((s,p)=>s + (p.y - model4PL(p.x, fit2))**2, 0);
       const rms2 = Math.sqrt(sse2 / rest.length);
-      if (dev >= floor && dev >= OUTLIER.RMS_MULT * rms2 && sse2 <= OUTLIER.SSE_DROP * sse
-          && fitImpact(fit, fit2, isStd) >= OUTLIER.MIN_IMPACT && (!pick || dev > pick.dev))
+      if (dev >= floor && dev >= OUTLIER.RMS_MULT * rms2 && sse2 <= OUTLIER.SSE_DROP * sse && (!pick || dev > pick.dev))
         pick = {j, dev, fit2};
     }
     if (!pick) break;
-    out.push(cur[pick.j]);
+    out.push({key: cur[pick.j].key, impact: fitImpact(fit0, pick.fit2, isStd)});   // cumulative against the original fit
     cur = cur.filter((_,i)=>i!==pick.j);
     fit = pick.fit2;
   }
@@ -1919,7 +1913,7 @@ function makeProgress() {
 
 // Suggested outliers from a first, unexcluded analysis. Returns a Set of exKeys.
 async function computeSuggestions(plateCharts, fc, universal, tick) {
-  const found = new Set();
+  const found = new Map();   // key → impact
   for (const pc of plateCharts) {
     const series = pc.samples.map(s => [s.points, s.params]);
     if (!universal) series.push([pc.std.points, pc.std.params]);
@@ -1927,7 +1921,7 @@ async function computeSuggestions(plateCharts, fc, universal, tick) {
     for (let si = 0; si < series.length; si++) {
       const [pts, params] = series[si];
       const isStd = !universal && si === series.length - 1;
-      if (!isStd) for (const q of suggestOutliers(pts, params, fc, false)) found.add(q.key);
+      if (!isStd) for (const q of suggestOutliers(pts, params, fc, false)) found.set(q.key, q.impact);
       if (tick) await tick(1);
     }
   }
@@ -1970,7 +1964,7 @@ self.onmessage = e => {
       if (!ctx.meta.universalStd) series.push([pc.std.points, pc.std.params, true]);
       const sug = [];
       for (const [pts, params, isStd] of series) {
-        if (!isStd) for (const q of suggestOutliers(pts, params, ctx.fc, false)) sug.push(q.key);
+        if (!isStd) for (const q of suggestOutliers(pts, params, ctx.fc, false)) sug.push([q.key, q.impact]);
         tk('screen');
       }
       for (let k = series.length; k < ${FIT_STEPS_PER_PLATE}; k++) tk('pad');
@@ -2062,16 +2056,16 @@ async function warmCacheParallel(pool, grid, numPlates, meta, fc, excl, cache, l
 
 // First run: fits every plate and screens it for outlier suggestions in one worker job (no barrier
 // between the two phases, so the pool stays busy). Ticks: FIT_STEPS_PER_PLATE per phase and plate.
-// Returns the Set of suggested exKeys, or null when the pool failed (nothing is cached then).
+// Returns the Map of suggested exKey → impact, or null when the pool failed (nothing is cached then).
 async function fitAndScreenParallel(pool, numPlates, excl, cache, logFn, tick, onPlate) {
   try {
-    const found = new Set();
+    const found = new Map();
     let chain = Promise.resolve();
     const tickSoon = m => { chain = chain.then(() => tick(m)); chain.catch(() => {}); return chain; };
     await Promise.all([...Array(numPlates).keys()].map(p => {
       const sig = plateSig(p, excl);   // as dispatched: the user may edit other plates while this one fits
       return pool.run({type: 'plate', p, excl: [...excl].filter(k => k.startsWith(p + '|')), screen: true}, tickSoon, logFn)
-        .then(r => { cache.set(sig, r.entry); r.sug.forEach(k => found.add(k)); if (onPlate) onPlate(p, r.sug); });
+        .then(r => { cache.set(sig, r.entry); r.sug.forEach(([k, v]) => found.set(k, v)); if (onPlate) onPlate(p, r.sug); });
     }));
     await chain;
     return found;
@@ -2592,7 +2586,10 @@ function renderStandardChart(pc) {
   const S = makeScales(xd, yd);
   let body = axisSvg(xd, yd, S, 'Concentration (log)', 'OD');
   if (pc.std.params) {
-    body += `<path d="${curvePath(pc.std.params, xd, S)}" fill="none" stroke="#1c1c1e" stroke-width="1.8"/>`;
+    const d = curvePath(pc.std.params, xd, S);
+    // A poor or failed standard fit gets the same red glow as poorly fitted sample curves.
+    if (plateFlags(pc).notes.some(t => /poor standard curve|standard-curve fit failed/.test(t))) body += `<path d="${d}" fill="none" stroke="#ff3b30" stroke-width="7" stroke-linecap="round" opacity=".35" style="filter:blur(2.5px)" pointer-events="none"/>`;
+    body += `<path d="${d}" fill="none" stroke="#1c1c1e" stroke-width="1.8"/>`;
   }
   let pts = '';
   for (const p of pc.std.points) pts += pointSvg(p, S, '#1c1c1e', 3, `Standard, ${fmtTick(p.x)}`);
@@ -3019,11 +3016,47 @@ function observeReviewList() {
   requestAnimationFrame(updateScrollHint);
 }
 
-// Impact threshold (fraction) from the Processing option; invalid input falls back to the default 10 %.
-function readMinImpact() {
-  const v = Number(document.getElementById('minImpactInp').value);
-  return document.getElementById('minImpactInp').value !== '' && isFinite(v) && v >= 0 && v <= 100 ? v / 100 : 0.10;
+// Suggested outliers = the candidates whose impact reaches the review level. Every candidate was computed once
+// (review.sugImpact); moving the slider only re-filters them, no refit.
+function refilterSuggested() {
+  const r = review;
+  if (!r) return;
+  r.suggested = new Set([...r.sugImpact].filter(([, v]) => v >= OUTLIER.MIN_IMPACT).map(([k]) => k));
+  r.flagCache = null;
 }
+function impactCardHtml() {
+  const r = review, pct = Math.round(OUTLIER.MIN_IMPACT * 100), off = r.meta.detectOutliers === false;
+  return `<div class="imp-title">Outlier sensitivity</div>
+    <div class="imp-row"><input type="range" id="impRange" min="0" max="100" step="1" value="${pct}"${off ? ' disabled' : ''}>
+    <input type="number" id="impNum" min="0" max="100" step="1" value="${pct}"${off ? ' disabled' : ''}><span>%</span></div>
+    <div class="imp-note" id="impNote">${impactNoteHtml()}</div>`;
+}
+function impactNoteHtml() {
+  const r = review;
+  if (r.meta.detectOutliers === false) return 'Outlier detection is off.';
+  return `<b>${r.suggested.size}</b> of ${r.sugImpact.size} candidate points shown. A candidate is shown when excluding it would shift the ED50 by at least this much. 0 % shows all.`;
+}
+document.addEventListener('change', e => { if (e.target.id === 'impRange') e.target.blur(); });   // hand the arrow-key shortcuts back
+let impactRaf = 0;
+function setImpactLevel(v) {
+  if (!review || !Number.isFinite(v)) return;
+  v = Math.max(0, Math.min(100, Math.round(v)));
+  OUTLIER.MIN_IMPACT = v / 100;
+  for (const id of ['impRange', 'impNum']) { const el = document.getElementById(id); if (el && document.activeElement !== el) el.value = v; }
+  refilterSuggested();
+  const note = document.getElementById('impNote'); if (note) note.innerHTML = impactNoteHtml();
+  if (impactRaf) return;
+  impactRaf = requestAnimationFrame(() => {
+    impactRaf = 0;
+    if (!review) return;
+    const list = document.getElementById('reviewList');
+    if (list) list.innerHTML = reviewListHtml();
+    refreshHeaders(); saveSession(); updateSections();
+  });
+}
+document.addEventListener('input', e => {
+  if (e.target.id === 'impRange' || e.target.id === 'impNum') setImpactLevel(e.target.value === '' ? NaN : Number(e.target.value));
+});
 
 // Run parameters shown above the review header (filled in by runProcessing).
 let runInfoHtml = '';
@@ -3035,13 +3068,12 @@ function advFitHtml(err) {
     `<td><input type="number" step="any" data-fit="${k}|${i}" value="${fitConfig[k][i]}"></td>`).join('') + '</tr>';
   return `<summary>Advanced: curve-fit settings</summary>
     <table><tr><th></th><th>Lower</th><th>Initial</th><th>Upper</th></tr>${[0, 1, 2, 3].map(row).join('')}</table>
-    <div class="adv-impact"><label>Suggestion impact threshold (%) <input type="number" min="0" max="100" step="1" data-impact value="${+(OUTLIER.MIN_IMPACT * 100).toFixed(2)}"></label></div>
     <div class="adv-btns"><button class="btn btn-secondary btn-sm" data-act="applyFit">Apply &amp; refit all plates</button>
     <button class="btn btn-secondary btn-sm" data-act="resetFit">Reset</button></div>
     ${err ? `<div class="adv-err">${escapeXml(err)}</div>` : ''}
-    <div class="adv-note">Hill is entered positive (the standard curve mirrors it). Applying refits all plates, recomputes outlier suggestions and un-accepts every plate. Your excluded points are kept. Settings last until the next Process run. The impact threshold decides which suggested outliers are worth showing: lower it to see more, raise it to see fewer.</div>`;
+    <div class="adv-note">Hill is entered positive (the standard curve mirrors it). Applying refits all plates, recomputes outlier suggestions and un-accepts every plate. Your excluded points are kept. Settings last until the next Process run.</div>`;
 }
-async function applyFitSettings(fc, impact) {
+async function applyFitSettings(fc) {
   const r = review;
   if (!r || waitForFitting()) return;
   const adv = document.getElementById('reviewAdv');
@@ -3051,9 +3083,6 @@ async function applyFitSettings(fc, impact) {
     if (!(lo <= p0 && p0 <= hi)) return adv.innerHTML = advFitHtml('Each row needs lower ≤ initial ≤ upper.');
   }
   if (fc.lower[3] <= 0) return adv.innerHTML = advFitHtml('Hill must be positive.');
-  if (!(impact >= 0 && impact <= 100)) return adv.innerHTML = advFitHtml('The impact threshold must be between 0 and 100 %.');
-  OUTLIER.MIN_IMPACT = impact / 100;
-  document.getElementById('minImpactInp').value = impact;
   fitConfig = fc; r.meta.fit = fc; r.meta.fitSource = 'manual override (Review)';
   runInfoHtml = runInfoHtml.replace(/(<h4>Curve-fit settings<\/h4><div>)[^<]*/, '$1manual override (Review)');
   r.cache.clear(); r.accepted.clear(); r.flagCache = null; r.busy = true;
@@ -3062,7 +3091,8 @@ async function applyFitSettings(fc, impact) {
     await reanalyzeAsync();
     if (r.meta.detectOutliers !== false) {
       setBusy('Screening for outliers…');
-      r.suggested = await computeSuggestions(r.analysis.plateCharts, fitConfig, !!r.meta.universalStd, () => new Promise(res => setTimeout(res, 0)));
+      r.sugImpact = await computeSuggestions(r.analysis.plateCharts, fitConfig, !!r.meta.universalStd, () => new Promise(res => setTimeout(res, 0)));
+      refilterSuggested();
     }
   } finally { r.busy = false; setBusy(''); }
   renderReview();
@@ -3073,6 +3103,7 @@ function renderReview(animate) {
   if (!sec || !review) return;
   sec.innerHTML = `<div id="reviewRunInfo" class="run-info">${runInfoHtml}</div>`
     + `<div id="reviewHeader" class="card">${reviewHeaderHtml()}</div>`
+    + `<div id="reviewImpact" class="card imp-card">${impactCardHtml()}</div>`
     + `<details id="reviewAdv" class="card adv-fit"${review.advOpen ? ' open' : ''}>${advFitHtml()}</details>`
     + `<div id="reviewList">${reviewListHtml()}</div>`
     + `<div id="reviewActions">${acceptBarHtml()}</div>`
@@ -3422,12 +3453,7 @@ document.addEventListener('click', e => {
       const fc = act.dataset.act === 'resetFit' ? JSON.parse(JSON.stringify(review.meta.fitDefault || DEFAULT_FIT)) : JSON.parse(JSON.stringify(fitConfig));
       if (act.dataset.act === 'applyFit')
         document.querySelectorAll('#reviewAdv input[data-fit]').forEach(inp => { const [k, i] = inp.dataset.fit.split('|'); fc[k][+i] = inp.value === '' ? NaN : Number(inp.value); });
-      let impact = 10;
-      if (act.dataset.act === 'applyFit') {
-        const inp = document.querySelector('#reviewAdv input[data-impact]');
-        impact = inp.value === '' ? NaN : Number(inp.value);
-      }
-      applyFitSettings(fc, impact); break;
+      applyFitSettings(fc); break;
     }
     case 'toggleShowExcl': review.showExcl = !review.showExcl; renderReview(); break;
     case 'more':
@@ -3569,7 +3595,7 @@ function buildSessionSheet() {
     plate384: document.getElementById('plate384Chk').checked,
     sess: {excl: [...r.excl], accepted: [...r.accepted], hidden: [...r.hidden], stdFrom: r.stdFrom || {}, files: r.files,
            opts: {subtractBg: document.getElementById('subtractBgChk').checked,
-                  detectOutliers: document.getElementById('detectChk').checked, minImpact: document.getElementById('minImpactInp').value,
+                  detectOutliers: document.getElementById('detectChk').checked, minImpact: Math.round(OUTLIER.MIN_IMPACT * 100),
                   outputName: document.getElementById('outputName').value}},
     fit: /manual/.test(r.meta.fitSource || '') ? fitConfig : null
   });
@@ -3594,7 +3620,7 @@ async function restoreFromWorkbook(bytes) {
     render384Pattern();
     document.getElementById('subtractBgChk').checked = !!o.subtractBg;
     document.getElementById('detectChk').checked = o.detectOutliers !== false;
-    if (o.minImpact !== undefined && o.minImpact !== '') document.getElementById('minImpactInp').value = o.minImpact;
+    if (Number.isFinite(+o.minImpact) && o.minImpact !== '' && o.minImpact !== null) OUTLIER.MIN_IMPACT = Math.max(0, Math.min(100, +o.minImpact)) / 100;
     if (o.outputName) document.getElementById('outputName').value = o.outputName;
     lastPlateFiles = [];
     showCSVState(); showMetaState();
@@ -3705,7 +3731,6 @@ async function runProcessing(saved) {
     prog.set(4, 'Reading metadata…');
     const meta = parseMetadata(metaBytes);
     meta.detectOutliers = document.getElementById('detectChk').checked;
-    OUTLIER.MIN_IMPACT = readMinImpact();
     log(`  ${meta.names.length} plate name row(s) found.`);
     log(`  Standard: ${meta.stdStart} ng/mL, 1:${meta.stdDil} dilution.`);
     log(`  Samples: 1:${meta.sampleStart} start, 1:${meta.sampleDil} dilution.`);
@@ -3741,7 +3766,7 @@ async function runProcessing(saved) {
       }
     }
     review = {grid, numPlates, meta, outputName,
-              excl: new Set(saved && saved.excl || []), suggested: new Set(), hidden: new Set(saved && saved.hidden || []),
+              excl: new Set(saved && saved.excl || []), suggested: new Set(), sugImpact: new Map(), hidden: new Set(saved && saved.hidden || []),
               accepted: new Set(saved && saved.accepted || []), analysis: null, cache: new Map(),
               files, view: 'all', cur: null, limit: FLAG.BATCH, flagCache: null, stdFrom: saved && saved.stdFrom || {},
               ready: new Set(), done: new Set(), nextRel: 0, seen: new Set(), fresh: null, fitting: false, shown: false, restoring: !!saved};
@@ -3778,7 +3803,8 @@ async function runProcessing(saved) {
     };
     const onPlate = (p, sug) => {
       if (gen !== runGen) return;
-      sug.forEach(k => review.suggested.add(k));
+      sug.forEach(([k, v]) => review.sugImpact.set(k, v));
+      refilterSuggested();
       // Plates finish in any order; they are released to the review in plate order, so it always starts with the first.
       review.done.add(p);
       const borrows = q => review.stdFrom && review.stdFrom[q] != null;
@@ -3806,7 +3832,7 @@ async function runProcessing(saved) {
         prog.set(5 + 90 * frac, 'Fitting and screening…');
         await prog.yieldMaybe();
       }, onPlate);
-      if (sug) { review.suggested = sug; screened = true; }
+      if (sug) { review.sugImpact = sug; refilterSuggested(); screened = true; }
       clearTimeout(uiTimer); uiTimer = 0;
     }
     review.fitting = false;
@@ -3831,7 +3857,7 @@ async function runProcessing(saved) {
     if (!screened) {
       const sugTotal = review.analysis.plateCharts.reduce((n, pc) => n + pc.samples.length + (meta.universalStd ? 0 : 1), 0) || 1;
       let sugDone = 0;
-      review.suggested = meta.detectOutliers === false ? new Set() : await computeSuggestions(review.analysis.plateCharts, fitConfig, !!meta.universalStd, async u => {
+      review.sugImpact = meta.detectOutliers === false ? new Map() : await computeSuggestions(review.analysis.plateCharts, fitConfig, !!meta.universalStd, async u => {
         if (gen !== runGen) throw CANCELLED;
         sugDone += u;
         prog.set(70 + 27 * sugDone / sugTotal, 'Screening for outliers…');
@@ -3839,7 +3865,8 @@ async function runProcessing(saved) {
       });
     }
     log(`  Fitting and screening took ${((performance.now() - tFit) / 1000).toFixed(1)} s.`);
-    log(`  ${review.suggested.size} suggested outlier(s).`);
+    refilterSuggested();
+    log(`  ${review.suggested.size} suggested outlier(s) at an impact level of ${Math.round(OUTLIER.MIN_IMPACT * 100)} % (${review.sugImpact.size} candidates in all).`);
 
     prog.set(99, 'Drawing the review…');
     await new Promise(r => setTimeout(r, 0));

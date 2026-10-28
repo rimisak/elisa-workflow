@@ -337,6 +337,16 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
       <span class="slider"></span>
     </label>
   </div>
+  <div class="option-row" style="margin-top:14px;border-top:1px solid #f0f0f0;padding-top:14px">
+    <span class="option-text">
+      <span class="option-title">Detect outliers</span>
+      <span class="option-sub">Suggest outlier and edge-effect points for exclusion. Turn off to review without any suggestions (points can still be excluded by hand).</span>
+    </span>
+    <label class="switch">
+      <input type="checkbox" id="detectChk" checked>
+      <span class="slider"></span>
+    </label>
+  </div>
 </div>
 
 <!-- Process -->
@@ -390,7 +400,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.35.0 &nbsp;·&nbsp; 28/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.36.0 &nbsp;·&nbsp; 28/10/2026</div>
 
 <script>
 'use strict';
@@ -554,6 +564,7 @@ function saveSession() {
     opts: {
       subtractBg: document.getElementById('subtractBgChk').checked,
       hookFix: document.getElementById('hookChk').checked,
+      detectOutliers: document.getElementById('detectChk').checked,
       outputName: document.getElementById('outputName').value
     }
   });
@@ -600,6 +611,7 @@ async function restoreFiles() {
     const o = sess.opts || {};
     document.getElementById('subtractBgChk').checked = !!o.subtractBg;
     document.getElementById('hookChk').checked = o.hookFix !== false;
+    document.getElementById('detectChk').checked = o.detectOutliers !== false;
     if (o.outputName) document.getElementById('outputName').value = o.outputName;
     setSection('secUpload', false); setSection('secProcessing', true);
     // Not re-run on reload: the saved session is picked up when Process is pressed (runProcessing reads it).
@@ -1959,7 +1971,7 @@ self.onmessage = e => {
       // fitting and outlier screening by their real cost.
       const tk = ph => { const now = performance.now(); self.postMessage({type: 'tick', id, ph, dt: ph === 'pad' ? 0 : now - last}); last = now; };
       while (!(r = it.next()).done) tk('fit');
-      if (!m.screen) { self.postMessage({type: 'done', id, result: r.value}); return; }
+      if (!m.screen || ctx.meta.detectOutliers === false) { self.postMessage({type: 'done', id, result: r.value}); return; }
       // Outlier screening on the plate's fresh (unexcluded) fits, in the same job.
       const pc = r.value.plateChart, series = pc.samples.map(s => [s.points, s.params, false]);
       if (!ctx.meta.universalStd) series.push([pc.std.points, pc.std.params, true]);
@@ -1981,7 +1993,7 @@ function createFitPool(grid, meta, fc, maxWorkers) {
   const size = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 4) - 1, maxWorkers || 8));
   const workers = [], idle = [], queue = [], running = new Map();
   let url = null, closed = false, nextId = 1;
-  const slim = {seriesST: meta.seriesST, seriesSA: meta.seriesSA, universalStd: meta.universalStd || null, hookFix: !!meta.hookFix};
+  const slim = {seriesST: meta.seriesST, seriesSA: meta.seriesSA, universalStd: meta.universalStd || null, hookFix: !!meta.hookFix, detectOutliers: meta.detectOutliers !== false};
   const pump = () => {
     while (idle.length && queue.length) {
       const w = idle.pop(), job = queue.shift();
@@ -3595,6 +3607,7 @@ async function runProcessing(saved) {
     prog.set(4, 'Reading metadata…');
     const meta = parseMetadata(metaBytes);
     meta.hookFix = document.getElementById('hookChk').checked;
+    meta.detectOutliers = document.getElementById('detectChk').checked;
     log(`  ${meta.names.length} plate name row(s) found.`);
     log(`  Standard: ${meta.stdStart} ng/mL, 1:${meta.stdDil} dilution.`);
     log(`  Samples: 1:${meta.sampleStart} start, 1:${meta.sampleDil} dilution.`);
@@ -3718,7 +3731,7 @@ async function runProcessing(saved) {
     if (!screened) {
       const sugTotal = review.analysis.plateCharts.reduce((n, pc) => n + pc.samples.length + (meta.universalStd ? 0 : 1), 0) || 1;
       let sugDone = 0;
-      review.suggested = await computeSuggestions(review.analysis.plateCharts, fitConfig, !!meta.universalStd, async u => {
+      review.suggested = meta.detectOutliers === false ? new Set() : await computeSuggestions(review.analysis.plateCharts, fitConfig, !!meta.universalStd, async u => {
         if (gen !== runGen) throw CANCELLED;
         sugDone += u;
         prog.set(70 + 27 * sugDone / sugTotal, 'Screening for outliers…');

@@ -410,7 +410,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.39.1 &nbsp;·&nbsp; 28/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.39.2 &nbsp;·&nbsp; 28/10/2026</div>
 
 <script>
 'use strict';
@@ -448,12 +448,13 @@ function updateSections() {
   setBadge('badgeReview', all ? '✓ All plates accepted' : `${acc}/${n} plates accepted`, all ? 'done' : 'busy');
   if (!all) {
     r.dlOpened = false;
+    if (acc < n) r.sawOpen = true;   // only a plate accepted during this review jumps to Download, not a restored session
     setBadge('badgeDownload', 'Waiting for review', 'idle');
     btn.disabled = true; btn.textContent = 'Download';
     hint.textContent = `Accept all plates in the review step to enable the download (${acc}/${n} accepted).`;
     return;
   }
-  if (!r.dlOpened) { r.dlOpened = true; setSection('secReview', false); setSection('secDownload', true); }
+  if (!r.dlOpened) { r.dlOpened = true; if (r.sawOpen) { setSection('secReview', false); setSection('secDownload', true); } }
   prepareDownload();
   if (r.out) {
     setBadge('badgeDownload', 'Ready', 'done');
@@ -3820,7 +3821,7 @@ async function runProcessing(saved) {
         review.shown = true;
         renderReview();
         setSection('secProcessing', false);
-        if (review.accepted.size < numPlates) setSection('secReview', true);
+        setSection('secReview', true);
       } else {
         refreshHeaders(); refreshListIncremental(); updateSections();
       }
@@ -3902,8 +3903,7 @@ async function runProcessing(saved) {
     prog.set(100, 'Done');
     setBadge('badgeProcessing', '✓ Done', 'done');
     setSection('secProcessing', false);
-    // When every plate was already accepted (restored session), updateSections already collapsed Review and opened Download.
-    if (!wasShown && review.accepted.size < numPlates) setSection('secReview', true);
+    if (!wasShown) setSection('secReview', true);
     log('Review the graphs, exclude outliers if needed, accept each plate, then download.', 'success');
   } catch (err) {
     if (err !== CANCELLED) {

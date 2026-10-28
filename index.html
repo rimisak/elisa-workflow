@@ -389,7 +389,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.33.2 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.34.0 &nbsp;·&nbsp; 28/10/2026</div>
 
 <script>
 'use strict';
@@ -2547,8 +2547,7 @@ function pointSvg(p, S, col, r, label) {
 // Display-only: hidden samples drop out of both graphs but stay in the results; axes stay as for all samples.
 function isHidden(pc, s) {
   if (!review) return false;
-  if (review.hidden.has(pc.plateIndex + '|' + s.name)) return true;
-  return focusActive(pc) && !focusSamples(pc).has(s.name);
+  return review.hidden.has(pc.plateIndex + '|' + s.name);
 }
 
 function renderSampleChart(pc) {
@@ -2625,7 +2624,7 @@ function renderStandardChart(pc) {
 
 // ─── REVIEW STATE ─────────────────────────────────────────────────────────────
 // Set after Process; the workbook is only written when every plate is accepted.
-let review = null;  // {grid, numPlates, meta, outputName, excl, suggested, accepted, analysis, view, cur, limit, focusOff}
+let review = null;  // {grid, numPlates, meta, outputName, excl, suggested, accepted, analysis, view, cur, limit}
 
 // ─── REVIEW TRIAGE ────────────────────────────────────────────────────────────
 // A plate is "flagged" when something in it deserves a look: unresolved suggested outliers, a failed
@@ -2744,31 +2743,6 @@ function triageCounts() {
   }
   return {todo, clean, acc: r.accepted.size};
 }
-// With flagged samples present, the plate's graphs show only those until "Show all" is used.
-// The samples a plate's graphs focus on. Sticky: a sample stays in the set once flagged (or once one
-// of its suggested outliers was excluded), so fixing it by exclusion does not make its curve vanish
-// or the other curves suddenly appear.
-function focusSamples(pc) {
-  const r = review, p = pc.plateIndex;
-  const set = (r.focusSet || (r.focusSet = {}))[p] || (r.focusSet[p] = new Set());
-  for (const n of plateFlags(pc).samples.keys()) set.add(n);
-  for (const s of pc.samples) if (s.points.some(q => q.excluded && r.suggested.has(q.key))) set.add(s.name);
-  return set;
-}
-function focusActive(pc) {
-  const r = review;
-  if (!r || r.view !== 'todo' || r.focusOff.has(pc.plateIndex)) return false;
-  const n = focusSamples(pc).size;
-  return n > 0 && n < pc.samples.length;
-}
-function materializeFocus(p) {
-  const pc = review.analysis.plateCharts[p];
-  if (!focusActive(pc)) return;
-  const f = focusSamples(pc);
-  for (const s of pc.samples) if (!f.has(s.name)) review.hidden.add(p + '|' + s.name);
-  review.focusOff.add(p);
-}
-
 function pointLabel(key) {
   const [p, c, i] = key.split('|').map(Number);
   const pc = review.analysis.plateCharts[p];
@@ -2867,7 +2841,7 @@ function plateBlockHtml(pc) {
     legend += `<button class="legend-item legend-btn${off ? ' off' : ''}" role="checkbox" aria-checked="${!off}" data-hide="${p}|${escapeXml(s.name)}" title="Click to ${off ? 'show' : 'hide'}; shift-click to show only this sample"><span class="cb">${off ? '' : '✓'}</span><span class="legend-swatch" style="background:${sampleColor(i)}"></span>${escapeXml(s.name)}${ed}</button>`;
   });
   const nHid = pc.samples.filter(s => isHidden(pc, s)).length;
-  const fl = plateFlags(pc), focus = focusActive(pc);
+  const fl = plateFlags(pc);
   const poorSet = poorNames(pc);
   const onlyPoor = poorSet.size > 0 && pc.samples.every(s => poorSet.has(s.name) === !isHidden(pc, s)) && poorSet.size < pc.samples.length;
   if (pc.samples.length) legend += `<span class="legend-all">
@@ -2916,11 +2890,11 @@ function plateBlockHtml(pc) {
     banner = `<div class="flag-banner"><div class="flag-head">⚠ Plate flagged.</div>
       <div class="flag-cols">
       ${group(1, 'Standard curve fit', !stdBad.length, stdTxt)}
-      ${group(2, 'Outliers', !nOut, nOut ? `${nOut} suggested` : 'None detected', nOut ? `<button class="btn btn-secondary btn-sm" data-exclplate="${p}" title="Exclude all suggested outliers and show only their curves">Exclude ${nOut > 1 ? 'all ' : ''}${nOut} outlier${nOut > 1 ? 's' : ''} <kbd class="keycap">X</kbd></button>` : '')}
+      ${group(2, 'Outliers', !nOut, nOut ? `${nOut} suggested` : 'None detected', nOut ? `<button class="btn btn-secondary btn-sm" data-exclplate="${p}" title="Exclude all suggested outliers">Exclude ${nOut > 1 ? 'all ' : ''}${nOut} outlier${nOut > 1 ? 's' : ''} <kbd class="keycap">X</kbd></button>` : '')}
       ${group(3, 'Poorly fitted curves', !nFit, nFit ? `${nFit} curve${nFit > 1 ? 's' : ''}` : 'None', nFit ? (onlyPoor ? `<button class="btn btn-secondary btn-sm" data-showall="${p}" title="Show every dilution curve again">Show all</button>` : `<button class="btn btn-secondary btn-sm" data-poorfit="${p}" title="Show only curves with a failed fit, low R² or a parameter at its fit bound">Show only poor fits</button>`) : '')}
       </div></div>`;
   } else if (plateResolved(p)) {
-    banner = `<div class="flag-banner ok"><div class="flag-head">✓ Resolved — ${nEx} point${nEx > 1 ? 's' : ''} excluded, no issues remain.</div>${focus ? `<div class="focus-note">Graphs still show only the ${focusSamples(pc).size} sample${focusSamples(pc).size > 1 ? "s" : ""} that ${focusSamples(pc).size > 1 ? "were" : "was"} flagged — “Show all” reveals the rest.</div>` : ''}</div>`;
+    banner = `<div class="flag-banner ok"><div class="flag-head">✓ Resolved — ${nEx} point${nEx > 1 ? 's' : ''} excluded, no issues remain.</div></div>`;
   } else if (nEx) {
     banner = `<div class="flag-banner ok"><div class="flag-head">✎ No issues flagged — ${nEx} point${nEx > 1 ? 's' : ''} excluded by you.</div></div>`;
   } else {
@@ -3306,7 +3280,6 @@ document.addEventListener('click', e => {
   const hb = e.target.closest('[data-hide]');
   if (hb) {
     const key = hb.dataset.hide, p = Number(key.split('|')[0]);
-    materializeFocus(p);
     const pc = review.analysis.plateCharts[p];
     if (e.shiftKey) {
       review.hidden = new Set([...review.hidden].filter(k => !k.startsWith(p + '|')));
@@ -3319,7 +3292,6 @@ document.addEventListener('click', e => {
   if (sa) {
     if (sa.disabled) return;
     const p = Number(sa.dataset.showall);
-    review.focusOff.add(p);
     review.hidden = new Set([...review.hidden].filter(k => !k.startsWith(p + '|')));
     refreshReview(p);
     return;
@@ -3328,7 +3300,6 @@ document.addEventListener('click', e => {
   if (pf) {
     if (pf.disabled) return;
     const p = Number(pf.dataset.poorfit), pc = review.analysis.plateCharts[p], poor = poorNames(pc);
-    review.focusOff.add(p);
     review.hidden = new Set([...review.hidden].filter(k => !k.startsWith(p + '|')));
     for (const s of pc.samples) if (!poor.has(s.name)) review.hidden.add(p + '|' + s.name);
     refreshReview(p);
@@ -3338,7 +3309,6 @@ document.addEventListener('click', e => {
   if (ha) {
     if (ha.disabled) return;
     const p = Number(ha.dataset.hideall);
-    review.focusOff.add(p);
     for (const s of review.analysis.plateCharts[p].samples) review.hidden.add(p + '|' + s.name);
     refreshReview(p);
     return;
@@ -3349,7 +3319,6 @@ document.addEventListener('click', e => {
     const pc = review.analysis.plateCharts[p];
     // Already the only curve shown: this click toggles the point itself.
     if (on.dataset.key && pc.samples.every(s => (s.name === name) === !isHidden(pc, s))) { toggleExclusion(on.dataset.key); return; }
-    review.focusOff.add(p);
     review.hidden = new Set([...review.hidden].filter(k => !k.startsWith(p + '|')));
     for (const s of pc.samples) if (s.name !== name) review.hidden.add(p + '|' + s.name);
     if (on.dataset.showexcl && !review.showExcl) { review.showExcl = true; saveSession(); renderReview(); return; }
@@ -3363,8 +3332,6 @@ document.addEventListener('click', e => {
     const u = review.undo, p = Number(ux.dataset.undoexcl);
     if (!u || u.p !== p) return;
     u.keys.forEach(k => review.excl.delete(k));
-    review.hidden = new Set(u.hidden);
-    if (!u.focusOff) review.focusOff.delete(p);
     review.undo = null;
     review.accepted.delete(p);
     review.out = null; review.prepFailed = false; review.blobTok = (review.blobTok || 0) + 1;
@@ -3374,15 +3341,8 @@ document.addEventListener('click', e => {
   }
   const xp = e.target.closest('[data-exclplate]');
   if (xp) {
-    const p = Number(xp.dataset.exclplate), pc = review.analysis.plateCharts[p];
-    const out = new Set(pc.samples.filter(s => s.points.some(q => review.suggested.has(q.key) && !review.excl.has(q.key))).map(s => s.name));
-    review.undo = {p, keys: [...review.suggested].filter(k => k.startsWith(p + '|') && !review.excl.has(k)),
-      hidden: new Set(review.hidden), focusOff: review.focusOff.has(p)};
-    if (out.size) {
-      review.focusOff.add(p);
-      review.hidden = new Set([...review.hidden].filter(k => !k.startsWith(p + '|')));
-      for (const s of pc.samples) if (!out.has(s.name)) review.hidden.add(p + '|' + s.name);
-    }
+    const p = Number(xp.dataset.exclplate);
+    review.undo = {p, keys: [...review.suggested].filter(k => k.startsWith(p + '|') && !review.excl.has(k))};
     excludeSuggestedInPlate(p);
     return;
   }
@@ -3643,7 +3603,7 @@ async function runProcessing(saved) {
     review = {grid, numPlates, meta, outputName,
               excl: new Set(saved && saved.excl || []), suggested: new Set(), hidden: new Set(saved && saved.hidden || []),
               accepted: new Set(saved && saved.accepted || []), analysis: null, cache: new Map(),
-              files, view: 'all', cur: null, limit: FLAG.BATCH, focusOff: new Set(), flagCache: null, stdFrom: saved && saved.stdFrom || {},
+              files, view: 'all', cur: null, limit: FLAG.BATCH, flagCache: null, stdFrom: saved && saved.stdFrom || {},
               ready: new Set(), done: new Set(), nextRel: 0, seen: new Set(), fresh: null, fitting: false, shown: false, restoring: !!saved};
     // Open the review right away: every plate is a grey tile until its fit is done.
     review.fitting = true;

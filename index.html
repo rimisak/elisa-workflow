@@ -2938,11 +2938,12 @@ function plateBlockHtml(pc) {
       : escapeXml(r.meta.universalStd ? 'OK — universal standard curve' : pc.std.borrowed ? `OK — borrowed from plate ${pc.std.from + 1}` : `OK${fl.stdR2 != null ? ` (R² ${fl.stdR2.toFixed(3)})` : ''}`);
     const nOut = ofKind(['outlier']).reduce((a, [, w]) => a + w[0].n, 0) + fl.stdOpen;
     const nFit = ofKind(['failed', 'r2', 'bound']).length;
+    const nVis = visibleSuggestedKeys(p).length;
     const group = (i, title, ok, txt, btn = '') => `<div class="flag-group"><span class="flag-gtitle">${i}. ${title}</span>${btn || `<span class="flag-item${ok ? ' ok' : ''}">${txt}</span>`}</div>`;
     banner = `<div class="flag-banner"><div class="flag-head">⚠ Plate flagged.</div>
       <div class="flag-cols">
       ${group(1, 'Standard curve fit', !stdBad.length, stdTxt)}
-      ${group(2, 'Outliers', !nOut, nOut ? `${nOut} suggested` : 'None detected', nOut ? `<button class="btn btn-secondary btn-sm" data-exclplate="${p}" title="Exclude all suggested outliers">Exclude ${nOut > 1 ? 'all ' : ''}${nOut} outlier${nOut > 1 ? 's' : ''} <kbd class="keycap">X</kbd></button>` : '')}
+      ${group(2, 'Outliers', !nOut, nOut ? `${nOut} suggested` : 'None detected', nOut ? (nVis ? `<button class="btn btn-secondary btn-sm" data-exclplate="${p}" title="Exclude the suggested outliers on the curves currently shown">Exclude ${nVis > 1 ? 'all ' : ''}${nVis} visible outlier${nVis > 1 ? 's' : ''} <kbd class="keycap">X</kbd></button>` : `<button class="btn btn-secondary btn-sm" disabled title="No suggested outliers on the curves currently shown">No visible outliers</button>`) : '')}
       ${group(3, 'Poorly fitted curves', !nFit, nFit ? `${nFit} curve${nFit > 1 ? 's' : ''}` : 'None', nFit ? (onlyPoor ? `<button class="btn btn-secondary btn-sm" data-showall="${p}" title="Show every dilution curve again">Show all</button>` : `<button class="btn btn-secondary btn-sm" data-poorfit="${p}" title="Show only curves with a failed fit, low R² or a parameter at its fit bound">Show only poor fits</button>`) : '')}
       </div></div>`;
   } else if (plateResolved(p)) {
@@ -3318,8 +3319,15 @@ async function setAllExclusions(mutate) {
 }
 
 // Plate-level actions used by the keyboard shortcuts.
+// Suggested, not-yet-excluded points of plate p on curves that are currently shown (standard always counts).
+function visibleSuggestedKeys(p) {
+  const pc = review.analysis.plateCharts[p];
+  if (!pc) return [];
+  const pts = pc.samples.filter(s => !isHidden(pc, s)).flatMap(s => s.points).concat(pc.std.points);
+  return pts.filter(q => q.suggested && !q.excluded && review.suggested.has(q.key) && !review.excl.has(q.key)).map(q => q.key);
+}
 function excludeSuggestedInPlate(p) {
-  const keys = [...review.suggested].filter(k => k.startsWith(p + '|') && !review.excl.has(k));
+  const keys = visibleSuggestedKeys(p);
   if (!keys.length) return;
   keys.forEach(k => review.excl.add(k));
   review.accepted.delete(p);
@@ -3431,7 +3439,7 @@ document.addEventListener('click', e => {
   const xp = e.target.closest('[data-exclplate]');
   if (xp) {
     const p = Number(xp.dataset.exclplate);
-    review.undo = {p, keys: [...review.suggested].filter(k => k.startsWith(p + '|') && !review.excl.has(k))};
+    review.undo = {p, keys: visibleSuggestedKeys(p)};
     excludeSuggestedInPlate(p);
     return;
   }

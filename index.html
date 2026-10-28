@@ -410,7 +410,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.39.2 &nbsp;·&nbsp; 28/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.41.0 &nbsp;·&nbsp; 28/10/2026</div>
 
 <script>
 'use strict';
@@ -1749,7 +1749,8 @@ const OUTLIER = {
   RMS_MULT: 4,      // ...and at least this many times the RMS misfit of the remaining points
   SSE_DROP: 0.35,   // ...and removing it must cut the fit's squared error to below this fraction
   MIN_POINTS: 6,    // never suggest when fewer than this many points remain
-  MAX_PER_SERIES: 2
+  MAX_PER_SERIES: 2,
+  MIN_IMPACT: 0.10  // a suggestion is only worth the reviewer's time if removing it moves the ED50 (or, for a standard, the interpolated concentrations) by this fraction
 };
 
 // Saturation "hunch": the concentrated dilutions are maxed out, sit flat and slightly low, and the
@@ -1831,12 +1832,42 @@ function suggestEdgeEffect(pts) {
   return out;
 }
 
+// How much a refit without some points moves the result, as a fraction: the ED50 shift (log ratio) and, for a
+// standard curve, the shift of the concentration read off at typical ODs. Samples are interpolated against the
+// standard, so their own fit only matters through its ED50.
+function fitImpact(a, b, isStd) {
+  let d = Math.abs(Math.log(b[2] / a[2]));
+  if (!isFinite(d)) return Infinity;
+  if (isStd) for (const od of [0.3, 0.8, 1.5]) {
+    const ca = inverse4PL(od, a[1], a[0], a[3], a[2]), cb = inverse4PL(od, b[1], b[0], b[3], b[2]);
+    const r = Math.abs(Math.log(cb / ca));
+    if (isFinite(r) && r > d) d = r;
+  }
+  return d;
+}
+
 // Leave-one-out check on the two largest residuals of an existing fit; returns the points
 // to suggest. Clean series cost nothing — refits only happen for series with a large residual.
-function suggestOutliers(pts, fit, fc) {
-  const edge = suggestEdgeEffect(pts);
-  const out = edge.slice();
+function suggestOutliers(pts, fit, fc, isStd) {
   const fy = p => p.fy !== undefined ? p.fy : p.y;   // value the fit saw (hunch-corrected points differ from the raw reading)
+  let edge = suggestEdgeEffect(pts);
+  // Impact gate: edge points sit on the plateaus where they barely move the curve. Only suggest them when
+  // refitting without them shifts the ED50 (or the standard's concentrations) noticeably, or when one is the
+  // reading a sample's concentration is interpolated from.
+  if (edge.length && fit) {
+    const rest = pts.filter(p => !edge.includes(p));
+    const live = pts.filter(p => !p.excluded).sort((a, b) => a.i - b.i);
+    const choice = isStd ? null : live.find(p => p.y <= 1.5);
+    let harmless = false;
+    if (rest.length >= OUTLIER.MIN_POINTS - 1 && !(choice && edge.includes(choice))) {
+      try {
+        const fit2 = fitBest4PL(rest.map(p => p.x), rest.map(fy), fc, fit);
+        harmless = fitImpact(fit, fit2, isStd) < OUTLIER.MIN_IMPACT;
+      } catch(_) {}
+    }
+    if (harmless) edge = [];
+  }
+  const out = edge.slice();
   let cur = pts.filter(p => !edge.includes(p));
   for (let k = 0; k < OUTLIER.MAX_PER_SERIES; k++) {
     if (!fit || cur.length < OUTLIER.MIN_POINTS) break;
@@ -1854,7 +1885,8 @@ function suggestOutliers(pts, fit, fc) {
       const dev = Math.abs(fy(cur[j]) - model4PL(cur[j].x, fit2));
       const sse2 = rest.reduce((s,p)=>s + (fy(p) - model4PL(p.x, fit2))**2, 0);
       const rms2 = Math.sqrt(sse2 / rest.length);
-      if (dev >= floor && dev >= OUTLIER.RMS_MULT * rms2 && sse2 <= OUTLIER.SSE_DROP * sse && (!pick || dev > pick.dev))
+      if (dev >= floor && dev >= OUTLIER.RMS_MULT * rms2 && sse2 <= OUTLIER.SSE_DROP * sse
+          && fitImpact(fit, fit2, isStd) >= OUTLIER.MIN_IMPACT && (!pick || dev > pick.dev))
         pick = {j, dev, fit2};
     }
     if (!pick) break;
@@ -1947,7 +1979,7 @@ async function computeSuggestions(plateCharts, fc, universal, tick) {
     for (let si = 0; si < series.length; si++) {
       const [pts, params] = series[si];
       const isStd = !universal && si === series.length - 1;
-      for (const q of suggestOutliers(pts, params, isStd ? std : fc)) found.add(q.key);
+      for (const q of suggestOutliers(pts, params, isStd ? std : fc, isStd)) found.add(q.key);
       if (tick) await tick(1);
     }
   }
@@ -1966,7 +1998,7 @@ function plateSig(p, excl, std) {
 
 function fitWorkerSource() {
   const fns = [model4PL, solveGaussian, levenbergMarquardt, inverse4PL, exKey, getSeries, estimateIC50,
-               fitBest4PL, ec50Gen, stdFitPoints, sampleChoicePoint, stdFitConfig, calculateConcentrations,
+               fitBest4PL, fitImpact, ec50Gen, stdFitPoints, sampleChoicePoint, stdFitConfig, calculateConcentrations,
                plateEntryGen, suggestOutliers, suggestEdgeEffect, applyHookCorrection];
   return `const OUTLIER = ${JSON.stringify(OUTLIER)};
 const EDGE = ${JSON.stringify(EDGE)};
@@ -1991,7 +2023,7 @@ self.onmessage = e => {
       if (!ctx.meta.universalStd) series.push([pc.std.points, pc.std.params, true]);
       const sug = [];
       for (const [pts, params, isStd] of series) {
-        for (const q of suggestOutliers(pts, params, isStd ? ctx.stdFc : ctx.fc)) sug.push(q.key);
+        for (const q of suggestOutliers(pts, params, isStd ? ctx.stdFc : ctx.fc, isStd)) sug.push(q.key);
         tk('screen');
       }
       for (let k = series.length; k < ${FIT_STEPS_PER_PLATE}; k++) tk('pad');

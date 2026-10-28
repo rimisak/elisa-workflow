@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Working rules for every change
 
-- **Update the footer on every change.** The page footer in `index.html` (`.page-footer`, near the end of the markup) reads `Kasimir Reich · v<version> · <DD/MM/YYYY>`. Set the date to today's date and bump the version in the same edit. Version scheme: `MAJOR.MINOR.PATCH` — patch for fixes and tweaks, minor for new features, major for breaking changes to the workflow or output layout. Current: v1.34.0
+- **Update the footer on every change.** The page footer in `index.html` (`.page-footer`, near the end of the markup) reads `Kasimir Reich · v<version> · <DD/MM/YYYY>`. Set the date to today's date and bump the version in the same edit. Version scheme: `MAJOR.MINOR.PATCH` — patch for fixes and tweaks, minor for new features, major for breaking changes to the workflow or output layout. Current: v1.35.0
 - **Commit after each edit.** When a change is finished, commit it straight away (small, focused commits; message explains the why). Don't let edits pile up uncommitted.
 
 ## What this is
@@ -75,5 +75,7 @@ Processing shows a progress bar with percentage and an ETA (pace so far). Fittin
 - **Metadata format is positional.** `Dilutions` sheet reads fixed cells `B2/B3` (standard start/dilution) and `B6/B7` (sample start/dilution). `Settings` sheet (optional) holds the 4PL bounds. `Names` sheet has one row per plate; header row is detected by `A1 === 'Plate'`. `createTemplate` generates a matching blank workbook (one Names row per loaded CSV, 6 if none).
 
 ## Example data
+
+**Load sample data** (button atop the Upload section, `loadSampleData`) fills both slots with 15 anonymised real plates (`SAMPLE_PLATES`: OD×1000, 96×450 nm then 96×570 nm; all IDs, dates and run numbers stripped) and a metadata workbook built by `buildTemplateWorkbook` (blank · sample 1–10 · standard).
 
 The `Example/` run (8 plates, metadata, output workbook) was removed from the repo; bring your own BMG CSVs plus a metadata workbook (use "Create a template file") to exercise the pipeline end-to-end.

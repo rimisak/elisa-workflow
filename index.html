@@ -97,7 +97,6 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .option-row{display:flex;align-items:center;justify-content:space-between;gap:14px}
 .option-text{display:flex;flex-direction:column;gap:2px}
 .option-title{font-size:14px;font-weight:500;color:#1c1c1e}
-.exp-tag{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:6px;font-size:10px;font-weight:600;letter-spacing:.3px;text-transform:uppercase;vertical-align:1px;color:#9a5b00;background:#fff3dc;border:1px solid #f5d9a8}
 .option-sub{font-size:12px;color:#aeaeb2}
 .switch{position:relative;display:inline-block;width:46px;height:28px;flex-shrink:0}
 .switch input{opacity:0;width:0;height:0}
@@ -168,35 +167,53 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .plate-charts-block::-webkit-scrollbar-thumb{background:#8e8e93;border-radius:6px;border:2px solid transparent;background-clip:content-box}
 .plate-charts-block::-webkit-scrollbar-thumb:hover{background:#636366;background-clip:content-box}
 #scrollHint{display:none;cursor:pointer;z-index:6;background:#1c1c1e;color:#fff;font-size:12px;font-weight:600;padding:6px 14px;border-radius:999px;box-shadow:0 2px 10px rgba(0,0,0,.3);opacity:.9}
-body.rv-lock #scrollHint.show{display:block;grid-column:1;grid-row:1/4;align-self:end;justify-self:center;margin-bottom:22px}
+body.rv-lock #scrollHint.show{display:block;grid-column:1;grid-row:1;align-self:end;justify-self:center;margin-bottom:22px}
 /* Review mode: the page itself does not scroll; the open Review section fills the window and shows one plate at a time. */
 body.rv-lock{height:100vh;overflow:hidden;display:flex;flex-direction:column;padding:8px 24px 12px}
-body.rv-lock>*:not(#secReview){display:none!important}
+body.rv-lock>*:not(#secReview):not(.tour-ui){display:none!important}
 body.rv-lock #secReview{flex:1;min-height:0;display:flex;flex-direction:column;margin-bottom:0}
 body.rv-lock #secReview .sec-head{flex:none}
 body.rv-lock #secReview .sec-body{flex:1;min-height:0;display:flex;flex-direction:column;margin-top:10px}
-body.rv-lock #chartsSection{flex:1;min-height:0;display:grid!important;grid-template-columns:minmax(0,1fr) 340px;grid-template-rows:auto auto 1fr;gap:0 14px}
-body.rv-lock #reviewRunInfo{grid-column:2;grid-row:1;margin-bottom:14px}
+body.rv-lock #chartsSection{flex:1;min-height:0;display:grid!important;grid-template-columns:minmax(0,1fr) 340px;grid-template-rows:minmax(0,1fr);gap:0 14px}
+/* Right column: the cards scroll together; the accept / back / next buttons stay pinned below them. */
+body.rv-lock #reviewSide{grid-column:2;grid-row:1;display:flex;flex-direction:column;min-height:0}
+body.rv-lock #reviewSideScroll{flex:1;min-height:0;overflow-y:auto;padding:1px 1px 0}
+body.rv-lock #reviewRunInfo{margin-bottom:14px}
 body.rv-lock #reviewRunInfo:empty{display:none}
 #reviewRunInfo{background:#fff;border:none;box-shadow:0 1px 3px rgba(0,0,0,.08);flex:none}
-body.rv-lock #reviewHeader{grid-column:2;grid-row:2;overflow-y:auto;max-height:100%}
 /* Accept / next: a narrow strip beside the plate box that widens over it on hover. */
 /* Back / accept / next stack at the bottom of the right-hand column, beside the plate box. */
-body.rv-lock #reviewActions{grid-column:2;grid-row:3;align-self:end;margin-bottom:10px;display:flex;flex-direction:column;gap:10px}
+body.rv-lock #reviewImpact{margin-bottom:10px}
+body.rv-lock #reviewAdv{margin-bottom:10px}
+body.rv-lock #reviewActions{flex:none;margin-top:4px;margin-bottom:10px;display:flex;flex-direction:column;gap:10px}
 #reviewActions .process-btn .keycap{font-size:12px}
 #reviewActions .ra-row{display:flex;gap:10px}
 #reviewActions .ra-row .process-btn{flex:1;width:auto}
 body.rv-lock #reviewHeader{flex:none;padding:12px 16px;margin-bottom:10px}
-body.rv-lock #reviewList{grid-column:1;grid-row:1/4;min-height:0;position:relative;margin-bottom:10px}
+body.rv-lock #reviewList{grid-column:1;grid-row:1;min-height:0;position:relative;margin-bottom:10px}
 body.rv-lock #reviewList>.plate-charts-block{margin-bottom:0}
 body.rv-lock #reviewList>.plate-charts-block:not(.current){display:none}
 body.rv-lock #reviewList>.plate-charts-block.current{height:100%;max-height:none}
 body.rv-lock #reviewList>.rv-empty{display:none}
 body.rv-lock #reviewList>.rv-empty:only-child{display:block}
 .flag-banner{border:1px solid #ff9500;background:#fff6e8;border-radius:10px;padding:6px 12px;margin:8px 0}
-.hook-note{font-size:12px;color:#0050b3;background:#f3f8ff;border:1px dashed #7fb3ff;border-radius:10px;padding:6px 12px;margin:0 0 10px}
 .std-bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:13px;border:1px dashed #ff9500;border-radius:10px;padding:8px 14px;margin:0 0 10px;background:#fffdf8}
 .std-bar.on{border-color:#007aff;background:#f3f8ff}
+.imp-card{padding:10px 16px;flex:none}
+.imp-card .imp-title{font-size:13px;font-weight:600;color:#3a3a3c}
+.imp-card .imp-row{display:flex;align-items:center;gap:10px;margin-top:8px}
+.imp-card input[type=range]{flex:1;min-width:0}
+.imp-card input[type=number]{width:56px;font-size:12px;padding:3px 5px;border:1px solid #c7c7cc;border-radius:6px}
+.imp-card .imp-note{font-size:11px;color:#636366;margin-top:6px}
+.adv-fit{padding:10px 16px;flex:none}
+.adv-fit summary{cursor:pointer;font-size:13px;font-weight:600;color:#3a3a3c}
+.adv-fit table{border-collapse:collapse;width:100%;margin:10px 0 6px;font-size:12px}
+.adv-fit th{font-weight:500;color:#636366;text-align:left;padding:2px 4px}
+.adv-fit td{padding:2px 4px}
+.adv-fit input{width:100%;box-sizing:border-box;font-size:12px;padding:3px 5px;border:1px solid #c7c7cc;border-radius:6px}
+.adv-fit .adv-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.adv-fit .adv-note{font-size:11px;color:#636366;margin-top:6px}
+.adv-fit .adv-err{font-size:12px;color:#c0392b;margin-top:6px}
 .std-bar select{font-size:13px;padding:3px 6px;border-radius:6px;border:1px solid #c7c7cc}
 .flag-banner.ok{border-color:#34c759;background:#eefaf1}
 .flag-head{font-size:15px;font-weight:600;color:#a35c00;line-height:1.35}
@@ -234,6 +251,29 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
 .chip.excluded{border-color:#8e8e93;color:#636366;background:#f2f2f7;text-decoration:line-through}
 .pt:hover circle:last-child{fill:rgba(0,0,0,.08)}
 .legend-swatch{width:11px;height:11px;border-radius:3px;display:inline-block;flex-shrink:0}
+
+.tour-banner{display:flex;align-items:center;gap:12px;background:#e5f0ff;border:1px solid #b3d4ff;color:#0a3d80;border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:16px}
+.tour-banner-text{flex:1}
+.tour-banner-x{background:none;border:none;font-size:20px;line-height:1;color:#0a3d80;cursor:pointer}
+.toolbar-actions{display:flex;align-items:center;gap:10px}
+.tour-shield{position:fixed;inset:0;z-index:9000}
+.tour-shield.dim{background:rgba(0,0,0,.55)}
+.tour-hole{position:fixed;z-index:9001;border-radius:10px;box-shadow:0 0 0 9999px rgba(0,0,0,.55),0 0 0 3px #007aff;pointer-events:none}
+.tour-pop{position:fixed;z-index:9002;width:340px;max-width:calc(100vw - 24px);background:#fff;border-radius:14px;padding:16px 18px 14px;box-shadow:0 12px 40px rgba(0,0,0,.35);font-size:13px;line-height:1.5;color:#1c1c1e}
+.tour-anim .tour-hole,.tour-anim.tour-pop{transition:left .25s ease,top .25s ease,width .25s ease,height .25s ease}
+.tour-pop h3{font-size:16px;font-weight:600;margin:6px 0 6px;letter-spacing:-.2px}
+.tour-pop kbd{font:inherit;font-size:11px;border:1px solid #c7c7cc;border-bottom-width:2px;border-radius:4px;padding:0 4px;background:#f2f2f7}
+.tour-body{color:#3a3a3c}
+.tour-body p+p{margin-top:6px}
+.tour-step{font-size:11px;font-weight:600;color:#007aff;text-transform:uppercase;letter-spacing:.5px}
+.tour-bar{height:3px;background:#e5e5ea;border-radius:2px;margin-top:6px;overflow:hidden}
+.tour-bar i{display:block;height:100%;background:#007aff;transition:width .25s}
+.tour-foot{display:flex;justify-content:space-between;align-items:center;margin-top:14px}
+.tour-x{position:absolute;top:8px;right:10px;background:none;border:none;font-size:22px;line-height:1;color:#8e8e93;cursor:pointer}
+.tour-x:hover{color:#1c1c1e}
+.tour-busy{display:flex;align-items:center;gap:10px;margin-top:8px}
+.tour-spin{flex:none;width:14px;height:14px;border-radius:50%;border:2px solid #007aff;border-top-color:transparent;animation:rvspin .8s linear infinite}
+@media (prefers-reduced-motion:reduce){.tour-anim .tour-hole,.tour-anim.tour-pop{transition:none}}
 </style>
 </head>
 <body>
@@ -243,12 +283,21 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   <button onclick="this.parentNode.style.display='none'" aria-label="Dismiss">×</button>
 </div>
 
+<div class="tour-banner" id="tourBanner">
+  <span class="tour-banner-text"><b>New here?</b> Take a guided tour through a complete analysis (upload, fit, review, download) using built-in sample data.</span>
+  <button class="btn btn-primary btn-sm" onclick="startTour()">Start the tour</button>
+  <button class="tour-banner-x" onclick="dismissTourBanner()" aria-label="Dismiss">×</button>
+</div>
+
 <div class="toolbar">
   <div class="toolbar-title">
     <div class="app-icon" id="appIcon"></div>
     <h1>ELISA Workflow</h1>
   </div>
-  <button class="btn btn-black btn-sm new-analysis-btn" id="newAnalysisBtn" onclick="newAnalysis()" title="Clear both files and the current analysis" disabled>Clear all and<br>start new analysis</button>
+  <div class="toolbar-actions">
+    <button class="btn btn-secondary btn-sm" onclick="startTour()" title="Walk through a full analysis with sample data">▶ Guided tour</button>
+    <button class="btn btn-black btn-sm new-analysis-btn" id="newAnalysisBtn" onclick="newAnalysis()" title="Clear both files and the current analysis" disabled>Clear all and<br>start new analysis</button>
+  </div>
 </div>
 
 <div class="sec open" id="secUpload">
@@ -257,6 +306,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
     <span class="sec-badge idle" id="badgeUpload">Waiting for files</span><span class="sec-chev">▾</span>
   </div>
   <div class="sec-body">
+<div style="margin-bottom:10px;text-align:right"><button class="btn btn-secondary btn-sm" onclick="loadSampleData()">Load sample data</button></div>
 <!-- CSV Drop Zone -->
 <div class="card">
   <div class="card-label">Plate Reader CSV Files</div>
@@ -328,11 +378,11 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
   <div class="option-row" style="margin-top:14px;border-top:1px solid #f0f0f0;padding-top:14px">
     <span class="option-text">
-      <span class="option-title">Correct saturation hunch <span class="exp-tag" title="Experimental: heuristic, not yet validated on real data">Experimental</span></span>
-      <span class="option-sub">When the concentrated dilutions are maxed out they sit flat and slightly below a bump just before the curve falls. Those points are treated as capped at the plateau for the fit (raw values stay in the output, marked).</span>
+      <span class="option-title">Detect outliers</span>
+      <span class="option-sub">Suggest outlier and edge-effect points for exclusion. Turn off to review without any suggestions (points can still be excluded by hand).</span>
     </span>
     <label class="switch">
-      <input type="checkbox" id="hookChk" checked>
+      <input type="checkbox" id="detectChk" checked>
       <span class="slider"></span>
     </label>
   </div>
@@ -389,7 +439,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.32.10 &nbsp;·&nbsp; 23/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.43.0 &nbsp;·&nbsp; 29/10/2026</div>
 
 <script>
 'use strict';
@@ -427,12 +477,13 @@ function updateSections() {
   setBadge('badgeReview', all ? '✓ All plates accepted' : `${acc}/${n} plates accepted`, all ? 'done' : 'busy');
   if (!all) {
     r.dlOpened = false;
+    if (acc < n) r.sawOpen = true;   // only a plate accepted during this review jumps to Download, not a restored session
     setBadge('badgeDownload', 'Waiting for review', 'idle');
     btn.disabled = true; btn.textContent = 'Download';
     hint.textContent = `Accept all plates in the review step to enable the download (${acc}/${n} accepted).`;
     return;
   }
-  if (!r.dlOpened) { r.dlOpened = true; setSection('secReview', false); setSection('secDownload', true); }
+  if (!r.dlOpened) { r.dlOpened = true; if (r.sawOpen) { setSection('secReview', false); setSection('secDownload', true); } }
   prepareDownload();
   if (r.out) {
     setBadge('badgeDownload', 'Ready', 'done');
@@ -552,7 +603,7 @@ function saveSession() {
     files: r.files,
     opts: {
       subtractBg: document.getElementById('subtractBgChk').checked,
-      hookFix: document.getElementById('hookChk').checked,
+      detectOutliers: document.getElementById('detectChk').checked, minImpact: Math.round(OUTLIER.MIN_IMPACT * 100),
       outputName: document.getElementById('outputName').value
     }
   });
@@ -598,7 +649,8 @@ async function restoreFiles() {
   if (sess && csvFiles.length && metaBytes && !review) {
     const o = sess.opts || {};
     document.getElementById('subtractBgChk').checked = !!o.subtractBg;
-    document.getElementById('hookChk').checked = o.hookFix !== false;
+    document.getElementById('detectChk').checked = o.detectOutliers !== false;
+    if (Number.isFinite(+o.minImpact) && o.minImpact !== '' && o.minImpact !== null) OUTLIER.MIN_IMPACT = Math.max(0, Math.min(100, +o.minImpact)) / 100;
     if (o.outputName) document.getElementById('outputName').value = o.outputName;
     setSection('secUpload', false); setSection('secProcessing', true);
     // Not re-run on reload: the saved session is picked up when Process is pressed (runProcessing reads it).
@@ -663,6 +715,7 @@ async function loadCSVFiles(files, force) {  // force: true/false from the 384 t
       let text;
       if (/\.xlsx?$/i.test(f.name)) {
         const bytes = new Uint8Array(await f.arrayBuffer());
+        if (hasSessionSheet(bytes)) { await restoreFromWorkbook(bytes); return; }
         if (XLSX.read(bytes, { type: 'array', bookSheets: true }).SheetNames.includes('Names')) { metaFile = f; continue; }
         text = workbookToText(bytes);
       } else {
@@ -741,7 +794,9 @@ function onDropMeta(e) {
 function loadMetaFile(f) {
   const r = new FileReader();
   r.onload = ev => {
-    metaBytes = new Uint8Array(ev.target.result);
+    const bytes = new Uint8Array(ev.target.result);
+    if (hasSessionSheet(bytes)) { restoreFromWorkbook(bytes); return; }
+    metaBytes = bytes;
     metaName  = f.name;
     storeSet('meta', {name: metaName, bytes: metaBytes});
     staleSession();
@@ -766,8 +821,8 @@ function clearMeta() {
 
 // Log
 // Reset everything: both input files, the review on screen, the log and the saved session.
-function newAnalysis() {
-  if ((csvFiles.length || metaBytes || review) &&
+function newAnalysis(skipConfirm) {
+  if (!skipConfirm && (csvFiles.length || metaBytes || review) &&
       !confirm('Start a new analysis? This clears both files and the current analysis, including any exclusions.')) return;
   runGen++;
   document.getElementById('outputName').value = defaultOutputName();
@@ -797,6 +852,30 @@ function clearLog() {
   box.innerHTML = '';
   document.getElementById('logRow').style.display = 'flex';
 }
+// Turns a raw exception into a console message that says where it happened and what usually causes it.
+function logError(err, stage) {
+  const raw = String((err && err.message) || err);
+  const hints = [];
+  if (/no 96-well plate data|no 384-well plate data|384-well plate/.test(raw))
+    hints.push('The CSV is not a plate export this tool can read. Export the plate as a grid (header row 1…12, rows A–H) from the reader software, and check the 384-well checkbox matches the plate format.');
+  else if (/all fits failed|insufficient|No data/.test(raw))
+    hints.push('A curve could not be fitted. Likely causes: wells left empty or not pipetted, a flat curve (no OD change over the dilution series), the Dilutions values in the metadata not matching the plate, or fit bounds on the Settings sheet that exclude the data.');
+  else if (/Cannot read prop|undefined|null|is not iterable|reading '/.test(raw) && /metadata/i.test(stage))
+    hints.push('The metadata workbook does not match the expected layout. It needs the sheets Names (header "Plate" in A1, one row per plate) and Dilutions (values in B2/B3 and B6/B7). Use "Create a template file" and copy your values into it.');
+  else if (/Cannot read prop|undefined|null|is not iterable|reading '/.test(raw))
+    hints.push('An input file is missing data this step expects. Check that the CSVs are complete exports (both the 450 nm and the reference-wavelength block) and that the metadata has one Names row per plate (' + (csvFiles ? csvFiles.length : '?') + ' plate(s) loaded).');
+  else if (/worker|Worker/.test(raw))
+    hints.push('The background fitting workers failed. Reload the page; if it persists, use a current Chrome, Edge, Firefox or Safari.');
+  else if (/Invalid array length|out of memory|Maximum call stack/.test(raw))
+    hints.push('The browser ran out of resources. Try fewer plates per run, or close other tabs.');
+  else if (/zip|xlsx|XLSX|Unsupported|corrupt|End of data|signature/i.test(raw))
+    hints.push('The workbook could not be read or written. Re-save the metadata as .xlsx (not .xls/.csv) and make sure the file is not open or password-protected.');
+  else
+    hints.push('Unexpected error. Check that the CSVs and the metadata match each other (same number of plates), then try again; the browser console (F12) has the full details.');
+  log(`❌ Error${stage ? ' while ' + stage : ''}: ${raw}`, 'error');
+  for (const h of hints) log('   Possible cause: ' + h, 'warn');
+}
+
 function log(msg, cls='') {
   const box = document.getElementById('logBox');
   const line = document.createElement('div');
@@ -859,7 +938,9 @@ function createCsvTemplate() {
 
 function createTemplate() {
   // One Names row per loaded CSV file (6 when none are loaded yet).
-  const numPlates = csvFiles.length || 6;
+  downloadData(XLSX.write(buildTemplateWorkbook(csvFiles.length || 6), {bookType:'xlsx', type:'array'}), 'MetaData.xlsx');
+}
+function buildTemplateWorkbook(numPlates, plateLabel = p => `plate ${p+1} - dXX assayXX`) {
   const wb = XLSX.utils.book_new();
   // Header row labels the 12 physical plate columns; data rows are pre-filled
   // with the suggested default layout (blank · samples · standard).
@@ -869,7 +950,7 @@ function createTemplate() {
   // Names sheet
   const namesData = [['Plate', ...columnLabels]];
   for (let p = 0; p < numPlates; p++)
-    namesData.push([`plate ${p+1} - dXX assayXX`, ...sampleLabels]);
+    namesData.push([plateLabel(p), ...sampleLabels]);
   const wsNames = XLSX.utils.aoa_to_sheet(namesData);
   wsNames['!cols'] = [{wch:28}, ...Array(12).fill({wch:12})];
   XLSX.utils.book_append_sheet(wb, wsNames, 'Names');
@@ -904,8 +985,32 @@ function createTemplate() {
   wsSet['!cols'] = [{wch:34},{wch:14},{wch:14},{wch:14}];
   XLSX.utils.book_append_sheet(wb, wsSet, 'Settings');
 
-  const buf = XLSX.write(wb, {bookType:'xlsx', type:'array'});
-  downloadData(buf, 'MetaData.xlsx');
+  return wb;
+}
+
+// ─── SAMPLE DATA ──────────────────────────────────────────────────────────────
+// 15 anonymised plates (OD × 1000, row-major A–H × columns 1–12): 96 values at 450 nm, then 96 at 570 nm.
+const SAMPLE_PLATES = [[144,957,261,1192,1397,478,235,254,296,339,326,1419,140,468,157,849,1503,252,130,142,156,172,203,1599,130,193,109,391,1218,139,83,104,104,119,154,1619,149,90,91,162,618,96,82,96,89,110,150,836,159,112,107,117,203,92,94,102,99,110,139,344,178,109,98,97,114,98,97,99,90,100,127,183,214,165,157,143,159,146,137,137,139,157,160,194,251,212,216,202,200,215,195,203,195,207,197,207,32,32,30,36,80,29,30,31,28,30,29,70,41,36,36,35,36,32,26,34,31,36,28,56,34,35,35,35,34,33,13,30,28,30,30,30,38,25,34,33,33,31,31,33,31,31,35,30,35,34,47,44,33,34,33,35,30,32,27,29,73,34,38,35,32,35,34,33,24,31,16,29,39,36,37,34,34,30,33,22,33,33,29,28,34,37,40,33,30,32,32,30,34,34,30,25],[197,488,270,862,222,361,368,409,445,950,397,1437,192,236,174,385,147,206,207,212,228,426,264,1347,179,168,122,201,126,138,139,152,148,203,161,1582,183,124,112,150,114,118,110,113,120,135,138,811,215,146,130,152,127,131,130,132,142,158,164,436,176,136,130,115,113,107,120,130,129,131,170,214,260,221,190,183,192,203,188,205,181,188,188,235,306,274,258,251,255,259,256,247,249,249,246,260,32,34,31,39,31,31,32,32,30,31,32,106,36,37,36,36,35,32,35,33,32,31,32,32,35,35,34,34,33,32,34,33,32,32,30,29,42,36,37,34,35,34,33,34,32,32,31,33,40,37,37,56,35,35,33,33,31,43,31,30,36,34,42,36,33,25,32,33,32,33,32,31,35,43,36,37,33,33,31,32,32,32,32,30,35,37,33,37,32,34,33,34,33,33,37,30],[214,1411,1429,697,326,302,423,323,344,461,329,1451,175,702,1375,344,160,161,213,153,194,248,219,1515,184,369,1220,194,124,116,132,109,115,157,164,1702,187,167,482,129,104,102,96,97,103,128,153,885,207,142,177,135,101,99,95,98,110,120,161,423,161,123,138,101,92,94,96,103,120,130,141,219,242,187,186,159,118,127,159,170,161,195,190,240,269,261,247,228,200,209,226,228,231,233,241,268,28,33,69,30,29,27,29,28,28,28,26,73,32,32,35,33,31,31,29,29,27,28,26,92,29,31,34,29,29,28,28,29,28,28,26,30,32,33,33,32,32,30,29,31,30,32,28,30,33,34,32,60,30,30,31,30,29,28,27,27,32,32,33,32,30,30,28,29,28,32,28,26,34,33,37,37,31,30,28,28,28,43,28,28,30,34,32,35,28,34,28,29,29,29,29,28],[162,572,233,328,333,286,1320,622,466,544,1657,1457,171,277,128,163,173,185,845,311,239,324,1389,1681,148,155,99,104,119,114,356,182,183,242,1010,1679,154,112,89,91,99,91,157,130,126,181,413,835,165,109,98,94,99,96,142,139,133,154,243,378,152,108,101,105,115,101,125,102,113,134,193,257,213,182,157,176,192,159,158,166,167,190,198,240,257,219,214,209,215,209,219,225,225,231,239,270,30,30,30,29,30,30,33,32,31,37,67,109,35,35,34,37,36,37,32,29,28,33,44,96,33,33,33,31,34,41,33,33,32,48,75,99,37,35,34,34,34,33,32,37,33,34,31,36,41,34,37,36,34,33,51,55,39,36,32,31,47,45,38,33,48,32,44,32,36,30,30,31,35,49,36,59,62,32,34,32,33,33,32,26,38,33,34,33,30,30,36,30,32,34,29,29],[259,1698,1704,1616,1466,1389,1685,1333,1337,1130,648,1558,170,1492,1045,1031,644,754,1145,636,568,516,452,1566,174,1098,499,456,274,371,542,271,272,265,264,1677,168,450,212,196,139,174,220,143,139,157,164,898,185,191,141,132,120,137,133,119,121,137,155,407,163,150,139,146,125,128,153,143,135,158,188,253,255,224,208,214,205,214,202,211,206,210,223,261,306,290,279,273,275,266,263,262,256,263,274,292,29,37,33,31,34,31,34,32,32,30,31,100,34,36,35,37,33,33,33,33,29,31,28,76,32,34,33,32,31,29,30,32,29,29,30,28,48,35,34,33,34,35,32,31,31,32,32,30,40,34,33,39,31,32,32,31,33,29,28,29,34,35,34,32,31,37,31,31,29,29,30,30,38,33,35,36,33,33,30,30,29,29,29,27,35,33,38,33,32,32,30,31,30,29,30,30],[167,1073,850,1724,1639,370,419,907,675,557,747,1683,121,508,400,1004,983,203,207,517,440,346,459,1558,158,240,190,586,721,130,164,313,297,222,296,1727,178,139,120,215,282,103,113,168,174,150,187,984,194,132,110,122,136,101,112,117,146,166,208,429,193,140,122,119,117,119,122,119,133,159,196,281,243,186,171,174,172,183,174,194,195,210,229,283,280,255,252,238,233,240,234,239,263,270,290,309,31,33,33,34,33,30,31,31,31,30,32,111,37,37,34,37,47,36,32,34,32,31,32,83,33,34,35,36,36,31,32,32,32,31,33,36,37,36,36,35,35,34,32,35,34,36,40,32,37,49,37,36,35,33,34,33,31,34,32,31,36,33,33,33,33,33,34,33,35,35,31,35,39,35,34,36,31,35,32,33,32,31,29,29,38,37,36,36,33,36,32,31,31,31,32,30],[243,515,1094,777,854,752,795,845,626,503,473,1535,197,281,395,291,333,291,407,422,329,281,250,1492,190,190,210,180,229,183,238,275,247,209,237,1735,2182,130,131,109,136,112,116,144,147,129,173,851,228,152,120,125,121,124,140,139,154,199,187,435,198,144,130,118,124,127,131,141,156,158,212,280,269,205,209,200,199,199,198,206,252,211,245,272,303,277,264,258,257,253,252,253,285,283,311,336,29,31,30,29,30,32,28,30,32,32,30,112,35,33,33,33,33,32,52,33,30,30,21,67,30,26,38,37,39,28,33,29,28,21,27,32,1959,32,37,31,51,30,30,26,23,15,14,27,43,34,29,35,33,31,33,32,31,43,26,28,34,31,32,30,30,30,35,35,32,28,28,29,35,20,32,32,31,29,29,33,65,28,26,26,31,31,29,31,30,30,30,27,36,32,29,43],[213,584,1925,597,623,698,546,599,566,1078,765,1421,119,273,1120,271,348,415,319,306,225,538,515,1532,117,140,627,149,163,173,164,137,120,246,233,1458,116,101,197,93,108,109,101,81,84,125,129,711,126,86,100,78,84,76,83,81,90,106,144,335,145,123,90,60,69,83,94,95,98,115,165,215,190,165,158,127,144,168,167,173,172,186,188,242,629,325,219,221,226,230,227,226,236,239,220,276,30,30,34,30,29,29,29,32,29,31,29,77,38,37,51,34,36,35,31,32,32,31,29,37,38,35,40,40,32,30,31,30,28,28,26,27,39,39,35,33,36,48,31,30,29,31,31,34,35,39,36,36,38,34,32,35,35,28,30,41,36,64,40,36,31,33,32,32,32,30,49,28,33,34,41,33,31,34,31,30,28,29,27,28,33,111,31,34,30,30,32,28,31,29,13,28],[214,740,588,948,626,556,738,937,737,673,803,1523,154,463,267,491,300,326,384,457,472,470,490,1620,152,254,176,284,173,163,207,229,331,282,299,1590,142,112,112,166,104,112,117,130,156,177,216,836,172,115,110,97,126,105,116,103,116,150,181,371,148,114,115,107,113,123,117,110,134,128,159,230,214,184,195,179,175,170,183,172,183,192,214,261,274,238,238,256,232,222,243,229,247,254,256,276,36,34,35,47,30,32,49,45,31,31,36,35,34,35,35,35,68,38,32,36,33,31,32,95,33,35,32,99,43,41,46,37,30,34,32,30,37,33,37,72,31,37,29,36,30,31,34,33,35,34,42,34,57,41,43,31,30,32,31,28,36,34,43,38,45,50,42,33,49,30,35,28,35,37,48,40,36,33,38,30,30,30,28,43,33,35,33,52,34,31,48,29,33,32,33,30],[154,578,843,846,584,606,804,515,608,844,1766,1578,123,243,373,436,371,336,439,324,377,476,1575,1695,127,133,196,242,184,158,228,179,251,294,906,1649,137,100,112,139,103,95,120,96,142,187,378,863,158,99,83,81,80,80,89,91,118,148,212,375,140,108,98,88,96,95,106,97,112,129,160,246,202,170,162,150,162,159,152,162,169,189,205,232,246,233,234,224,218,219,229,222,226,228,236,256,29,30,29,30,29,30,31,30,31,28,32,113,33,32,33,32,32,31,33,27,29,32,32,80,31,34,32,31,32,29,30,31,32,28,30,30,35,35,32,53,33,29,32,32,30,31,34,34,33,35,34,32,32,31,29,31,29,31,30,29,33,32,35,32,35,33,34,27,29,30,30,27,37,32,35,33,32,30,30,30,29,31,30,25,34,36,36,32,29,29,29,29,29,30,28,29],[119,1246,653,874,557,789,1325,691,1407,917,593,1506,97,728,381,484,332,505,759,382,818,430,302,1624,98,372,251,256,128,201,357,208,317,195,229,1601,115,167,139,143,98,122,148,144,137,107,141,851,192,103,98,102,90,82,94,74,79,71,137,330,145,101,99,112,85,99,92,85,62,83,126,229,212,146,150,160,164,150,145,162,242,176,189,238,266,240,239,229,221,231,230,235,231,226,238,264,27,34,28,43,29,28,32,30,37,113,30,59,31,33,31,32,45,30,32,34,71,59,29,41,33,42,35,37,33,29,29,35,31,32,41,30,38,37,35,39,32,31,30,60,31,35,31,62,82,36,39,43,43,32,32,30,29,28,41,28,35,43,36,52,37,48,42,35,31,30,30,27,35,32,33,40,44,42,30,34,103,35,26,26,33,33,31,31,30,28,29,28,30,30,26,27],[187,609,526,490,464,1619,500,545,794,481,402,1583,153,324,248,276,229,1087,223,296,465,320,274,1697,146,200,132,146,133,466,131,168,269,221,225,1456,163,136,90,97,93,176,94,106,162,185,204,677,170,101,86,82,88,107,92,103,134,146,194,337,159,107,92,86,89,104,94,106,117,131,178,247,221,167,153,143,148,160,161,162,169,193,218,275,257,227,222,233,222,232,232,233,251,239,262,293,31,40,30,32,50,33,29,31,30,32,32,38,36,35,36,32,32,34,31,33,32,34,30,30,36,33,33,32,33,34,33,32,31,32,30,31,40,53,33,34,32,33,31,24,32,34,34,31,34,35,36,35,42,37,32,33,32,20,32,27,36,35,34,34,31,34,34,31,32,30,31,29,34,38,34,36,37,32,30,30,31,30,30,30,34,34,33,36,32,32,33,30,35,30,31,31],[231,602,510,324,401,454,568,459,637,538,611,1525,153,345,214,265,205,221,303,278,372,392,409,1706,133,187,135,120,111,109,178,172,225,385,283,1535,143,128,92,81,83,80,95,102,147,223,222,748,145,91,80,71,67,67,85,86,115,171,201,369,146,84,72,67,70,73,77,82,95,130,162,256,189,125,120,104,104,114,126,144,159,191,204,262,231,208,197,193,205,195,209,209,229,235,249,284,29,30,32,29,28,27,29,31,28,31,29,88,36,33,31,89,63,30,31,28,27,26,30,36,31,31,31,40,31,29,31,29,27,45,27,28,39,43,32,33,33,29,30,30,29,34,27,27,35,35,37,33,31,30,30,31,30,27,29,30,32,32,30,30,32,30,29,27,28,27,27,27,32,34,34,32,29,30,29,29,31,29,29,25,28,32,30,30,39,29,25,30,26,28,25,28],[295,943,460,344,636,680,841,412,417,86,95,1453,170,462,233,181,297,330,507,307,241,88,63,1732,129,190,140,113,141,153,269,190,140,59,76,1436,119,119,103,96,103,100,195,115,101,82,82,640,113,92,88,82,84,85,95,82,77,83,77,268,90,85,67,81,104,74,83,71,77,74,82,171,117,97,92,120,79,90,85,102,86,85,82,120,136,108,95,95,100,80,89,110,132,118,152,193,62,31,29,30,29,32,37,30,30,33,29,36,34,38,34,36,33,32,35,32,33,35,28,35,34,40,30,33,31,32,31,35,33,29,28,28,36,37,34,33,37,35,70,33,32,30,30,32,36,36,34,33,31,32,34,33,29,29,29,31,33,39,34,38,55,31,34,31,31,31,31,30,35,38,35,65,33,33,33,48,32,33,27,27,32,33,32,31,32,31,30,36,34,26,30,34],[290,1051,832,999,808,811,910,780,584,593,504,1492,263,694,491,656,561,464,515,434,307,370,346,1703,215,427,303,342,283,223,240,212,157,203,202,1694,221,280,202,190,165,161,161,137,128,169,169,830,235,210,164,158,166,145,144,134,145,154,184,371,246,188,187,178,167,160,172,144,158,188,181,270,308,263,251,248,245,237,243,231,234,238,236,284,343,317,360,288,294,306,296,284,289,287,276,304,32,37,35,30,33,30,32,32,31,32,29,105,37,40,27,35,39,35,34,33,31,34,32,68,34,35,13,34,23,31,33,32,34,31,26,31,37,36,42,15,28,34,46,28,32,43,30,31,37,36,35,35,38,39,33,33,38,31,32,33,37,37,37,31,35,30,35,33,38,68,35,29,57,35,34,33,37,31,33,28,30,30,32,34,44,44,73,32,32,39,31,31,33,30,30,31]];
+function sampleCsvText(v) {
+  const block = off => 'ABCDEFGH'.split('').map((row, r) =>
+    row + ',' + v.slice(off + r * 12, off + r * 12 + 12).map(x => x / 1000).join(',')).join('\r\n');
+  const cols = ',1,2,3,4,5,6,7,8,9,10,11,12,';
+  return ['', '', '', 'ID1: assay_platenumber,ID2: date,ID3: experiment,', 'Absorbance', '',
+    '1. Raw Data (450 1)', '', cols, block(0), '', '2. Raw Data (570 2)', '', cols, block(96)].join('\r\n') + '\r\n';
+}
+function loadSampleData(skipConfirm) {
+  if (!skipConfirm && (csvFiles.length || metaBytes) && !confirm('Replace the loaded plate and metadata files with the sample data?')) return;
+  csvFiles = SAMPLE_PLATES.map((v, i) => ({ name: `Sample_plate_${String(i + 1).padStart(2, '0')}.csv`, text: sampleCsvText(v), reader: 'BMG LABTECH', warnings: [] }));
+  lastPlateFiles = [];
+  document.getElementById('plate384Chk').checked = false;
+  render384Pattern();
+  storeSet('csvFiles', csvFiles);
+  metaBytes = new Uint8Array(XLSX.write(buildTemplateWorkbook(SAMPLE_PLATES.length, p => `plate ${p + 1}`), {bookType:'xlsx', type:'array'}));
+  metaName = 'Sample_MetaData.xlsx';
+  storeSet('meta', {name: metaName, bytes: metaBytes});
+  staleSession();
+  showCSVState();
+  showMetaState();
 }
 
 // ─── MATH UTILITIES ───────────────────────────────────────────────────────────
@@ -1672,66 +1777,79 @@ const OUTLIER = {
   RMS_MULT: 4,      // ...and at least this many times the RMS misfit of the remaining points
   SSE_DROP: 0.35,   // ...and removing it must cut the fit's squared error to below this fraction
   MIN_POINTS: 6,    // never suggest when fewer than this many points remain
-  MAX_PER_SERIES: 2
+  MAX_PER_SERIES: 2,
+  MIN_IMPACT: 0.10  // review level (slider): suggestions whose impact (see fitImpact) is below this fraction stay hidden; every candidate is computed and carries its impact
 };
 
-// Saturation "hunch": the concentrated dilutions are maxed out, sit flat and slightly low, and the
-// series peaks just before it falls. A 4PL chases that bump (poor R², shifted ED50), so the points
-// before the peak are treated as capped at the peak for fitting. Heuristic, so every change is
-// shown on the graph and in the output; excluding the peak point undoes it for that series.
-const HOOK = {
-  MIN_POINTS: 5,       // readings needed in the series
-  MIN_PRE: 2,          // readings before the peak
-  MIN_POST: 2,         // readings after it, so the falling limb is actually measured
-  MIN_RISE: 0.12,      // OD: the peak must exceed the median of the earlier points by this much...
-  REL_RISE: 0.04,      // ...and by this fraction of the peak
-  SIGMA: 2,            // ...and by this many robust SDs of the earlier points
-  PLATEAU_FRAC: 0.75,  // earlier points must all be at least this fraction of the peak (a plateau)
-  DROP_AFTER: 0.15,    // some later point must fall at least this far below the peak (it does descend)
-  // Near-ceiling shortcut: when the series sits at the top of the OD range, a concentrated reading that
-  // is lower than a later one is almost always saturation, so no statistics are needed.
-  CEILING_OD: 2.0,     // the peak must be at least this high (the standard fit already treats OD > 2 as saturated)
-  EARLY_N: 4,          // ...and be one of the first this-many readings (the plateau end of the series)
-  CEIL_MIN_RISE: 0.03  // OD: ignore differences below the plate noise
+// Edge effect: the outer wells (the last two rows, G and H = the most diluted points) read high from
+// evaporation/temperature drift. A dilution series only falls, so a point in those rows that sits above
+// the lowest reading of the rows before it is suggested as an outlier. Likewise the first two rows
+// (A and B) must not read below the highest of the rows after them (saturation dip). No fit needed.
+const EDGE = {
+  FIRST_ROW: 6,     // dose index of row G; rows G and H are scanned
+  HEAD_ROWS: 2,     // rows A and B are checked against the highest later reading
+  MIN_PRE: 3,       // readings needed in the earlier rows
+  MIN_RISE: 0.04,   // OD: a G/H point must exceed the lowest earlier reading by this much...
+  REL_RISE: 0.15    // ...and by this fraction of that reading (plate noise scales with OD)
 };
-// Returns {vals, plateau, n} with the earlier points raised to the peak, or null when there is no hunch.
-function applyHookCorrection(vals) {
-  const idx = [];
-  vals.forEach((v, i) => { if (v !== null && isFinite(v)) idx.push(i); });
-  if (idx.length < HOOK.MIN_POINTS) return null;
-  let m = idx[0];
-  for (const i of idx) if (vals[i] > vals[m]) m = i;
-  const pre = idx.filter(i => i < m), post = idx.filter(i => i > m);
-  const peak = vals[m];
-  const out = vals.slice();
-  // Near-ceiling shortcut: first dilution(s) lower than a later one while the OD is at the ceiling.
-  if (pre.length && post.length && peak >= HOOK.CEILING_OD && idx.indexOf(m) < HOOK.EARLY_N
-      && peak - Math.max(...pre.map(i => vals[i])) >= HOOK.CEIL_MIN_RISE
-      && Math.min(...pre.map(i => vals[i])) >= HOOK.PLATEAU_FRAC * peak) {
-    for (const i of pre) out[i] = peak;
-    return {vals: out, plateau: peak, n: pre.length};
+function suggestEdgeEffect(pts) {
+  const live = pts.filter(q => !q.excluded).sort((a, b) => a.i - b.i);
+  const early = live.filter(q => q.i < EDGE.FIRST_ROW);
+  if (early.length < EDGE.MIN_PRE) return [];
+  let ref = Math.min(...early.map(q => q.y));
+  const out = [];
+  for (const q of live) {
+    if (q.i < EDGE.FIRST_ROW) continue;
+    if (q.y - ref >= Math.max(EDGE.MIN_RISE, EDGE.REL_RISE * ref)) out.push(q);
+    else ref = Math.min(ref, q.y);   // a clean row G lowers the bar for row H
   }
-  if (pre.length < HOOK.MIN_PRE || post.length < HOOK.MIN_POST) return null;
-  const med = a => { const b = a.slice().sort((x, y) => x - y), h = b.length >> 1; return b.length % 2 ? b[h] : (b[h - 1] + b[h]) / 2; };
-  const preV = pre.map(i => vals[i]);
-  const mid = med(preV), sd = 1.4826 * med(preV.map(v => Math.abs(v - mid)));
-  if (peak - mid < Math.max(HOOK.MIN_RISE, HOOK.REL_RISE * peak, HOOK.SIGMA * sd)) return null;
-  if (Math.min(...preV) < HOOK.PLATEAU_FRAC * peak) return null;
-  if (Math.min(...post.map(i => vals[i])) > (1 - HOOK.DROP_AFTER) * peak) return null;
-  for (const i of pre) out[i] = peak;
-  return {vals: out, plateau: peak, n: pre.length};
+  const rest = live.filter(q => !out.includes(q));
+  if (rest.length >= EDGE.MIN_PRE)
+    for (const q of rest) {
+      if (q.i >= EDGE.HEAD_ROWS) break;
+      const top = Math.max(...rest.filter(r => r.i > q.i).map(r => r.y));
+      if (q.y < top) out.push(q);
+    }
+  return out;
+}
+
+// How much a refit without some points moves the result, as a fraction: the relative ED50 shift and, for a
+// standard curve, the shift of the concentration read off at typical ODs. Samples are interpolated against the
+// standard, so their own fit only matters through its ED50.
+function fitImpact(a, b, isStd) {
+  let d = Math.abs(Math.log(b[2] / a[2]));
+  if (!isFinite(d)) return Infinity;
+  if (isStd) for (const od of [0.3, 0.8, 1.5]) {
+    const ca = inverse4PL(od, a[1], a[0], a[3], a[2]), cb = inverse4PL(od, b[1], b[0], b[3], b[2]);
+    const r = Math.abs(Math.log(cb / ca));
+    if (isFinite(r) && r > d) d = r;
+  }
+  return Math.expm1(d);
 }
 
 // Leave-one-out check on the two largest residuals of an existing fit; returns the points
 // to suggest. Clean series cost nothing — refits only happen for series with a large residual.
-function suggestOutliers(pts, fit, fc) {
-  const out = [];
-  const fy = p => p.fy !== undefined ? p.fy : p.y;   // value the fit saw (hunch-corrected points differ from the raw reading)
-  let cur = pts.slice();
+function suggestOutliers(pts, fit, fc, isStd) {
+  const edge = suggestEdgeEffect(pts);
+  const out = [];   // {key, impact}: every candidate, with how much removing it moves the result; the review level filters them
+  // Edge points sit on the plateaus where they barely move the curve. Their impact is that of removing the
+  // whole group; it is unbounded when one is the reading a sample's concentration is interpolated from.
+  if (edge.length) {
+    let impact = Infinity;
+    const rest = pts.filter(p => !edge.includes(p));
+    const live = pts.filter(p => !p.excluded).sort((a, b) => a.i - b.i);
+    const choice = isStd ? null : live.find(p => p.y <= 1.5);
+    if (fit && rest.length >= OUTLIER.MIN_POINTS - 1 && !(choice && edge.includes(choice))) {
+      try { impact = fitImpact(fit, fitBest4PL(rest.map(p => p.x), rest.map(p => p.y), fc, fit), isStd); } catch(_) {}
+    }
+    for (const q of edge) out.push({key: q.key, impact});
+  }
+  const fit0 = fit;
+  let cur = pts.filter(p => !edge.includes(p));
   for (let k = 0; k < OUTLIER.MAX_PER_SERIES; k++) {
     if (!fit || cur.length < OUTLIER.MIN_POINTS) break;
-    const y = cur.map(fy);
-    const res = cur.map(p=>fy(p) - model4PL(p.x, fit));
+    const y = cur.map(p => p.y);
+    const res = cur.map(p=>p.y - model4PL(p.x, fit));
     const sse = res.reduce((s,r)=>s+r*r, 0);
     const floor = Math.max(OUTLIER.MIN_DEV, OUTLIER.REL_DEV * (Math.max(...y) - Math.min(...y)));
     if (Math.max(...res.map(Math.abs)) < 0.5 * floor) break;
@@ -1740,15 +1858,15 @@ function suggestOutliers(pts, fit, fc) {
     for (const j of cands) {
       const rest = cur.filter((_,i)=>i!==j);
       let fit2;
-      try { fit2 = fitBest4PL(rest.map(p=>p.x), rest.map(fy), fc, fit); } catch(_) { continue; }
-      const dev = Math.abs(fy(cur[j]) - model4PL(cur[j].x, fit2));
-      const sse2 = rest.reduce((s,p)=>s + (fy(p) - model4PL(p.x, fit2))**2, 0);
+      try { fit2 = fitBest4PL(rest.map(p=>p.x), rest.map(p => p.y), fc, fit); } catch(_) { continue; }
+      const dev = Math.abs(cur[j].y - model4PL(cur[j].x, fit2));
+      const sse2 = rest.reduce((s,p)=>s + (p.y - model4PL(p.x, fit2))**2, 0);
       const rms2 = Math.sqrt(sse2 / rest.length);
       if (dev >= floor && dev >= OUTLIER.RMS_MULT * rms2 && sse2 <= OUTLIER.SSE_DROP * sse && (!pick || dev > pick.dev))
         pick = {j, dev, fit2};
     }
     if (!pick) break;
-    out.push(cur[pick.j]);
+    out.push({key: cur[pick.j].key, impact: fitImpact(fit0, pick.fit2, isStd)});   // cumulative against the original fit
     cur = cur.filter((_,i)=>i!==pick.j);
     fit = pick.fit2;
   }
@@ -1829,7 +1947,7 @@ function makeProgress() {
 
 // Suggested outliers from a first, unexcluded analysis. Returns a Set of exKeys.
 async function computeSuggestions(plateCharts, fc, universal, tick) {
-  const found = new Set();
+  const found = new Map();   // key → impact
   for (const pc of plateCharts) {
     const series = pc.samples.map(s => [s.points, s.params]);
     if (!universal) series.push([pc.std.points, pc.std.params]);
@@ -1837,7 +1955,7 @@ async function computeSuggestions(plateCharts, fc, universal, tick) {
     for (let si = 0; si < series.length; si++) {
       const [pts, params] = series[si];
       const isStd = !universal && si === series.length - 1;
-      for (const q of suggestOutliers(pts, params, isStd ? std : fc)) found.add(q.key);
+      if (!isStd) for (const q of suggestOutliers(pts, params, fc, false)) found.set(q.key, q.impact);
       if (tick) await tick(1);
     }
   }
@@ -1856,10 +1974,10 @@ function plateSig(p, excl, std) {
 
 function fitWorkerSource() {
   const fns = [model4PL, solveGaussian, levenbergMarquardt, inverse4PL, exKey, getSeries, estimateIC50,
-               fitBest4PL, ec50Gen, stdFitPoints, sampleChoicePoint, stdFitConfig, calculateConcentrations,
-               plateEntryGen, suggestOutliers, applyHookCorrection];
+               fitBest4PL, fitImpact, ec50Gen, stdFitPoints, sampleChoicePoint, stdFitConfig, calculateConcentrations,
+               plateEntryGen, suggestOutliers, suggestEdgeEffect];
   return `const OUTLIER = ${JSON.stringify(OUTLIER)};
-const HOOK = ${JSON.stringify(HOOK)};
+const EDGE = ${JSON.stringify(EDGE)};
 const STD_CON_FLOOR = ${STD_CON_FLOOR};
 ${fns.map(f => f.toString()).join('\n')}
 let ctx = null;
@@ -1874,13 +1992,13 @@ self.onmessage = e => {
       // fitting and outlier screening by their real cost.
       const tk = ph => { const now = performance.now(); self.postMessage({type: 'tick', id, ph, dt: ph === 'pad' ? 0 : now - last}); last = now; };
       while (!(r = it.next()).done) tk('fit');
-      if (!m.screen) { self.postMessage({type: 'done', id, result: r.value}); return; }
+      if (!m.screen || ctx.meta.detectOutliers === false) { self.postMessage({type: 'done', id, result: r.value}); return; }
       // Outlier screening on the plate's fresh (unexcluded) fits, in the same job.
       const pc = r.value.plateChart, series = pc.samples.map(s => [s.points, s.params, false]);
       if (!ctx.meta.universalStd) series.push([pc.std.points, pc.std.params, true]);
       const sug = [];
       for (const [pts, params, isStd] of series) {
-        for (const q of suggestOutliers(pts, params, isStd ? ctx.stdFc : ctx.fc)) sug.push(q.key);
+        if (!isStd) for (const q of suggestOutliers(pts, params, ctx.fc, false)) sug.push([q.key, q.impact]);
         tk('screen');
       }
       for (let k = series.length; k < ${FIT_STEPS_PER_PLATE}; k++) tk('pad');
@@ -1896,7 +2014,7 @@ function createFitPool(grid, meta, fc, maxWorkers) {
   const size = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 4) - 1, maxWorkers || 8));
   const workers = [], idle = [], queue = [], running = new Map();
   let url = null, closed = false, nextId = 1;
-  const slim = {seriesST: meta.seriesST, seriesSA: meta.seriesSA, universalStd: meta.universalStd || null, hookFix: !!meta.hookFix};
+  const slim = {seriesST: meta.seriesST, seriesSA: meta.seriesSA, universalStd: meta.universalStd || null, detectOutliers: meta.detectOutliers !== false};
   const pump = () => {
     while (idle.length && queue.length) {
       const w = idle.pop(), job = queue.shift();
@@ -1972,16 +2090,16 @@ async function warmCacheParallel(pool, grid, numPlates, meta, fc, excl, cache, l
 
 // First run: fits every plate and screens it for outlier suggestions in one worker job (no barrier
 // between the two phases, so the pool stays busy). Ticks: FIT_STEPS_PER_PLATE per phase and plate.
-// Returns the Set of suggested exKeys, or null when the pool failed (nothing is cached then).
+// Returns the Map of suggested exKey → impact, or null when the pool failed (nothing is cached then).
 async function fitAndScreenParallel(pool, numPlates, excl, cache, logFn, tick, onPlate) {
   try {
-    const found = new Set();
+    const found = new Map();
     let chain = Promise.resolve();
     const tickSoon = m => { chain = chain.then(() => tick(m)); chain.catch(() => {}); return chain; };
     await Promise.all([...Array(numPlates).keys()].map(p => {
       const sig = plateSig(p, excl);   // as dispatched: the user may edit other plates while this one fits
       return pool.run({type: 'plate', p, excl: [...excl].filter(k => k.startsWith(p + '|')), screen: true}, tickSoon, logFn)
-        .then(r => { cache.set(sig, r.entry); r.sug.forEach(k => found.add(k)); if (onPlate) onPlate(p, r.sug); });
+        .then(r => { cache.set(sig, r.entry); r.sug.forEach(([k, v]) => found.set(k, v)); if (onPlate) onPlate(p, r.sug); });
     }));
     await chain;
     return found;
@@ -2050,21 +2168,8 @@ function* plateEntryGen(grid, p, meta, fc, excl, logFn, stdOverride) {
     const key = exKey(p, col, q.i);
     return {...q, key, excluded: excl.has(key), suggested: false};
   };
-  // Saturation hunch: sample curves are fitted on the corrected values; interpolation and the
-  // chart/output keep the real readings.
-  let fitSeries = series;
-  const hooks = new Map();
-  if (meta.hookFix) {
-    fitSeries = new Map(series);
-    fitSeries.colOf = series.colOf;
-    for (const [name, vals] of series) {
-      if (name === 'standard' || name.startsWith('blank')) continue;
-      const h = applyHookCorrection(vals);
-      if (h) { fitSeries.set(name, h.vals); hooks.set(name, h); }
-    }
-  }
   logFn(`  Plate ${p+1}: fitting EC50...`);
-  const {row: ec50Row, fits: ec50Fits} = yield* ec50Gen(fitSeries, seriesSA, fc);
+  const {row: ec50Row, fits: ec50Fits} = yield* ec50Gen(series, seriesSA, fc);
   logFn(`  Plate ${p+1}: calculating concentrations...`);
   const {conRow, choValRow, choDilRow, fittedParams, STindex,
          stdPoints, stdParams, sampleChoices} = calculateConcentrations(series, seriesST, seriesSA, fc, stdOverride || meta.universalStd);
@@ -2077,12 +2182,7 @@ function* plateEntryGen(grid, p, meta, fc, excl, logFn, stdOverride) {
   for (let i = 0; i < ec50Fits.length; i++) {
     const f = ec50Fits[i];
     if (!f.isSample) continue;
-    const h = hooks.get(f.name), live = series.get(f.name);
-    const allPts = mkPts(rawSeries.get(f.name), seriesSA).map(q => {
-      const o = flag(q, f.col);
-      if (h && !o.excluded && h.vals[q.i] !== live[q.i]) o.fy = h.vals[q.i];
-      return o;
-    });
+    const allPts = mkPts(rawSeries.get(f.name), seriesSA).map(q => flag(q, f.col));
     if (allPts.length === 0) continue;
     const c = sampleChoices[i] || {};
     samples.push({
@@ -2090,7 +2190,6 @@ function* plateEntryGen(grid, p, meta, fc, excl, logFn, stdOverride) {
       params: f.params,
       ed50: f.params ? f.params[2] : null,
       points: allPts,
-      hook: h ? {n: h.n, plateau: h.plateau} : null,
       chosenVal: c.chosenVal != null ? c.chosenVal : null,
       intersectionX: c.intersectionX != null ? c.intersectionX : null,
     });
@@ -2167,10 +2266,6 @@ function buildDataSheet(grid, numPlates, meta, fc, logFn, excl, cache, stdFrom, 
     plateFits.push(entry.plateFit); plateCharts.push(entry.plateChart);
   }
 
-  // Wells whose value the hunch correction replaced for fitting (raw value stays in the sheet).
-  const hookKeys = new Set();
-  for (const pc of plateCharts) if (pc) for (const smp of pc.samples) for (const q of smp.points) if (q.fy !== undefined) hookKeys.add(q.key);
-
   // Full grid: 29 original rows + blank + EC50 + blank + choVal + choDil + con
   const fullData = [...grid.map(r=>[...r])];
   fullData.push(new Array(numPlates*14).fill(null));   // row 29: blank
@@ -2194,8 +2289,6 @@ function buildDataSheet(grid, numPlates, meta, fc, logFn, excl, cache, stdFrom, 
       // Row 7: sample names — bold, with fill color copied from MetaData Names sheet
       if (R >= 9 && R <= 16 && isDataCol && typeof v === 'number' && excl.has(exKey(plateIdx, colInPlate, R - 9)))
         return {v, t:'n', s:{font:{strike:true, color:{rgb:'FF9A9A9A'}}}};
-      if (R >= 9 && R <= 16 && isDataCol && typeof v === 'number' && hookKeys.has(exKey(plateIdx, colInPlate, R - 9)))
-        return {v, t:'n', s:{font:{italic:true, color:{rgb:'FF1F5FBF'}}}};
       if (R === 7 && isDataCol) {
         const nameColor = colors && colors[plateIdx] && colors[plateIdx][colInPlate - 1];
         if (nameColor) return styledCell(v, 'FF' + nameColor, {font:{bold:true}});
@@ -2344,18 +2437,6 @@ function buildProtocolSheet(meta, plateFits, plateCharts, fit) {
     }
   });
 
-  const hookRows = [];
-  plateCharts.forEach((pc, i) => pc.samples.forEach(smp => { if (smp.hook) hookRows.push([i + 1, smp.name, smp.hook.n, smp.hook.plateau]); }));
-  if (meta.hookFix) {
-    data.push([]);
-    data.push([{v:'Saturation Hunch Correction', t:'s', s:hdrS}]);
-    data.push([{v:'Where the concentrated dilutions were flat and below a peak just before the fall, those points were raised to the peak for fitting only. Their raw values are in italic blue on the Processed Data sheet.', t:'s', s:{font:{sz:9}}}]);
-    if (hookRows.length) {
-      data.push(['Plate','Sample','Points raised','Plateau OD used'].map(v=>({v,t:'s',s:boldS})));
-      for (const [pl, nm, n, plat] of hookRows) data.push([{v:plateLabel(pl - 1), t:'s', s:lblS}, {v:nm, t:'s'}, {v:n, t:'n'}, {v:r4(plat), t:'n'}]);
-    } else data.push([{v:'No series needed it.', t:'s'}]);
-  }
-
   const ws = aoaToSheet(data);
   ws['!cols'] = [{wch:34},{wch:14},{wch:16},{wch:14},{wch:20},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12}];
   return ws;
@@ -2489,8 +2570,7 @@ function pointSvg(p, S, col, r, label) {
 // Display-only: hidden samples drop out of both graphs but stay in the results; axes stay as for all samples.
 function isHidden(pc, s) {
   if (!review) return false;
-  if (review.hidden.has(pc.plateIndex + '|' + s.name)) return true;
-  return focusActive(pc) && !focusSamples(pc).has(s.name);
+  return review.hidden.has(pc.plateIndex + '|' + s.name);
 }
 
 function renderSampleChart(pc) {
@@ -2504,6 +2584,7 @@ function renderSampleChart(pc) {
   const S = makeScales(xd, yd);
   let body = axisSvg(xd, yd, S, 'Sample dilution factor (log)', 'OD');
   let pts = ''; // points are drawn after every line so guide lines never cover them
+  const poor = poorNames(pc);
   pc.samples.forEach((s, i) => {
     if (isHidden(pc, s)) return;
     const col = sampleColor(i);
@@ -2513,16 +2594,12 @@ function renderSampleChart(pc) {
       body += `<line class="dash-hit" x1="${px.toFixed(1)}" y1="${CPAD.t}" x2="${px.toFixed(1)}" y2="${CHART_H-CPAD.b}" stroke="${col}" stroke-width="12" data-tip="${escapeXml(`${s.name} · ED50 ≈ ${Math.max(10, Math.round(s.ed50))}`)}"/>`;
     }
     if (s.params) {
-      body += `<path d="${curvePath(s.params, xd, S)}" fill="none" stroke="${col}" stroke-width="1.6"/>`;
+      const d = curvePath(s.params, xd, S);
+      // Poorly fitted curves get a red glow (wide, soft red stroke under the curve; pointer-events off).
+      if (poor.has(s.name)) body += `<path d="${d}" fill="none" stroke="#ff3b30" stroke-width="7" stroke-linecap="round" opacity=".35" style="filter:blur(2.5px)" pointer-events="none"/>`;
+      body += `<path d="${d}" fill="none" stroke="${col}" stroke-width="1.6"/>`;
     }
     for (const p of s.points) pts += pointSvg(p, S, col, 2.8, `${s.name}, 1:${fmtTick(p.x)}`);
-    // Hunch-corrected points: a dashed ring where the fit treated the reading (pointer-events off).
-    for (const p of s.points) {
-      if (p.fy === undefined) continue;
-      const cx = S.X(p.x).toFixed(1), y0 = S.Y(p.y).toFixed(1), y1 = S.Y(p.fy).toFixed(1);
-      pts += `<g pointer-events="none"><line x1="${cx}" y1="${y0}" x2="${cx}" y2="${y1}" stroke="${col}" stroke-width="1" stroke-dasharray="2 2" opacity=".7"/>`
-            + `<circle cx="${cx}" cy="${y1}" r="3.6" fill="none" stroke="${col}" stroke-width="1.2" stroke-dasharray="2 2"/></g>`;
-    }
   });
   return svgWrap(body + pts);
 }
@@ -2543,7 +2620,10 @@ function renderStandardChart(pc) {
   const S = makeScales(xd, yd);
   let body = axisSvg(xd, yd, S, 'Concentration (log)', 'OD');
   if (pc.std.params) {
-    body += `<path d="${curvePath(pc.std.params, xd, S)}" fill="none" stroke="#1c1c1e" stroke-width="1.8"/>`;
+    const d = curvePath(pc.std.params, xd, S);
+    // A poor or failed standard fit gets the same red glow as poorly fitted sample curves.
+    if (plateFlags(pc).notes.some(t => /poor standard curve|standard-curve fit failed/.test(t))) body += `<path d="${d}" fill="none" stroke="#ff3b30" stroke-width="7" stroke-linecap="round" opacity=".35" style="filter:blur(2.5px)" pointer-events="none"/>`;
+    body += `<path d="${d}" fill="none" stroke="#1c1c1e" stroke-width="1.8"/>`;
   }
   let pts = '';
   for (const p of pc.std.points) pts += pointSvg(p, S, '#1c1c1e', 3, `Standard, ${fmtTick(p.x)}`);
@@ -2567,7 +2647,7 @@ function renderStandardChart(pc) {
 
 // ─── REVIEW STATE ─────────────────────────────────────────────────────────────
 // Set after Process; the workbook is only written when every plate is accepted.
-let review = null;  // {grid, numPlates, meta, outputName, excl, suggested, accepted, analysis, view, cur, limit, focusOff}
+let review = null;  // {grid, numPlates, meta, outputName, excl, suggested, accepted, analysis, view, cur, limit}
 
 // ─── REVIEW TRIAGE ────────────────────────────────────────────────────────────
 // A plate is "flagged" when something in it deserves a look: unresolved suggested outliers, a failed
@@ -2581,13 +2661,12 @@ const FLAG = {
   BATCH: 10          // plates rendered at once
 };
 function r2Of(points, params) {
-  const fy = q => q.fy !== undefined ? q.fy : q.y;
-  const y = points.map(fy), n = y.length;
+  const y = points.map(q => q.y), n = y.length;
   if (n < 3) return null;
   const mean = y.reduce((a, b) => a + b, 0) / n;
   const tot = y.reduce((a, b) => a + (b - mean) ** 2, 0);
   if (tot < 1e-12) return null;
-  const res = points.reduce((a, q) => a + (fy(q) - model4PL(q.x, params)) ** 2, 0);
+  const res = points.reduce((a, q) => a + (q.y - model4PL(q.x, params)) ** 2, 0);
   return 1 - res / tot;
 }
 // Why a plate's own standard looks unusable (flat / absent wells), or '' when it looks fine.
@@ -2621,7 +2700,7 @@ function plateFlags(pc) {
     const open = live.filter(q => r.suggested.has(q.key)).length;
     if (open) add(s.name, 'outlier', `${open} suggested outlier${open > 1 ? 's' : ''}`, open);
     if (!s.params) { if (live.length) add(s.name, 'failed', 'fit failed'); continue; }
-    const ys = live.map(q => q.fy !== undefined ? q.fy : q.y);
+    const ys = live.map(q => q.y);
     if (ys.length < 3 || Math.max(...ys) - Math.min(...ys) < FLAG.MIN_RANGE) continue;
     if (atBound(s.params[2], fc.lower[2]) || atBound(s.params[2], fc.upper[2])) add(s.name, 'bound', 'ED50 at fit bound');
     else if (atBound(s.params[3], fc.lower[3]) || atBound(s.params[3], fc.upper[3])) add(s.name, 'bound', 'slope at fit bound');
@@ -2686,31 +2765,6 @@ function triageCounts() {
   }
   return {todo, clean, acc: r.accepted.size};
 }
-// With flagged samples present, the plate's graphs show only those until "Show all" is used.
-// The samples a plate's graphs focus on. Sticky: a sample stays in the set once flagged (or once one
-// of its suggested outliers was excluded), so fixing it by exclusion does not make its curve vanish
-// or the other curves suddenly appear.
-function focusSamples(pc) {
-  const r = review, p = pc.plateIndex;
-  const set = (r.focusSet || (r.focusSet = {}))[p] || (r.focusSet[p] = new Set());
-  for (const n of plateFlags(pc).samples.keys()) set.add(n);
-  for (const s of pc.samples) if (s.points.some(q => q.excluded && r.suggested.has(q.key))) set.add(s.name);
-  return set;
-}
-function focusActive(pc) {
-  const r = review;
-  if (!r || r.view !== 'todo' || r.focusOff.has(pc.plateIndex)) return false;
-  const n = focusSamples(pc).size;
-  return n > 0 && n < pc.samples.length;
-}
-function materializeFocus(p) {
-  const pc = review.analysis.plateCharts[p];
-  if (!focusActive(pc)) return;
-  const f = focusSamples(pc);
-  for (const s of pc.samples) if (!f.has(s.name)) review.hidden.add(p + '|' + s.name);
-  review.focusOff.add(p);
-}
-
 function pointLabel(key) {
   const [p, c, i] = key.split('|').map(Number);
   const pc = review.analysis.plateCharts[p];
@@ -2809,7 +2863,7 @@ function plateBlockHtml(pc) {
     legend += `<button class="legend-item legend-btn${off ? ' off' : ''}" role="checkbox" aria-checked="${!off}" data-hide="${p}|${escapeXml(s.name)}" title="Click to ${off ? 'show' : 'hide'}; shift-click to show only this sample"><span class="cb">${off ? '' : '✓'}</span><span class="legend-swatch" style="background:${sampleColor(i)}"></span>${escapeXml(s.name)}${ed}</button>`;
   });
   const nHid = pc.samples.filter(s => isHidden(pc, s)).length;
-  const fl = plateFlags(pc), focus = focusActive(pc);
+  const fl = plateFlags(pc);
   const poorSet = poorNames(pc);
   const onlyPoor = poorSet.size > 0 && pc.samples.every(s => poorSet.has(s.name) === !isHidden(pc, s)) && poorSet.size < pc.samples.length;
   if (pc.samples.length) legend += `<span class="legend-all">
@@ -2854,15 +2908,16 @@ function plateBlockHtml(pc) {
       : escapeXml(r.meta.universalStd ? 'OK — universal standard curve' : pc.std.borrowed ? `OK — borrowed from plate ${pc.std.from + 1}` : `OK${fl.stdR2 != null ? ` (R² ${fl.stdR2.toFixed(3)})` : ''}`);
     const nOut = ofKind(['outlier']).reduce((a, [, w]) => a + w[0].n, 0) + fl.stdOpen;
     const nFit = ofKind(['failed', 'r2', 'bound']).length;
+    const nVis = visibleSuggestedKeys(p).length;
     const group = (i, title, ok, txt, btn = '') => `<div class="flag-group"><span class="flag-gtitle">${i}. ${title}</span>${btn || `<span class="flag-item${ok ? ' ok' : ''}">${txt}</span>`}</div>`;
     banner = `<div class="flag-banner"><div class="flag-head">⚠ Plate flagged.</div>
       <div class="flag-cols">
       ${group(1, 'Standard curve fit', !stdBad.length, stdTxt)}
-      ${group(2, 'Outliers', !nOut, nOut ? `${nOut} suggested` : 'None detected', nOut ? `<button class="btn btn-secondary btn-sm" data-exclplate="${p}" title="Exclude all suggested outliers and show only their curves">Exclude ${nOut > 1 ? 'all ' : ''}${nOut} outlier${nOut > 1 ? 's' : ''} <kbd class="keycap">X</kbd></button>` : '')}
+      ${group(2, 'Outliers', !nOut, nOut ? `${nOut} suggested` : 'None detected', nOut ? (nVis ? `<button class="btn btn-secondary btn-sm" data-exclplate="${p}" title="Exclude the suggested outliers on the curves currently shown">Exclude ${nVis > 1 ? 'all ' : ''}${nVis} visible outlier${nVis > 1 ? 's' : ''} <kbd class="keycap">X</kbd></button>` : `<button class="btn btn-secondary btn-sm" disabled title="No suggested outliers on the curves currently shown">No visible outliers</button>`) : '')}
       ${group(3, 'Poorly fitted curves', !nFit, nFit ? `${nFit} curve${nFit > 1 ? 's' : ''}` : 'None', nFit ? (onlyPoor ? `<button class="btn btn-secondary btn-sm" data-showall="${p}" title="Show every dilution curve again">Show all</button>` : `<button class="btn btn-secondary btn-sm" data-poorfit="${p}" title="Show only curves with a failed fit, low R² or a parameter at its fit bound">Show only poor fits</button>`) : '')}
       </div></div>`;
   } else if (plateResolved(p)) {
-    banner = `<div class="flag-banner ok"><div class="flag-head">✓ Resolved — ${nEx} point${nEx > 1 ? 's' : ''} excluded, no issues remain.</div>${focus ? `<div class="focus-note">Graphs still show only the ${focusSamples(pc).size} sample${focusSamples(pc).size > 1 ? "s" : ""} that ${focusSamples(pc).size > 1 ? "were" : "was"} flagged — “Show all” reveals the rest.</div>` : ''}</div>`;
+    banner = `<div class="flag-banner ok"><div class="flag-head">✓ Resolved — ${nEx} point${nEx > 1 ? 's' : ''} excluded, no issues remain.</div></div>`;
   } else if (nEx) {
     banner = `<div class="flag-banner ok"><div class="flag-head">✎ No issues flagged — ${nEx} point${nEx > 1 ? 's' : ''} excluded by you.</div></div>`;
   } else {
@@ -2870,10 +2925,6 @@ function plateBlockHtml(pc) {
   }
   if (r.undo && r.undo.p === p && r.undo.keys.some(k => r.excl.has(k)))
     banner = banner.replace(/<\/div>$/, `<button class="btn btn-secondary btn-sm" data-undoexcl="${p}" style="margin-top:6px">↶ Undo excluding outliers</button></div>`);
-  const hooked = pc.samples.filter(q => q.hook);
-  const hookNote = hooked.length
-    ? `<div class="hook-note">↗ <b>Saturation hunch corrected in ${hooked.length} sample${hooked.length > 1 ? 's' : ''}</b> (${hooked.slice(0, 8).map(q => escapeXml(q.name) + ' · ' + q.hook.n + ' pt' + (q.hook.n > 1 ? 's' : '') + ' → OD ' + q.hook.plateau.toFixed(2)).join(', ')}${hooked.length > 8 ? ` and ${hooked.length - 8} more` : ''}). Dashed rings on the graph show where the fit treated those points; exclude the peak point to undo it for one sample.</div>`
-    : '';
   let stdBar = '';
   if (pc.std.from != null || fl.noStd) {
     const donors = standardDonors(p);
@@ -2890,7 +2941,6 @@ function plateBlockHtml(pc) {
     <div class="plate-charts-header">${escapeXml(plateLabel(p))}
     </div>
     ${banner}
-    ${hookNote}
     ${stdBar}
     ${rowBarHtml(p)}
     <div class="plate-charts-row">
@@ -2970,11 +3020,11 @@ function acceptBarHtml() {
   if (p == null || !r.analysis.plateCharts[p]) return '';
   const acc = r.accepted.has(p);
   const list = visiblePlates(), i = list.indexOf(p), first = i <= 0, last = i < 0 || i >= list.length - 1;
-  return `<button class="btn process-btn ${acc ? 'btn-accepted' : 'btn-primary'}" data-accept="${p}">${acc ? '✓ Accepted' : 'Accept plate and show next <kbd class="keycap">A</kbd>'}</button>`
-    + `<div class="ra-row"><button class="btn btn-primary process-btn" ${first ? 'disabled' : `data-prevplate="${p}"`} title="${first ? 'This is the first plate' : 'Previous plate (←)'}">Back <kbd class="keycap">←</kbd></button>`
-    + `<button class="btn btn-primary process-btn" ${last ? 'disabled' : `data-nextplate="${p}"`} title="${last ? 'This is the last plate' : 'Next plate (→)'}">Next <kbd class="keycap">→</kbd></button>`
+  return `<button class="btn process-btn ${acc ? 'btn-accepted' : 'btn-black'}" data-accept="${p}">${acc ? '✓ Accepted' : 'Accept plate and show next <kbd class="keycap">A</kbd>'}</button>`
+    + `<div class="ra-row"><button class="btn btn-black process-btn" ${first ? 'disabled' : `data-prevplate="${p}"`} title="${first ? 'This is the first plate' : 'Previous plate (←)'}">Back <kbd class="keycap">←</kbd></button>`
+    + `<button class="btn btn-black process-btn" ${last ? 'disabled' : `data-nextplate="${p}"`} title="${last ? 'This is the last plate' : 'Next plate (→)'}">Next <kbd class="keycap">→</kbd></button>`
     + '</div>'
-    + (last && r.accepted.size < r.numPlates ? `<button class="btn process-btn btn-primary" data-act="acceptAll" ${r.fitting ? 'disabled' : ''}>Accept all remaining plates (${r.numPlates - r.accepted.size})</button>` : '');
+    + (last && r.accepted.size < r.numPlates ? `<button class="btn process-btn btn-black" data-act="acceptAll" ${r.fitting ? 'disabled' : ''}>Accept all remaining plates (${r.numPlates - r.accepted.size})</button>` : '');
 }
 
 // Shows the "Scroll for more" pill while the current plate has content below the visible part.
@@ -3000,17 +3050,101 @@ function observeReviewList() {
   requestAnimationFrame(updateScrollHint);
 }
 
+// Suggested outliers = the candidates whose impact reaches the review level. Every candidate was computed once
+// (review.sugImpact); moving the slider only re-filters them, no refit.
+function refilterSuggested() {
+  const r = review;
+  if (!r) return;
+  r.suggested = new Set([...r.sugImpact].filter(([, v]) => v >= OUTLIER.MIN_IMPACT).map(([k]) => k));
+  r.flagCache = null;
+}
+function impactCardHtml() {
+  const r = review, pct = Math.round(OUTLIER.MIN_IMPACT * 100), off = r.meta.detectOutliers === false;
+  return `<div class="imp-title">Outlier sensitivity</div>
+    <div class="imp-row"><input type="range" id="impRange" min="0" max="100" step="1" value="${pct}"${off ? ' disabled' : ''}>
+    <input type="number" id="impNum" min="0" max="100" step="1" value="${pct}"${off ? ' disabled' : ''}><span>%</span></div>
+    <div class="imp-note" id="impNote">${impactNoteHtml()}</div>`;
+}
+function impactNoteHtml() {
+  const r = review;
+  if (r.meta.detectOutliers === false) return 'Outlier detection is off.';
+  return `<b>${r.suggested.size}</b> of ${r.sugImpact.size} candidate points shown. A candidate is shown when excluding it would shift the ED50 by at least this much. 0 % shows all.`;
+}
+document.addEventListener('change', e => { if (e.target.id === 'impRange') e.target.blur(); });   // hand the arrow-key shortcuts back
+let impactRaf = 0;
+function setImpactLevel(v) {
+  if (!review || !Number.isFinite(v)) return;
+  v = Math.max(0, Math.min(100, Math.round(v)));
+  OUTLIER.MIN_IMPACT = v / 100;
+  for (const id of ['impRange', 'impNum']) { const el = document.getElementById(id); if (el && document.activeElement !== el) el.value = v; }
+  refilterSuggested();
+  const note = document.getElementById('impNote'); if (note) note.innerHTML = impactNoteHtml();
+  if (impactRaf) return;
+  impactRaf = requestAnimationFrame(() => {
+    impactRaf = 0;
+    if (!review) return;
+    const list = document.getElementById('reviewList');
+    if (list) list.innerHTML = reviewListHtml();
+    refreshHeaders(); saveSession(); updateSections();
+  });
+}
+document.addEventListener('input', e => {
+  if (e.target.id === 'impRange' || e.target.id === 'impNum') setImpactLevel(e.target.value === '' ? NaN : Number(e.target.value));
+});
+
 // Run parameters shown above the review header (filled in by runProcessing).
 let runInfoHtml = '';
+
+// Advanced: manual 4PL bounds / starting values. Applying refits every plate against the new settings.
+function advFitHtml(err) {
+  const names = ['Bottom', 'Top', 'ED50', 'Hill (slope)'];
+  const row = (i) => `<tr><td>${names[i]}</td>` + ['lower', 'p0', 'upper'].map(k =>
+    `<td><input type="number" step="any" data-fit="${k}|${i}" value="${fitConfig[k][i]}"></td>`).join('') + '</tr>';
+  return `<summary>Advanced: curve-fit settings</summary>
+    <table><tr><th></th><th>Lower</th><th>Initial</th><th>Upper</th></tr>${[0, 1, 2, 3].map(row).join('')}</table>
+    <div class="adv-btns"><button class="btn btn-secondary btn-sm" data-act="applyFit">Apply &amp; refit all plates</button>
+    <button class="btn btn-secondary btn-sm" data-act="resetFit">Reset</button></div>
+    ${err ? `<div class="adv-err">${escapeXml(err)}</div>` : ''}
+    <div class="adv-note">Hill is entered positive (the standard curve mirrors it). Applying refits all plates, recomputes outlier suggestions and un-accepts every plate. Your excluded points are kept. Settings last until the next Process run.</div>`;
+}
+async function applyFitSettings(fc) {
+  const r = review;
+  if (!r || waitForFitting()) return;
+  const adv = document.getElementById('reviewAdv');
+  for (let i = 0; i < 4; i++) {
+    const [lo, p0, hi] = [fc.lower[i], fc.p0[i], fc.upper[i]];
+    if (![lo, p0, hi].every(Number.isFinite)) return adv.innerHTML = advFitHtml('Every field needs a number.');
+    if (!(lo <= p0 && p0 <= hi)) return adv.innerHTML = advFitHtml('Each row needs lower ≤ initial ≤ upper.');
+  }
+  if (fc.lower[3] <= 0) return adv.innerHTML = advFitHtml('Hill must be positive.');
+  fitConfig = fc; r.meta.fit = fc; r.meta.fitSource = 'manual override (Review)';
+  runInfoHtml = runInfoHtml.replace(/(<h4>Curve-fit settings<\/h4><div>)[^<]*/, '$1manual override (Review)');
+  r.cache.clear(); r.accepted.clear(); r.flagCache = null; r.busy = true;
+  try {
+    setBusy('Refitting all plates with the new settings…');
+    await reanalyzeAsync();
+    if (r.meta.detectOutliers !== false) {
+      setBusy('Screening for outliers…');
+      r.sugImpact = await computeSuggestions(r.analysis.plateCharts, fitConfig, !!r.meta.universalStd, () => new Promise(res => setTimeout(res, 0)));
+      refilterSuggested();
+    }
+  } finally { r.busy = false; setBusy(''); }
+  renderReview();
+}
 
 function renderReview(animate) {
   const sec = document.getElementById('chartsSection');
   if (!sec || !review) return;
-  sec.innerHTML = `<div id="reviewRunInfo" class="run-info">${runInfoHtml}</div>`
+  const keep = document.getElementById('reviewSideScroll'), top = keep ? keep.scrollTop : 0;
+  sec.innerHTML = `<div id="reviewSide"><div id="reviewSideScroll">`
+    + `<div id="reviewRunInfo" class="run-info">${runInfoHtml}</div>`
     + `<div id="reviewHeader" class="card">${reviewHeaderHtml()}</div>`
+    + `<div id="reviewImpact" class="card imp-card">${impactCardHtml()}</div>`
+    + `<details id="reviewAdv" class="card adv-fit"${review.advOpen ? ' open' : ''}>${advFitHtml()}</details>`
+    + `</div><div id="reviewActions">${acceptBarHtml()}</div></div>`
     + `<div id="reviewList">${reviewListHtml()}</div>`
-    + `<div id="reviewActions">${acceptBarHtml()}</div>`
     + `<div id="scrollHint">↓ Scroll for more</div>`;
+  const sc = document.getElementById('reviewSideScroll'); if (sc) sc.scrollTop = top;
   sec.style.display = 'block';
   if (animate) sec.querySelectorAll('.plate-charts-block').forEach(el => { el.classList.add('enter'); el.addEventListener('animationend', () => el.classList.remove('enter'), {once: true}); });
   syncReviewLock();
@@ -3197,8 +3331,15 @@ async function setAllExclusions(mutate) {
 }
 
 // Plate-level actions used by the keyboard shortcuts.
+// Suggested, not-yet-excluded points of plate p on curves that are currently shown (standard always counts).
+function visibleSuggestedKeys(p) {
+  const pc = review.analysis.plateCharts[p];
+  if (!pc) return [];
+  const pts = pc.samples.filter(s => !isHidden(pc, s)).flatMap(s => s.points).concat(pc.std.points);
+  return pts.filter(q => q.suggested && !q.excluded && review.suggested.has(q.key) && !review.excl.has(q.key)).map(q => q.key);
+}
 function excludeSuggestedInPlate(p) {
-  const keys = [...review.suggested].filter(k => k.startsWith(p + '|') && !review.excl.has(k));
+  const keys = visibleSuggestedKeys(p);
   if (!keys.length) return;
   keys.forEach(k => review.excl.add(k));
   review.accepted.delete(p);
@@ -3248,7 +3389,6 @@ document.addEventListener('click', e => {
   const hb = e.target.closest('[data-hide]');
   if (hb) {
     const key = hb.dataset.hide, p = Number(key.split('|')[0]);
-    materializeFocus(p);
     const pc = review.analysis.plateCharts[p];
     if (e.shiftKey) {
       review.hidden = new Set([...review.hidden].filter(k => !k.startsWith(p + '|')));
@@ -3261,7 +3401,6 @@ document.addEventListener('click', e => {
   if (sa) {
     if (sa.disabled) return;
     const p = Number(sa.dataset.showall);
-    review.focusOff.add(p);
     review.hidden = new Set([...review.hidden].filter(k => !k.startsWith(p + '|')));
     refreshReview(p);
     return;
@@ -3270,7 +3409,6 @@ document.addEventListener('click', e => {
   if (pf) {
     if (pf.disabled) return;
     const p = Number(pf.dataset.poorfit), pc = review.analysis.plateCharts[p], poor = poorNames(pc);
-    review.focusOff.add(p);
     review.hidden = new Set([...review.hidden].filter(k => !k.startsWith(p + '|')));
     for (const s of pc.samples) if (!poor.has(s.name)) review.hidden.add(p + '|' + s.name);
     refreshReview(p);
@@ -3280,7 +3418,6 @@ document.addEventListener('click', e => {
   if (ha) {
     if (ha.disabled) return;
     const p = Number(ha.dataset.hideall);
-    review.focusOff.add(p);
     for (const s of review.analysis.plateCharts[p].samples) review.hidden.add(p + '|' + s.name);
     refreshReview(p);
     return;
@@ -3291,7 +3428,6 @@ document.addEventListener('click', e => {
     const pc = review.analysis.plateCharts[p];
     // Already the only curve shown: this click toggles the point itself.
     if (on.dataset.key && pc.samples.every(s => (s.name === name) === !isHidden(pc, s))) { toggleExclusion(on.dataset.key); return; }
-    review.focusOff.add(p);
     review.hidden = new Set([...review.hidden].filter(k => !k.startsWith(p + '|')));
     for (const s of pc.samples) if (s.name !== name) review.hidden.add(p + '|' + s.name);
     if (on.dataset.showexcl && !review.showExcl) { review.showExcl = true; saveSession(); renderReview(); return; }
@@ -3305,8 +3441,6 @@ document.addEventListener('click', e => {
     const u = review.undo, p = Number(ux.dataset.undoexcl);
     if (!u || u.p !== p) return;
     u.keys.forEach(k => review.excl.delete(k));
-    review.hidden = new Set(u.hidden);
-    if (!u.focusOff) review.focusOff.delete(p);
     review.undo = null;
     review.accepted.delete(p);
     review.out = null; review.prepFailed = false; review.blobTok = (review.blobTok || 0) + 1;
@@ -3316,15 +3450,8 @@ document.addEventListener('click', e => {
   }
   const xp = e.target.closest('[data-exclplate]');
   if (xp) {
-    const p = Number(xp.dataset.exclplate), pc = review.analysis.plateCharts[p];
-    const out = new Set(pc.samples.filter(s => s.points.some(q => review.suggested.has(q.key) && !review.excl.has(q.key))).map(s => s.name));
-    review.undo = {p, keys: [...review.suggested].filter(k => k.startsWith(p + '|') && !review.excl.has(k)),
-      hidden: new Set(review.hidden), focusOff: review.focusOff.has(p)};
-    if (out.size) {
-      review.focusOff.add(p);
-      review.hidden = new Set([...review.hidden].filter(k => !k.startsWith(p + '|')));
-      for (const s of pc.samples) if (!out.has(s.name)) review.hidden.add(p + '|' + s.name);
-    }
+    const p = Number(xp.dataset.exclplate);
+    review.undo = {p, keys: visibleSuggestedKeys(p)};
     excludeSuggestedInPlate(p);
     return;
   }
@@ -3358,6 +3485,13 @@ document.addEventListener('click', e => {
     case 'acceptAll':
       for (let p = 0; p < review.numPlates; p++) review.accepted.add(p);
       renderReview(); break;
+    case 'applyFit': case 'resetFit': {
+      if (!review) break;
+      const fc = act.dataset.act === 'resetFit' ? JSON.parse(JSON.stringify(review.meta.fitDefault || DEFAULT_FIT)) : JSON.parse(JSON.stringify(fitConfig));
+      if (act.dataset.act === 'applyFit')
+        document.querySelectorAll('#reviewAdv input[data-fit]').forEach(inp => { const [k, i] = inp.dataset.fit.split('|'); fc[k][+i] = inp.value === '' ? NaN : Number(inp.value); });
+      applyFitSettings(fc); break;
+    }
     case 'toggleShowExcl': review.showExcl = !review.showExcl; renderReview(); break;
     case 'more':
       review.limit += FLAG.BATCH;
@@ -3366,11 +3500,31 @@ document.addEventListener('click', e => {
   }
 });
 
+document.addEventListener('toggle', e => { if (review && e.target.id === 'reviewAdv') review.advOpen = e.target.open; }, true);
+
 document.addEventListener('change', e => {
   const sel = e.target.closest && e.target.closest('select[data-stdfrom]');
   if (!sel || !review || sel.value === '') return;
   setStdFrom(Number(sel.dataset.stdfrom), Number(sel.value));
 });
+
+// ↓/↑: walk the current plate's sample curves one at a time. Positions: 0 = all shown (start),
+// 1..n = only sample k, n+1 = all shown (end). Positions re-sync with the hidden set if it was changed by hand.
+function stepCurve(dir) {
+  const p = review.cur != null ? review.cur : visiblePlates()[0];
+  const pc = p != null && review.analysis.plateCharts[p];
+  if (!pc || !pc.samples.length) return;
+  const n = pc.samples.length, shown = pc.samples.map((s, i) => isHidden(pc, s) ? -1 : i).filter(i => i >= 0);
+  let pos;
+  if (shown.length === 1 && n > 1) pos = shown[0] + 1;
+  else if (shown.length === n && review.curvePos && review.curvePos.p === p && review.curvePos.pos === n + 1) pos = n + 1;
+  else pos = 0;
+  pos = Math.max(0, Math.min(n + 1, pos + dir));
+  review.curvePos = {p, pos};
+  review.hidden = new Set([...review.hidden].filter(k => !k.startsWith(p + '|')));
+  if (pos >= 1 && pos <= n) pc.samples.forEach((s, i) => { if (i !== pos - 1) review.hidden.add(p + '|' + s.name); });
+  refreshReview(p);
+}
 
 // Keyboard review: ←/→ (or K/J) step through the listed plates, A accepts and moves on.
 document.addEventListener('keydown', e => {
@@ -3385,6 +3539,8 @@ document.addEventListener('keydown', e => {
   switch (key) {
     case 'j': case 'arrowright': case 'n': e.preventDefault(); stepPlate(1); break;
     case 'k': case 'arrowleft': case 'p': e.preventDefault(); stepPlate(-1); break;
+    case 'arrowdown': e.preventDefault(); stepCurve(1); break;
+    case 'arrowup': e.preventDefault(); stepCurve(-1); break;
     case 'a': if (cur != null) { e.preventDefault(); acceptPlate(cur); } break;
     case 'x': if (cur != null) { e.preventDefault(); excludeSuggestedInPlate(cur); } break;
     case 'c': if (cur != null) { e.preventDefault(); clearPlateExclusions(cur); } break;
@@ -3453,6 +3609,65 @@ function buildExcludedSheet() {
   return ws;
 }
 
+// Everything needed to rebuild the review is stored in a very hidden sheet of the downloaded workbook:
+// the plate files, the metadata workbook, exclusions, accepted plates, hidden samples, borrowed standards,
+// the options and any manual fit bounds. Dropping the workbook back into the app restores it (`restoreFromWorkbook`).
+// The JSON is split over rows because a cell holds at most 32 767 characters.
+const SESSION_SHEET = 'ElisaSession';
+function bytesToB64(u8) {
+  let s = '';
+  for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+function b64ToBytes(b) {
+  const s = atob(b), u8 = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) u8[i] = s.charCodeAt(i);
+  return u8;
+}
+function buildSessionSheet() {
+  const r = review;
+  const payload = JSON.stringify({
+    app: 'elisa', v: 1,
+    csv: csvFiles, meta: {name: metaName, b64: bytesToB64(metaBytes)},
+    plate384: document.getElementById('plate384Chk').checked,
+    sess: {excl: [...r.excl], accepted: [...r.accepted], hidden: [...r.hidden], stdFrom: r.stdFrom || {}, files: r.files,
+           opts: {subtractBg: document.getElementById('subtractBgChk').checked,
+                  detectOutliers: document.getElementById('detectChk').checked, minImpact: Math.round(OUTLIER.MIN_IMPACT * 100),
+                  outputName: document.getElementById('outputName').value}},
+    fit: /manual/.test(r.meta.fitSource || '') ? fitConfig : null
+  });
+  const rows = [];
+  for (let i = 0; i < payload.length; i += 30000) rows.push([payload.slice(i, i + 30000)]);
+  return XLSX.utils.aoa_to_sheet(rows);
+}
+function hasSessionSheet(bytes) {
+  try { return XLSX.read(bytes, {type: 'array', bookSheets: true}).SheetNames.includes(SESSION_SHEET); } catch (e) { return false; }
+}
+async function restoreFromWorkbook(bytes) {
+  try {
+    const wb = XLSX.read(bytes, {type: 'array'});
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[SESSION_SHEET], {header: 1});
+    const d = JSON.parse(rows.map(x => x[0]).join(''));
+    if (d.app !== 'elisa') throw new Error('not an ELISA results workbook');
+    if (review) { review.stale = true; runGen++; }
+    csvFiles = d.csv; metaBytes = b64ToBytes(d.meta.b64); metaName = d.meta.name;
+    storeSet('csvFiles', csvFiles); storeSet('meta', {name: metaName, bytes: metaBytes});
+    const o = d.sess.opts || {};
+    document.getElementById('plate384Chk').checked = !!d.plate384;
+    render384Pattern();
+    document.getElementById('subtractBgChk').checked = !!o.subtractBg;
+    document.getElementById('detectChk').checked = o.detectOutliers !== false;
+    if (Number.isFinite(+o.minImpact) && o.minImpact !== '' && o.minImpact !== null) OUTLIER.MIN_IMPACT = Math.max(0, Math.min(100, +o.minImpact)) / 100;
+    if (o.outputName) document.getElementById('outputName').value = o.outputName;
+    lastPlateFiles = [];
+    showCSVState(); showMetaState();
+    storeSet('session', d.sess);
+    await runProcessing({...d.sess, fit: d.fit});
+  } catch (err) {
+    alert('Could not restore this workbook: ' + err.message);
+  }
+}
+
 // The workbook bytes are built ahead of the click: Safari only honours a download that starts
 // synchronously inside the user's click, not after awaits (it opens the blob instead).
 async function buildResultsBytes() {
@@ -3463,6 +3678,9 @@ async function buildResultsBytes() {
   XLSX.utils.book_append_sheet(wb, buildResultsTableSheet(), 'Results Table');
   XLSX.utils.book_append_sheet(wb, buildProtocolSheet(r.meta, plateFits, r.analysis.plateCharts, fitConfig), 'Protocol Parameters');
   if (r.excl.size) XLSX.utils.book_append_sheet(wb, buildExcludedSheet(), 'Excluded Points');
+  XLSX.utils.book_append_sheet(wb, buildSessionSheet(), SESSION_SHEET);
+  wb.Workbook = wb.Workbook || {};
+  wb.Workbook.Sheets = wb.SheetNames.map(n => ({Hidden: n === SESSION_SHEET ? 2 : 0}));  // very hidden
   let buf = XLSX.write(wb, {bookType:'xlsx', type:'array'});
   return await injectConditionalFormatting(buf, condfmt);
 }
@@ -3477,7 +3695,7 @@ async function prepareDownload() {
     if (review === r && (r.blobTok || 0) === tok && r.accepted.size === r.numPlates) r.out = bytes;
   } catch (err) {
     r.prepFailed = true;
-    log(`❌ Error: ${err.message}`, 'error');
+    logError(err, 'building the results workbook');
     console.error(err);
   }
   r.preparing = false;
@@ -3512,6 +3730,7 @@ async function runProcessing(saved) {
   updateSections();
 
   const CANCELLED = new Error('cancelled');
+  let stage = 'starting';
   let pool = null;
   const prog = makeProgress();
   prog.set(0, 'Starting…');
@@ -3520,6 +3739,7 @@ async function runProcessing(saved) {
   await new Promise(r => setTimeout(r, 50));
 
   try {
+    stage = 'parsing the CSV files';
     log('Parsing CSV files...', 'info');
     prog.set(1, 'Parsing files…');
     const files = csvFiles.map(f => ({name: f.name, sig: textSig(f.text)}));
@@ -3527,6 +3747,7 @@ async function runProcessing(saved) {
     const numPlates = csvArrays.length;
     log(`  ${numPlates} plate(s) parsed.`);
 
+    stage = 'merging the plates';
     log('Merging plates...', 'info');
     prog.set(2, 'Merging plates…');
     const grid = mergePlates(csvArrays);
@@ -3534,6 +3755,7 @@ async function runProcessing(saved) {
 
     if (document.getElementById('subtractBgChk').checked) {
       const { sig, ref } = readWavelengths();
+      stage = 'subtracting the background';
       log(`Subtracting ${ref ? ref + ' nm ' : 'reference-read '}background${sig && ref ? ` (${sig} − ${ref})` : ''}...`, 'info');
       const n = subtractBackground(grid, numPlates);
       log(`  Corrected ${n} well(s) across ${numPlates} plate(s).`);
@@ -3541,13 +3763,16 @@ async function runProcessing(saved) {
     }
 
 
+    stage = 'reading the metadata workbook';
     log('Reading metadata...', 'info');
     prog.set(4, 'Reading metadata…');
     const meta = parseMetadata(metaBytes);
-    meta.hookFix = document.getElementById('hookChk').checked;
+    meta.detectOutliers = document.getElementById('detectChk').checked;
     log(`  ${meta.names.length} plate name row(s) found.`);
     log(`  Standard: ${meta.stdStart} ng/mL, 1:${meta.stdDil} dilution.`);
     log(`  Samples: 1:${meta.sampleStart} start, 1:${meta.sampleDil} dilution.`);
+    meta.fitDefault = JSON.parse(JSON.stringify(meta.fit));
+    if (saved && saved.fit) { meta.fit = saved.fit; meta.fitSource = 'manual override (Review)'; }
     fitConfig = meta.fit;
     runInfoHtml =
       `<h4>Standard</h4><div>${meta.stdStart} ng/mL, 1:${meta.stdDil} dilution</div>` +
@@ -3565,6 +3790,7 @@ async function runProcessing(saved) {
       for (let c = 0; c < 12; c++) grid[7][p*14+1+c] = plateNames[c] || '';
     }
 
+    stage = 'fitting curves and calculating results';
     log('Fitting curves and calculating results...', 'info');
     prog.set(5, 'Fitting curves…');
     await new Promise(r => setTimeout(r, 10));
@@ -3577,9 +3803,9 @@ async function runProcessing(saved) {
       }
     }
     review = {grid, numPlates, meta, outputName,
-              excl: new Set(saved && saved.excl || []), suggested: new Set(), hidden: new Set(saved && saved.hidden || []),
+              excl: new Set(saved && saved.excl || []), suggested: new Set(), sugImpact: new Map(), hidden: new Set(saved && saved.hidden || []),
               accepted: new Set(saved && saved.accepted || []), analysis: null, cache: new Map(),
-              files, view: 'all', cur: null, limit: FLAG.BATCH, focusOff: new Set(), flagCache: null, stdFrom: saved && saved.stdFrom || {},
+              files, view: 'all', cur: null, limit: FLAG.BATCH, flagCache: null, stdFrom: saved && saved.stdFrom || {},
               ready: new Set(), done: new Set(), nextRel: 0, seen: new Set(), fresh: null, fitting: false, shown: false, restoring: !!saved};
     // Open the review right away: every plate is a grey tile until its fit is done.
     review.fitting = true;
@@ -3606,7 +3832,7 @@ async function runProcessing(saved) {
         review.shown = true;
         renderReview();
         setSection('secProcessing', false);
-        if (review.accepted.size < numPlates) setSection('secReview', true);
+        setSection('secReview', true);
       } else {
         refreshHeaders(); refreshListIncremental(); updateSections();
       }
@@ -3614,7 +3840,8 @@ async function runProcessing(saved) {
     };
     const onPlate = (p, sug) => {
       if (gen !== runGen) return;
-      sug.forEach(k => review.suggested.add(k));
+      sug.forEach(([k, v]) => review.sugImpact.set(k, v));
+      refilterSuggested();
       // Plates finish in any order; they are released to the review in plate order, so it always starts with the first.
       review.done.add(p);
       const borrows = q => review.stdFrom && review.stdFrom[q] != null;
@@ -3642,7 +3869,7 @@ async function runProcessing(saved) {
         prog.set(5 + 90 * frac, 'Fitting and screening…');
         await prog.yieldMaybe();
       }, onPlate);
-      if (sug) { review.suggested = sug; screened = true; }
+      if (sug) { review.sugImpact = sug; refilterSuggested(); screened = true; }
       clearTimeout(uiTimer); uiTimer = 0;
     }
     review.fitting = false;
@@ -3667,7 +3894,7 @@ async function runProcessing(saved) {
     if (!screened) {
       const sugTotal = review.analysis.plateCharts.reduce((n, pc) => n + pc.samples.length + (meta.universalStd ? 0 : 1), 0) || 1;
       let sugDone = 0;
-      review.suggested = await computeSuggestions(review.analysis.plateCharts, fitConfig, !!meta.universalStd, async u => {
+      review.sugImpact = meta.detectOutliers === false ? new Map() : await computeSuggestions(review.analysis.plateCharts, fitConfig, !!meta.universalStd, async u => {
         if (gen !== runGen) throw CANCELLED;
         sugDone += u;
         prog.set(70 + 27 * sugDone / sugTotal, 'Screening for outliers…');
@@ -3675,7 +3902,8 @@ async function runProcessing(saved) {
       });
     }
     log(`  Fitting and screening took ${((performance.now() - tFit) / 1000).toFixed(1)} s.`);
-    log(`  ${review.suggested.size} suggested outlier(s).`);
+    refilterSuggested();
+    log(`  ${review.suggested.size} suggested outlier(s) at an impact level of ${Math.round(OUTLIER.MIN_IMPACT * 100)} % (${review.sugImpact.size} candidates in all).`);
 
     prog.set(99, 'Drawing the review…');
     await new Promise(r => setTimeout(r, 0));
@@ -3688,15 +3916,15 @@ async function runProcessing(saved) {
     prog.set(100, 'Done');
     setBadge('badgeProcessing', '✓ Done', 'done');
     setSection('secProcessing', false);
-    // When every plate was already accepted (restored session), updateSections already collapsed Review and opened Download.
-    if (!wasShown && review.accepted.size < numPlates) setSection('secReview', true);
+    if (!wasShown) setSection('secReview', true);
     log('Review the graphs, exclude outliers if needed, accept each plate, then download.', 'success');
   } catch (err) {
     if (err !== CANCELLED) {
-      log(`❌ Error: ${err.message}`, 'error');
+      logError(err, stage);
       console.error(err);
       setBadge('badgeProcessing', 'Error', 'err');
-      setSection('secProcessing', true); setSection('secUpload', true);
+      setSection('secProcessing', true); setSection('secUpload', false);
+      setSection('secReview', false); setSection('secDownload', false);
       document.getElementById('progressLabel').textContent = 'Stopped by an error';
     }
   }
@@ -3706,6 +3934,198 @@ async function runProcessing(saved) {
   btn.textContent = 'Process and start review';
   updateProcessBtn();
 }
+// ─── GUIDED TOUR ──────────────────────────────────────────────────────────────
+// Walks through a whole analysis on the sample data: a dimmed page with a spotlight on the target element and
+// a popover beside it. A step may `enter` (load data, run the fit, pick a plate), switch the page `view`
+// (setup / review / download) and name a `target` (selector or function). The shield blocks clicks on the page
+// underneath, so the tour cannot be derailed mid-way; Esc leaves it.
+const TOUR_KEY = 'elisaTourDismissed';
+let tour = null;
+function dismissTourBanner() {
+  try { localStorage.setItem(TOUR_KEY, '1'); } catch (e) {}
+  document.getElementById('tourBanner').style.display = 'none';
+}
+try { if (localStorage.getItem(TOUR_KEY) === '1') document.getElementById('tourBanner').style.display = 'none'; } catch (e) {}
+
+const tourCard = id => () => { const e = document.getElementById(id); return e && e.closest('.card'); };
+const tourPlate = sel => () => document.querySelector('#reviewList .plate-charts-block.current ' + sel);
+const tourWait = ms => new Promise(r => setTimeout(r, ms));
+const tourSampleLoaded = () => csvFiles.length === SAMPLE_PLATES.length && metaName === 'Sample_MetaData.xlsx';
+async function tourLoadSample() {
+  if (!tourSampleLoaded()) loadSampleData(true);
+  await tourWait(60);
+}
+async function tourRun() {
+  if (review && review.analysis && !review.fitting && review.numPlates === SAMPLE_PLATES.length) return;
+  const upd = setInterval(() => {
+    const m = document.getElementById('tourBusyMsg');
+    if (m && review && review.analysis) m.textContent = `Fitting curves: ${review.ready.size} of ${review.numPlates} plates ready…`;
+  }, 200);
+  try { await runProcessing(); } finally { clearInterval(upd); }
+  for (let k = 0; k < 50 && review && review.fitting; k++) await tourWait(100);
+  if (!review) throw new Error('Processing did not finish');
+}
+// Current plate: the first one, or (with `flagged`) the first plate that still has something to look at.
+function tourGoPlate(flagged) {
+  const r = review; if (!r) return;
+  const ok = q => r.analysis.plateCharts[q];
+  let p = flagged ? [...Array(r.numPlates).keys()].find(q => ok(q) && plateFlags(r.analysis.plateCharts[q]).count) : null;
+  if (p == null) p = visiblePlates()[0];
+  setCurrent(p, false);
+}
+async function tourAcceptAll() {
+  if (!review) return;
+  for (let p = 0; p < review.numPlates; p++) review.accepted.add(p);
+  renderReview();
+}
+
+const TOUR_STEPS = [
+  {view: 'setup', title: 'Welcome to the ELISA workflow',
+   body: '<p>This tour walks through a complete analysis on built-in sample data (15 anonymised plates): upload, fitting, review and download.</p><p>It takes about three minutes. Press <kbd>Esc</kbd> to leave at any time.</p>',
+   next: 'Load sample data and start'},
+  {view: 'setup', enter: tourLoadSample, busy: 'Loading the sample plates…', target: '#csvZone', title: '1 · Plate reader files',
+   body: '<p>One export per plate. BMG, BioTek, Tecan and SpectraMax files are recognised automatically; 384-well plates are split into four 96-well plates.</p><p>The 15 sample plates are loaded here.</p>'},
+  {view: 'setup', target: tourCard('metaZone'), title: '1 · Metadata workbook',
+   body: '<p>Holds the sample names for every plate, the standard and sample dilution series, and optional fit bounds.</p><p><b>Create a template file</b> builds a matching blank workbook for your own plates.</p>'},
+  {view: 'setup', target: tourCard('subtractBgChk'), title: '2 · Analysis options',
+   body: '<p><b>Background subtraction</b> replaces each well by signal − reference read (here 450 − 570 nm) before anything is fitted.</p><p><b>Detect outliers</b> adds suggestions for points to exclude; nothing is removed until you decide.</p>'},
+  {view: 'setup', target: '#processBtn', title: '2 · Process',
+   body: '<p>Fits a four-parameter logistic (4PL) curve to the standard and to every sample dilution series, then reads each sample\'s concentration off the standard curve.</p><p>Next presses the button for you.</p>',
+   next: 'Run processing'},
+  {view: 'review', enter: tourRun, busy: 'Fitting curves…', target: '#reviewHeader', pos: 'left', title: '3 · Review overview',
+   body: '<p>Plates are fitted in parallel and appear here as they finish. Each tile is a plate; its colour shows its state and accepted plates get a ✓. Click a tile to jump to it.</p><p><b>Needs review</b> narrows the list to plates with something to check.</p>'},
+  {view: 'review', enter: () => tourGoPlate(false), target: tourPlate('.plate-charts-row'), title: '3 · Curves and ED50',
+   body: '<p><b>Left:</b> each sample\'s dose–response with its fitted curve and ED50.</p><p><b>Right:</b> the standard curve, with the sample readings interpolated onto it.</p><p>Click a legend entry to hide a curve, shift-click to show only that one.</p>'},
+  {view: 'review', target: tourPlate('.res-wrap'), title: '3 · Results table',
+   body: '<p>The fitted values and interpolated concentrations for every sample on this plate. They update immediately whenever you change anything above.</p>'},
+  {view: 'review', enter: () => tourGoPlate(true), target: tourPlate('.chip-secs'), title: '3 · Outliers',
+   body: '<p>Poorly fitted curves, <b>suggested outliers</b> and already excluded points are listed here. Click a chip, or a point in a chart, to exclude or restore it; the plate refits at once.</p><p>Excluded values stay in the output, struck through, and get an <i>Excluded Points</i> sheet. <kbd>X</kbd> excludes the suggestions on this plate, <kbd>C</kbd> clears them.</p>'},
+  {view: 'review', target: tourPlate('.row-bar'), title: '3 · Edge effects',
+   body: '<p>Edge effects are suggested automatically. To drop a whole row, use the <b>A–H</b> buttons: here for this plate, or in the header for all plates.</p>'},
+  {view: 'review', target: '#reviewImpact', pos: 'left', title: '3 · Outlier sensitivity',
+   body: '<p>A candidate is suggested when excluding it would shift the ED50 by at least this percentage. Slide towards 0 % to see more candidates, higher to keep only the influential ones. No refit is needed.</p>'},
+  {view: 'review', target: '#reviewAdv', pos: 'left', title: '3 · Advanced fit settings',
+   body: '<p>Lower, initial and upper bounds of the 4PL parameters. Applying them refits every plate and clears the accepted plates. The defaults, or the <i>Settings</i> sheet in the metadata, are usually enough.</p>'},
+  {view: 'review', target: '#reviewActions', pos: 'left', title: '3 · Accept plates',
+   body: '<p>When a plate looks right, accept it and move on. <kbd>A</kbd> accepts, <kbd>←</kbd> <kbd>→</kbd> step through plates and <kbd>↑</kbd> <kbd>↓</kbd> walk the curves one at a time.</p><p>Download unlocks once every plate is accepted. Next accepts all of them for the tour.</p>',
+   next: 'Accept all plates'},
+  {view: 'download', enter: tourAcceptAll, target: () => document.querySelector('#secDownload .sec-body .card'), title: '4 · Download',
+   body: '<p>Choose a file name and download a styled <b>.xlsx</b> workbook: results with colour scales, a Protocol sheet with settings and fitted curve parameters, and the excluded points.</p><p>The workbook also stores this whole review. Drop it back on the upload area later and you continue exactly where you stopped.</p>'},
+  {view: 'download', title: 'You are set',
+   body: '<p>The sample analysis stays loaded so you can keep exploring.</p><p>To analyse your own plates press <b>Clear all and start new analysis</b>, then upload the plate files and a metadata workbook. This tour is always available under <b>▶ Guided tour</b>.</p>',
+   next: 'Finish'},
+];
+
+function tourShowView(v) {
+  if (v === 'setup') { setSection('secReview', false); setSection('secDownload', false); setSection('secUpload', true); setSection('secProcessing', true); }
+  else if (v === 'review') { setSection('secDownload', false); setSection('secReview', true); }
+  else { setSection('secReview', false); setSection('secUpload', false); setSection('secProcessing', false); setSection('secDownload', true); }
+}
+
+function startTour() {
+  if (tour) return;
+  const hasWork = csvFiles.length || metaBytes || review;
+  if (hasWork && !confirm('The tour runs on the sample data and replaces the files and analysis currently loaded. Continue?')) return;
+  if (hasWork) newAnalysis(true);
+  const el = (cls, tag) => { const e = document.createElement(tag || 'div'); e.className = cls + ' tour-ui'; document.body.appendChild(e); return e; };
+  const t = tour = {i: 0, busy: false, scrolled: false, shield: el('tour-shield dim'), hole: el('tour-hole'), pop: el('tour-pop')};
+  t.hole.style.display = 'none';
+  t.pop.setAttribute('role', 'dialog');
+  t.pop.addEventListener('click', e => {
+    const b = e.target.closest('[data-t]');
+    if (!b || tour !== t) return;
+    if (b.dataset.t === 'close') tourStop();
+    else if (t.busy) return;
+    else if (b.dataset.t === 'back') tourGo(t.i - 1);
+    else if (t.i === TOUR_STEPS.length - 1) tourStop(true);
+    else tourGo(t.i + 1);
+  });
+  t.timer = setInterval(tourPlace, 120);
+  tourGo(0);
+}
+
+function tourStop(finished) {
+  const t = tour; if (!t) return;
+  tour = null;
+  clearInterval(t.timer);
+  [t.shield, t.hole, t.pop].forEach(e => e.remove());
+  if (finished) dismissTourBanner();
+}
+
+async function tourGo(i) {
+  const t = tour; if (!t) return;
+  const s = TOUR_STEPS[i];
+  t.i = i; t.busy = true; t.target = null;
+  if (s.busy) tourDraw(true);
+  try {
+    if (s.enter) await s.enter();
+    tourShowView(s.view);
+    await tourWait(80);
+  } catch (err) {
+    console.error(err);
+    tourStop();
+    tourShowView('setup');
+    return;
+  }
+  if (tour !== t || t.i !== i) return;
+  t.busy = false;
+  tourDraw(false);
+}
+
+function tourDraw(busy) {
+  const t = tour, s = TOUR_STEPS[t.i], n = TOUR_STEPS.length;
+  const head = `<div class="tour-step">Step ${t.i + 1} of ${n}</div><div class="tour-bar"><i style="width:${(t.i + 1) / n * 100}%"></i></div><h3>${s.title}</h3>`;
+  t.pop.innerHTML = (busy
+    ? `<button class="tour-x" data-t="close" aria-label="Close tour" title="Close (Esc)">×</button>${head}<div class="tour-busy"><span class="tour-spin"></span><span id="tourBusyMsg">${s.busy}</span></div>`
+    : `<button class="tour-x" data-t="close" aria-label="Close tour" title="Close (Esc)">×</button>${head}<div class="tour-body">${s.body}</div>
+       <div class="tour-foot">${t.i ? '<button class="btn btn-secondary btn-sm" data-t="back">Back</button>' : '<span></span>'}
+       <button class="btn btn-primary btn-sm" data-t="next">${s.next || 'Next'}</button></div>`);
+  t.scrolled = busy;
+  tourPlace();
+  const nb = t.pop.querySelector('[data-t="next"]');
+  if (nb) nb.focus({preventScroll: true});
+}
+
+// Puts the spotlight over the step's target and the popover beside it (centred when there is no target).
+function tourPlace() {
+  const t = tour; if (!t || t.busy && !t.pop.firstChild) return;
+  const s = TOUR_STEPS[t.i], vw = innerWidth, vh = innerHeight, M = 12;
+  const el = t.busy ? null : (typeof s.target === 'function' ? s.target() : s.target ? document.querySelector(s.target) : null);
+  if (el && !t.scrolled) { el.scrollIntoView({block: 'center', inline: 'nearest'}); t.scrolled = true; }
+  let r = el ? el.getBoundingClientRect() : null;
+  if (r && (!r.width || !r.height)) r = null;
+  t.shield.classList.toggle('dim', !r);
+  const pw = t.pop.offsetWidth, ph = t.pop.offsetHeight, clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  let x, y;
+  if (!r) {
+    t.hole.style.display = 'none';
+    x = (vw - pw) / 2; y = (vh - ph) / 2.4;
+  } else {
+    const pad = 6, l = Math.max(r.left - pad, 4), tp = Math.max(r.top - pad, 4);
+    const w = Math.min(r.right + pad, vw - 4) - l, h = Math.min(r.bottom + pad, vh - 4) - tp;
+    Object.assign(t.hole.style, {display: 'block', left: l + 'px', top: tp + 'px', width: w + 'px', height: h + 'px'});
+    const room = {bottom: vh - (tp + h) - M >= ph, top: tp - M >= ph, right: vw - (l + w) - M >= pw, left: l - M >= pw};
+    const side = [s.pos, 'bottom', 'top', 'right', 'left'].find(k => k && room[k]);
+    if (side === 'bottom' || side === 'top') { x = clamp(l + w / 2 - pw / 2, M, vw - pw - M); y = side === 'bottom' ? tp + h + M : tp - ph - M; }
+    else if (side) { y = clamp(tp, M, vh - ph - M); x = side === 'right' ? l + w + M : l - pw - M; }
+    else { x = vw - pw - 16; y = vh - ph - 16; }   // no free side: float over the corner
+  }
+  t.pop.style.left = x + 'px'; t.pop.style.top = y + 'px';
+  if (!t.anim) { t.anim = true; requestAnimationFrame(() => { t.pop.classList.add('tour-anim'); t.hole.classList.add('tour-anim'); }); }
+}
+addEventListener('resize', () => tour && tourPlace());
+
+// While the tour runs it owns the keyboard (the review's A/X/C/arrow shortcuts must not fire behind it).
+addEventListener('keydown', e => {
+  if (!tour) return;
+  if (e.key === 'Tab' || e.metaKey || e.ctrlKey) return;
+  e.stopImmediatePropagation();
+  if (e.key === 'Escape') { e.preventDefault(); tourStop(); }
+  else if (tour.busy) return;
+  else if (e.key === 'ArrowRight' && tour.i < TOUR_STEPS.length - 1) { e.preventDefault(); tourGo(tour.i + 1); }
+  else if (e.key === 'ArrowLeft' && tour.i > 0) { e.preventDefault(); tourGo(tour.i - 1); }
+}, true);
+
 restoreFiles();
 </script>
 </body>

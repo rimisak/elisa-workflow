@@ -170,7 +170,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 body.rv-lock #scrollHint.show{display:block;grid-column:1;grid-row:1;align-self:end;justify-self:center;margin-bottom:22px}
 /* Review mode: the page itself does not scroll; the open Review section fills the window and shows one plate at a time. */
 body.rv-lock{height:100vh;overflow:hidden;display:flex;flex-direction:column;padding:8px 24px 12px}
-body.rv-lock>*:not(#secReview){display:none!important}
+body.rv-lock>*:not(#secReview):not(.tour-ui){display:none!important}
 body.rv-lock #secReview{flex:1;min-height:0;display:flex;flex-direction:column;margin-bottom:0}
 body.rv-lock #secReview .sec-head{flex:none}
 body.rv-lock #secReview .sec-body{flex:1;min-height:0;display:flex;flex-direction:column;margin-top:10px}
@@ -251,6 +251,29 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
 .chip.excluded{border-color:#8e8e93;color:#636366;background:#f2f2f7;text-decoration:line-through}
 .pt:hover circle:last-child{fill:rgba(0,0,0,.08)}
 .legend-swatch{width:11px;height:11px;border-radius:3px;display:inline-block;flex-shrink:0}
+
+.tour-banner{display:flex;align-items:center;gap:12px;background:#e5f0ff;border:1px solid #b3d4ff;color:#0a3d80;border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:16px}
+.tour-banner-text{flex:1}
+.tour-banner-x{background:none;border:none;font-size:20px;line-height:1;color:#0a3d80;cursor:pointer}
+.toolbar-actions{display:flex;align-items:center;gap:10px}
+.tour-shield{position:fixed;inset:0;z-index:9000}
+.tour-shield.dim{background:rgba(0,0,0,.55)}
+.tour-hole{position:fixed;z-index:9001;border-radius:10px;box-shadow:0 0 0 9999px rgba(0,0,0,.55),0 0 0 3px #007aff;pointer-events:none}
+.tour-pop{position:fixed;z-index:9002;width:340px;max-width:calc(100vw - 24px);background:#fff;border-radius:14px;padding:16px 18px 14px;box-shadow:0 12px 40px rgba(0,0,0,.35);font-size:13px;line-height:1.5;color:#1c1c1e}
+.tour-anim .tour-hole,.tour-anim.tour-pop{transition:left .25s ease,top .25s ease,width .25s ease,height .25s ease}
+.tour-pop h3{font-size:16px;font-weight:600;margin:6px 0 6px;letter-spacing:-.2px}
+.tour-pop kbd{font:inherit;font-size:11px;border:1px solid #c7c7cc;border-bottom-width:2px;border-radius:4px;padding:0 4px;background:#f2f2f7}
+.tour-body{color:#3a3a3c}
+.tour-body p+p{margin-top:6px}
+.tour-step{font-size:11px;font-weight:600;color:#007aff;text-transform:uppercase;letter-spacing:.5px}
+.tour-bar{height:3px;background:#e5e5ea;border-radius:2px;margin-top:6px;overflow:hidden}
+.tour-bar i{display:block;height:100%;background:#007aff;transition:width .25s}
+.tour-foot{display:flex;justify-content:space-between;align-items:center;margin-top:14px}
+.tour-x{position:absolute;top:8px;right:10px;background:none;border:none;font-size:22px;line-height:1;color:#8e8e93;cursor:pointer}
+.tour-x:hover{color:#1c1c1e}
+.tour-busy{display:flex;align-items:center;gap:10px;margin-top:8px}
+.tour-spin{flex:none;width:14px;height:14px;border-radius:50%;border:2px solid #007aff;border-top-color:transparent;animation:rvspin .8s linear infinite}
+@media (prefers-reduced-motion:reduce){.tour-anim .tour-hole,.tour-anim.tour-pop{transition:none}}
 </style>
 </head>
 <body>
@@ -260,12 +283,21 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   <button onclick="this.parentNode.style.display='none'" aria-label="Dismiss">×</button>
 </div>
 
+<div class="tour-banner" id="tourBanner">
+  <span class="tour-banner-text"><b>New here?</b> Take a guided tour through a complete analysis (upload, fit, review, download) using built-in sample data.</span>
+  <button class="btn btn-primary btn-sm" onclick="startTour()">Start the tour</button>
+  <button class="tour-banner-x" onclick="dismissTourBanner()" aria-label="Dismiss">×</button>
+</div>
+
 <div class="toolbar">
   <div class="toolbar-title">
     <div class="app-icon" id="appIcon"></div>
     <h1>ELISA Workflow</h1>
   </div>
-  <button class="btn btn-black btn-sm new-analysis-btn" id="newAnalysisBtn" onclick="newAnalysis()" title="Clear both files and the current analysis" disabled>Clear all and<br>start new analysis</button>
+  <div class="toolbar-actions">
+    <button class="btn btn-secondary btn-sm" onclick="startTour()" title="Walk through a full analysis with sample data">▶ Guided tour</button>
+    <button class="btn btn-black btn-sm new-analysis-btn" id="newAnalysisBtn" onclick="newAnalysis()" title="Clear both files and the current analysis" disabled>Clear all and<br>start new analysis</button>
+  </div>
 </div>
 
 <div class="sec open" id="secUpload">
@@ -407,7 +439,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.42.1 &nbsp;·&nbsp; 28/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.43.0 &nbsp;·&nbsp; 29/10/2026</div>
 
 <script>
 'use strict';
@@ -789,8 +821,8 @@ function clearMeta() {
 
 // Log
 // Reset everything: both input files, the review on screen, the log and the saved session.
-function newAnalysis() {
-  if ((csvFiles.length || metaBytes || review) &&
+function newAnalysis(skipConfirm) {
+  if (!skipConfirm && (csvFiles.length || metaBytes || review) &&
       !confirm('Start a new analysis? This clears both files and the current analysis, including any exclusions.')) return;
   runGen++;
   document.getElementById('outputName').value = defaultOutputName();
@@ -966,8 +998,8 @@ function sampleCsvText(v) {
   return ['', '', '', 'ID1: assay_platenumber,ID2: date,ID3: experiment,', 'Absorbance', '',
     '1. Raw Data (450 1)', '', cols, block(0), '', '2. Raw Data (570 2)', '', cols, block(96)].join('\r\n') + '\r\n';
 }
-function loadSampleData() {
-  if ((csvFiles.length || metaBytes) && !confirm('Replace the loaded plate and metadata files with the sample data?')) return;
+function loadSampleData(skipConfirm) {
+  if (!skipConfirm && (csvFiles.length || metaBytes) && !confirm('Replace the loaded plate and metadata files with the sample data?')) return;
   csvFiles = SAMPLE_PLATES.map((v, i) => ({ name: `Sample_plate_${String(i + 1).padStart(2, '0')}.csv`, text: sampleCsvText(v), reader: 'BMG LABTECH', warnings: [] }));
   lastPlateFiles = [];
   document.getElementById('plate384Chk').checked = false;
@@ -3902,6 +3934,198 @@ async function runProcessing(saved) {
   btn.textContent = 'Process and start review';
   updateProcessBtn();
 }
+// ─── GUIDED TOUR ──────────────────────────────────────────────────────────────
+// Walks through a whole analysis on the sample data: a dimmed page with a spotlight on the target element and
+// a popover beside it. A step may `enter` (load data, run the fit, pick a plate), switch the page `view`
+// (setup / review / download) and name a `target` (selector or function). The shield blocks clicks on the page
+// underneath, so the tour cannot be derailed mid-way; Esc leaves it.
+const TOUR_KEY = 'elisaTourDismissed';
+let tour = null;
+function dismissTourBanner() {
+  try { localStorage.setItem(TOUR_KEY, '1'); } catch (e) {}
+  document.getElementById('tourBanner').style.display = 'none';
+}
+try { if (localStorage.getItem(TOUR_KEY) === '1') document.getElementById('tourBanner').style.display = 'none'; } catch (e) {}
+
+const tourCard = id => () => { const e = document.getElementById(id); return e && e.closest('.card'); };
+const tourPlate = sel => () => document.querySelector('#reviewList .plate-charts-block.current ' + sel);
+const tourWait = ms => new Promise(r => setTimeout(r, ms));
+const tourSampleLoaded = () => csvFiles.length === SAMPLE_PLATES.length && metaName === 'Sample_MetaData.xlsx';
+async function tourLoadSample() {
+  if (!tourSampleLoaded()) loadSampleData(true);
+  await tourWait(60);
+}
+async function tourRun() {
+  if (review && review.analysis && !review.fitting && review.numPlates === SAMPLE_PLATES.length) return;
+  const upd = setInterval(() => {
+    const m = document.getElementById('tourBusyMsg');
+    if (m && review && review.analysis) m.textContent = `Fitting curves: ${review.ready.size} of ${review.numPlates} plates ready…`;
+  }, 200);
+  try { await runProcessing(); } finally { clearInterval(upd); }
+  for (let k = 0; k < 50 && review && review.fitting; k++) await tourWait(100);
+  if (!review) throw new Error('Processing did not finish');
+}
+// Current plate: the first one, or (with `flagged`) the first plate that still has something to look at.
+function tourGoPlate(flagged) {
+  const r = review; if (!r) return;
+  const ok = q => r.analysis.plateCharts[q];
+  let p = flagged ? [...Array(r.numPlates).keys()].find(q => ok(q) && plateFlags(r.analysis.plateCharts[q]).count) : null;
+  if (p == null) p = visiblePlates()[0];
+  setCurrent(p, false);
+}
+async function tourAcceptAll() {
+  if (!review) return;
+  for (let p = 0; p < review.numPlates; p++) review.accepted.add(p);
+  renderReview();
+}
+
+const TOUR_STEPS = [
+  {view: 'setup', title: 'Welcome to the ELISA workflow',
+   body: '<p>This tour walks through a complete analysis on built-in sample data (15 anonymised plates): upload, fitting, review and download.</p><p>It takes about three minutes. Press <kbd>Esc</kbd> to leave at any time.</p>',
+   next: 'Load sample data and start'},
+  {view: 'setup', enter: tourLoadSample, busy: 'Loading the sample plates…', target: '#csvZone', title: '1 · Plate reader files',
+   body: '<p>One export per plate. BMG, BioTek, Tecan and SpectraMax files are recognised automatically; 384-well plates are split into four 96-well plates.</p><p>The 15 sample plates are loaded here.</p>'},
+  {view: 'setup', target: tourCard('metaZone'), title: '1 · Metadata workbook',
+   body: '<p>Holds the sample names for every plate, the standard and sample dilution series, and optional fit bounds.</p><p><b>Create a template file</b> builds a matching blank workbook for your own plates.</p>'},
+  {view: 'setup', target: tourCard('subtractBgChk'), title: '2 · Analysis options',
+   body: '<p><b>Background subtraction</b> replaces each well by signal − reference read (here 450 − 570 nm) before anything is fitted.</p><p><b>Detect outliers</b> adds suggestions for points to exclude; nothing is removed until you decide.</p>'},
+  {view: 'setup', target: '#processBtn', title: '2 · Process',
+   body: '<p>Fits a four-parameter logistic (4PL) curve to the standard and to every sample dilution series, then reads each sample\'s concentration off the standard curve.</p><p>Next presses the button for you.</p>',
+   next: 'Run processing'},
+  {view: 'review', enter: tourRun, busy: 'Fitting curves…', target: '#reviewHeader', pos: 'left', title: '3 · Review overview',
+   body: '<p>Plates are fitted in parallel and appear here as they finish. Each tile is a plate; its colour shows its state and accepted plates get a ✓. Click a tile to jump to it.</p><p><b>Needs review</b> narrows the list to plates with something to check.</p>'},
+  {view: 'review', enter: () => tourGoPlate(false), target: tourPlate('.plate-charts-row'), title: '3 · Curves and ED50',
+   body: '<p><b>Left:</b> each sample\'s dose–response with its fitted curve and ED50.</p><p><b>Right:</b> the standard curve, with the sample readings interpolated onto it.</p><p>Click a legend entry to hide a curve, shift-click to show only that one.</p>'},
+  {view: 'review', target: tourPlate('.res-wrap'), title: '3 · Results table',
+   body: '<p>The fitted values and interpolated concentrations for every sample on this plate. They update immediately whenever you change anything above.</p>'},
+  {view: 'review', enter: () => tourGoPlate(true), target: tourPlate('.chip-secs'), title: '3 · Outliers',
+   body: '<p>Poorly fitted curves, <b>suggested outliers</b> and already excluded points are listed here. Click a chip, or a point in a chart, to exclude or restore it; the plate refits at once.</p><p>Excluded values stay in the output, struck through, and get an <i>Excluded Points</i> sheet. <kbd>X</kbd> excludes the suggestions on this plate, <kbd>C</kbd> clears them.</p>'},
+  {view: 'review', target: tourPlate('.row-bar'), title: '3 · Edge effects',
+   body: '<p>Edge effects are suggested automatically. To drop a whole row, use the <b>A–H</b> buttons: here for this plate, or in the header for all plates.</p>'},
+  {view: 'review', target: '#reviewImpact', pos: 'left', title: '3 · Outlier sensitivity',
+   body: '<p>A candidate is suggested when excluding it would shift the ED50 by at least this percentage. Slide towards 0 % to see more candidates, higher to keep only the influential ones. No refit is needed.</p>'},
+  {view: 'review', target: '#reviewAdv', pos: 'left', title: '3 · Advanced fit settings',
+   body: '<p>Lower, initial and upper bounds of the 4PL parameters. Applying them refits every plate and clears the accepted plates. The defaults, or the <i>Settings</i> sheet in the metadata, are usually enough.</p>'},
+  {view: 'review', target: '#reviewActions', pos: 'left', title: '3 · Accept plates',
+   body: '<p>When a plate looks right, accept it and move on. <kbd>A</kbd> accepts, <kbd>←</kbd> <kbd>→</kbd> step through plates and <kbd>↑</kbd> <kbd>↓</kbd> walk the curves one at a time.</p><p>Download unlocks once every plate is accepted. Next accepts all of them for the tour.</p>',
+   next: 'Accept all plates'},
+  {view: 'download', enter: tourAcceptAll, target: () => document.querySelector('#secDownload .sec-body .card'), title: '4 · Download',
+   body: '<p>Choose a file name and download a styled <b>.xlsx</b> workbook: results with colour scales, a Protocol sheet with settings and fitted curve parameters, and the excluded points.</p><p>The workbook also stores this whole review. Drop it back on the upload area later and you continue exactly where you stopped.</p>'},
+  {view: 'download', title: 'You are set',
+   body: '<p>The sample analysis stays loaded so you can keep exploring.</p><p>To analyse your own plates press <b>Clear all and start new analysis</b>, then upload the plate files and a metadata workbook. This tour is always available under <b>▶ Guided tour</b>.</p>',
+   next: 'Finish'},
+];
+
+function tourShowView(v) {
+  if (v === 'setup') { setSection('secReview', false); setSection('secDownload', false); setSection('secUpload', true); setSection('secProcessing', true); }
+  else if (v === 'review') { setSection('secDownload', false); setSection('secReview', true); }
+  else { setSection('secReview', false); setSection('secUpload', false); setSection('secProcessing', false); setSection('secDownload', true); }
+}
+
+function startTour() {
+  if (tour) return;
+  const hasWork = csvFiles.length || metaBytes || review;
+  if (hasWork && !confirm('The tour runs on the sample data and replaces the files and analysis currently loaded. Continue?')) return;
+  if (hasWork) newAnalysis(true);
+  const el = (cls, tag) => { const e = document.createElement(tag || 'div'); e.className = cls + ' tour-ui'; document.body.appendChild(e); return e; };
+  const t = tour = {i: 0, busy: false, scrolled: false, shield: el('tour-shield dim'), hole: el('tour-hole'), pop: el('tour-pop')};
+  t.hole.style.display = 'none';
+  t.pop.setAttribute('role', 'dialog');
+  t.pop.addEventListener('click', e => {
+    const b = e.target.closest('[data-t]');
+    if (!b || tour !== t) return;
+    if (b.dataset.t === 'close') tourStop();
+    else if (t.busy) return;
+    else if (b.dataset.t === 'back') tourGo(t.i - 1);
+    else if (t.i === TOUR_STEPS.length - 1) tourStop(true);
+    else tourGo(t.i + 1);
+  });
+  t.timer = setInterval(tourPlace, 120);
+  tourGo(0);
+}
+
+function tourStop(finished) {
+  const t = tour; if (!t) return;
+  tour = null;
+  clearInterval(t.timer);
+  [t.shield, t.hole, t.pop].forEach(e => e.remove());
+  if (finished) dismissTourBanner();
+}
+
+async function tourGo(i) {
+  const t = tour; if (!t) return;
+  const s = TOUR_STEPS[i];
+  t.i = i; t.busy = true; t.target = null;
+  if (s.busy) tourDraw(true);
+  try {
+    if (s.enter) await s.enter();
+    tourShowView(s.view);
+    await tourWait(80);
+  } catch (err) {
+    console.error(err);
+    tourStop();
+    tourShowView('setup');
+    return;
+  }
+  if (tour !== t || t.i !== i) return;
+  t.busy = false;
+  tourDraw(false);
+}
+
+function tourDraw(busy) {
+  const t = tour, s = TOUR_STEPS[t.i], n = TOUR_STEPS.length;
+  const head = `<div class="tour-step">Step ${t.i + 1} of ${n}</div><div class="tour-bar"><i style="width:${(t.i + 1) / n * 100}%"></i></div><h3>${s.title}</h3>`;
+  t.pop.innerHTML = (busy
+    ? `<button class="tour-x" data-t="close" aria-label="Close tour" title="Close (Esc)">×</button>${head}<div class="tour-busy"><span class="tour-spin"></span><span id="tourBusyMsg">${s.busy}</span></div>`
+    : `<button class="tour-x" data-t="close" aria-label="Close tour" title="Close (Esc)">×</button>${head}<div class="tour-body">${s.body}</div>
+       <div class="tour-foot">${t.i ? '<button class="btn btn-secondary btn-sm" data-t="back">Back</button>' : '<span></span>'}
+       <button class="btn btn-primary btn-sm" data-t="next">${s.next || 'Next'}</button></div>`);
+  t.scrolled = busy;
+  tourPlace();
+  const nb = t.pop.querySelector('[data-t="next"]');
+  if (nb) nb.focus({preventScroll: true});
+}
+
+// Puts the spotlight over the step's target and the popover beside it (centred when there is no target).
+function tourPlace() {
+  const t = tour; if (!t || t.busy && !t.pop.firstChild) return;
+  const s = TOUR_STEPS[t.i], vw = innerWidth, vh = innerHeight, M = 12;
+  const el = t.busy ? null : (typeof s.target === 'function' ? s.target() : s.target ? document.querySelector(s.target) : null);
+  if (el && !t.scrolled) { el.scrollIntoView({block: 'center', inline: 'nearest'}); t.scrolled = true; }
+  let r = el ? el.getBoundingClientRect() : null;
+  if (r && (!r.width || !r.height)) r = null;
+  t.shield.classList.toggle('dim', !r);
+  const pw = t.pop.offsetWidth, ph = t.pop.offsetHeight, clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  let x, y;
+  if (!r) {
+    t.hole.style.display = 'none';
+    x = (vw - pw) / 2; y = (vh - ph) / 2.4;
+  } else {
+    const pad = 6, l = Math.max(r.left - pad, 4), tp = Math.max(r.top - pad, 4);
+    const w = Math.min(r.right + pad, vw - 4) - l, h = Math.min(r.bottom + pad, vh - 4) - tp;
+    Object.assign(t.hole.style, {display: 'block', left: l + 'px', top: tp + 'px', width: w + 'px', height: h + 'px'});
+    const room = {bottom: vh - (tp + h) - M >= ph, top: tp - M >= ph, right: vw - (l + w) - M >= pw, left: l - M >= pw};
+    const side = [s.pos, 'bottom', 'top', 'right', 'left'].find(k => k && room[k]);
+    if (side === 'bottom' || side === 'top') { x = clamp(l + w / 2 - pw / 2, M, vw - pw - M); y = side === 'bottom' ? tp + h + M : tp - ph - M; }
+    else if (side) { y = clamp(tp, M, vh - ph - M); x = side === 'right' ? l + w + M : l - pw - M; }
+    else { x = vw - pw - 16; y = vh - ph - 16; }   // no free side: float over the corner
+  }
+  t.pop.style.left = x + 'px'; t.pop.style.top = y + 'px';
+  if (!t.anim) { t.anim = true; requestAnimationFrame(() => { t.pop.classList.add('tour-anim'); t.hole.classList.add('tour-anim'); }); }
+}
+addEventListener('resize', () => tour && tourPlace());
+
+// While the tour runs it owns the keyboard (the review's A/X/C/arrow shortcuts must not fire behind it).
+addEventListener('keydown', e => {
+  if (!tour) return;
+  if (e.key === 'Tab' || e.metaKey || e.ctrlKey) return;
+  e.stopImmediatePropagation();
+  if (e.key === 'Escape') { e.preventDefault(); tourStop(); }
+  else if (tour.busy) return;
+  else if (e.key === 'ArrowRight' && tour.i < TOUR_STEPS.length - 1) { e.preventDefault(); tourGo(tour.i + 1); }
+  else if (e.key === 'ArrowLeft' && tour.i > 0) { e.preventDefault(); tourGo(tour.i - 1); }
+}, true);
+
 restoreFiles();
 </script>
 </body>

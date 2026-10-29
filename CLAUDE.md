@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Working rules for every change
 
-- **Update the footer on every change.** The page footer in `index.html` (`.page-footer`, near the end of the markup) reads `Kasimir Reich · v<version> · <DD/MM/YYYY>`. Set the date to today's date and bump the version in the same edit. Version scheme: `MAJOR.MINOR.PATCH` — patch for fixes and tweaks, minor for new features, major for breaking changes to the workflow or output layout. Current: v1.42.1
+- **Update the footer on every change.** The page footer in `index.html` (`.page-footer`, near the end of the markup) reads `Kasimir Reich · v<version> · <DD/MM/YYYY>`. Set the date to today's date and bump the version in the same edit. Version scheme: `MAJOR.MINOR.PATCH` — patch for fixes and tweaks, minor for new features, major for breaking changes to the workflow or output layout. Current: v1.43.0
 - **Commit after each edit.** When a change is finished, commit it straight away (small, focused commits; message explains the why). Don't let edits pile up uncommitted.
 
 ## What this is
@@ -78,6 +78,10 @@ Processing shows a progress bar with percentage and an ETA (pace so far). Fittin
 ## Restoring from a downloaded workbook
 
 `buildResultsBytes` appends a very hidden sheet `ElisaSession` (`buildSessionSheet`): JSON of the plate files, the metadata workbook (base64), exclusions, accepted plates, hidden samples, borrowed standards, options and manual fit bounds, split over rows of 30 000 characters. Dropping that workbook on either upload zone (`loadCSVFiles` / `loadMetaFile` check `hasSessionSheet`) calls `restoreFromWorkbook`, which reloads both inputs and re-runs processing with the saved session, so the review comes back exactly as downloaded. Anything new that the session should keep must be added to both `saveSession` and `buildSessionSheet`.
+
+## Guided tour
+
+A blue banner above the toolbar (dismissed state in `localStorage` key `elisaTourDismissed`) and the toolbar's "▶ Guided tour" button call `startTour`. The tour (`TOUR_STEPS`, "GUIDED TOUR" block at the end of the script) loads the sample data, runs processing and walks through upload, options, review (plates, curves, outliers, sensitivity, advanced, accept) and download. A step has `view` (`setup`/`review`/`download`, applied by `tourShowView`), an optional async `enter`, a `target` (selector or function, re-resolved every 120 ms because the review re-renders) and `pos`. The tour elements carry class `tour-ui`, which `body.rv-lock` must not hide. A capture-phase keydown listener keeps the review shortcuts from firing behind it. When adding review UI that the tour points at, keep the selectors in `TOUR_STEPS` valid.
 
 ## Example data
 

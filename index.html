@@ -439,7 +439,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.43.0 &nbsp;·&nbsp; 29/10/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.44.0 &nbsp;·&nbsp; 04/11/2026</div>
 
 <script>
 'use strict';
@@ -3571,10 +3571,14 @@ function plateLabel(p) {
 function buildResultsTableSheet() {
   const r = review, {ec50Rows, conRows} = r.analysis;
   const hs = { font: { bold: true }, fill: { patternType: 'solid', fgColor: { rgb: 'FFDCE6F1' } } };
-  const data = [['ID1', 'ID2', 'ID3', 'Sample Name', 'ED50', 'Concentration (µg/mL)', 'Standard curve']
+  // 384-well subplates are named "<file> · Subplate X" in ID1: show the letter in its own column.
+  const subLetter = p => (plateIdValue(r.grid, p, 1).match(/ · Subplate ([A-D])$/) || [])[1];
+  const has384 = Array.from({length: r.numPlates}, (_, p) => subLetter(p)).some(Boolean);
+  const data = [['ID1', 'ID2', 'ID3', ...(has384 ? ['Subplate'] : []), 'Sample Name', 'ED50', 'Concentration (µg/mL)', 'Standard curve']
     .map(h => ({ v: h, t: 's', s: hs }))];
   for (let p = 0; p < r.numPlates; p++) {
     const ids = [1, 2, 3].map(n => plateIdValue(r.grid, p, n));
+    if (has384) ids.push(subLetter(p) || '');
     for (let c = 1; c <= 12; c++) {
       const name = String(r.grid[7][p * 14 + c] ?? '').trim();
       if (!name || name.toLowerCase() === 'blank' || name.toLowerCase() === 'standard') continue;
@@ -3584,7 +3588,7 @@ function buildResultsTableSheet() {
     }
   }
   const ws = aoaToSheet(data);
-  ws['!cols'] = [{ wch: 8 }, { wch: 12 }, { wch: 28 }, { wch: 16 }, { wch: 10 }, { wch: 20 }, { wch: 14 }];
+  ws['!cols'] = [{ wch: 8 }, { wch: 12 }, { wch: 28 }, ...(has384 ? [{ wch: 9 }] : []), { wch: 16 }, { wch: 10 }, { wch: 20 }, { wch: 14 }];
   return ws;
 }
 

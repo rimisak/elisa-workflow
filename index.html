@@ -439,7 +439,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.44.0 &nbsp;·&nbsp; 04/11/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.43.0 &nbsp;·&nbsp; 29/10/2026</div>
 
 <script>
 'use strict';
@@ -3571,41 +3571,6 @@ function plateLabel(p) {
 function buildResultsTableSheet() {
   const r = review, {ec50Rows, conRows} = r.analysis;
   const hs = { font: { bold: true }, fill: { patternType: 'solid', fgColor: { rgb: 'FFDCE6F1' } } };
-  const isSample = n => n && n.toLowerCase() !== 'blank' && n.toLowerCase() !== 'standard';
-  // 384-well plates: the four subplates of one file sit side by side instead of below each other.
-  const subOf = p => { const m = plateIdValue(r.grid, p, 1).match(/^(.*) · Subplate ([A-D])$/); return m ? {base: m[1], letter: m[2]} : null; };
-  if (r.numPlates > 0 && Array.from({length: r.numPlates}, (_, p) => p).every(p => subOf(p))) {
-    const groups = [];
-    for (let p = 0; p < r.numPlates; p++) {
-      const s = subOf(p), g = groups[groups.length - 1];
-      if (g && g.base === s.base && !g.subs.some(x => x.letter === s.letter)) g.subs.push({p, letter: s.letter});
-      else groups.push({base: s.base, subs: [{p, letter: s.letter}]});
-    }
-    const letters = [...new Set(groups.flatMap(g => g.subs.map(s => s.letter)))].sort();
-    const head = ['ID1', 'ID2', 'ID3', 'Well column'];
-    for (const L of letters) head.push(`Sample Name subplate ${L}`, `Concentration (µg/mL) subplate ${L}`, `ED50 subplate ${L}`, `Standard curve subplate ${L}`);
-    const data = [head.map(h => ({ v: h, t: 's', s: hs }))];
-    for (const g of groups) {
-      const first = g.subs[0].p;
-      const ids = [g.base, plateIdValue(r.grid, first, 2), plateIdValue(r.grid, first, 3)];
-      for (let c = 1; c <= 12; c++) {
-        const cells = letters.map(L => {
-          const s = g.subs.find(x => x.letter === L);
-          const name = s ? String(r.grid[7][s.p * 14 + c] ?? '').trim() : '';
-          if (!isSample(name)) return null;
-          const from = r.analysis.plateCharts[s.p].std.from;
-          return [name, conRows[s.p * 14 + c], ec50Rows[s.p * 14 + c], from != null ? `plate ${from + 1}` : 'own plate'];
-        });
-        if (cells.every(x => !x)) continue;
-        const row = [...ids, c];
-        for (const x of cells) row.push(...(x || ['', '', '', '']));
-        data.push(row.map(v => ({ v: v == null ? '' : v, t: typeof v === 'number' ? 'n' : 's' })));
-      }
-    }
-    const ws = aoaToSheet(data);
-    ws['!cols'] = [{ wch: 24 }, { wch: 12 }, { wch: 12 }, { wch: 11 }, ...letters.flatMap(() => [{ wch: 20 }, { wch: 22 }, { wch: 14 }, { wch: 16 }])];
-    return ws;
-  }
   const data = [['ID1', 'ID2', 'ID3', 'Sample Name', 'ED50', 'Concentration (µg/mL)', 'Standard curve']
     .map(h => ({ v: h, t: 's', s: hs }))];
   for (let p = 0; p < r.numPlates; p++) {

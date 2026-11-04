@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Working rules for every change
 
-- **Update the footer on every change.** The page footer in `index.html` (`.page-footer`, near the end of the markup) reads `Kasimir Reich · v<version> · <DD/MM/YYYY>`. Set the date to today's date and bump the version in the same edit. Version scheme: `MAJOR.MINOR.PATCH` — patch for fixes and tweaks, minor for new features, major for breaking changes to the workflow or output layout. Current: v1.43.0
+- **Update the footer on every change.** The page footer in `index.html` (`.page-footer`, near the end of the markup) reads `Kasimir Reich · v<version> · <DD/MM/YYYY>`. Set the date to today's date and bump the version in the same edit. Version scheme: `MAJOR.MINOR.PATCH` — patch for fixes and tweaks, minor for new features, major for breaking changes to the workflow or output layout. Current: v1.44.0
 - **Commit after each edit.** When a change is finished, commit it straight away (small, focused commits; message explains the why). Don't let edits pile up uncommitted.
 
 ## What this is
@@ -88,3 +88,7 @@ A blue banner above the toolbar (dismissed state in `localStorage` key `elisaTou
 **Load sample data** (button atop the Upload section, `loadSampleData`) fills both slots with 15 anonymised real plates (`SAMPLE_PLATES`: OD×1000, 96×450 nm then 96×570 nm; all IDs, dates and run numbers stripped) and a metadata workbook built by `buildTemplateWorkbook` (blank · sample 1–10 · standard).
 
 The `Example/` run (8 plates, metadata, output workbook) was removed from the repo; bring your own BMG CSVs plus a metadata workbook (use "Create a template file") to exercise the pipeline end-to-end.
+
+## Results Table sheet
+
+`buildResultsTableSheet` writes one row per sample column. In 384-well mode (every plate's ID1 ends "· Subplate X") the subplates of one file sit side by side: Sample Name, Concentration, ED50 and Standard curve per subplate, one row per well column 1–12.

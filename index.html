@@ -439,7 +439,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.44.0 &nbsp;·&nbsp; 04/11/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.44.1 &nbsp;·&nbsp; 05/11/2026</div>
 
 <script>
 'use strict';
@@ -1685,10 +1685,10 @@ function* ec50Gen(series, seriesSA, fc) {
 function drain(gen) { let r; while (!(r = gen.next()).done); return r.value; }
 function calculateEC50s(series, seriesSA, fc) { return drain(ec50Gen(series, seriesSA, fc)); }
 
-// Points the standard-curve fit uses: readings above OD 2 are saturated and dropped.
+// Points the standard-curve fit uses: every valid reading (no OD ceiling).
 function stdFitPoints(vals, seriesST) {
   return vals.map((v,i)=>({x:seriesST[i], y:v, i}))
-             .filter(p=>p.y!==null&&isFinite(p.y)&&p.y<=2);
+             .filter(p=>p.y!==null&&isFinite(p.y));
 }
 
 // Reading used to interpolate a sample: the least-diluted reading at or below OD 1.5 (the
@@ -2196,7 +2196,7 @@ function* plateEntryGen(grid, p, meta, fc, excl, logFn, stdOverride) {
   }
   const stdCol = rawSeries.colOf.get('standard');
   const stdAll = (stdCol == null || stdOverride) ? [] :
-    mkPts(rawSeries.get('standard'), seriesST, q => q.y <= 2).map(q => flag(q, stdCol));
+    mkPts(rawSeries.get('standard'), seriesST).map(q => flag(q, stdCol));
   const plateChart = {
     plateIndex: p,
     samples,

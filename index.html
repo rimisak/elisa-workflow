@@ -439,7 +439,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.44.1 &nbsp;·&nbsp; 05/11/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.44.2 &nbsp;·&nbsp; 05/11/2026</div>
 
 <script>
 'use strict';
@@ -1568,7 +1568,9 @@ function getSeries(grid, plateIdx, excl) {
     const colIdx = offset + c;
     const rawName = grid[7][colIdx];
     const name    = (rawName !== null && rawName !== undefined) ? String(rawName) : '';
-    const key     = name === 'blank' ? `blank${colIdx}` : (name || `col${colIdx}`);
+    let key       = name === 'blank' ? `blank${colIdx}` : (name || `col${colIdx}`);
+    // Repeated sample names must stay separate series (the Map is keyed by name): "X", "X (2)", "X (3)"…
+    if (result.has(key)) { let n = 2; while (result.has(`${key} (${n})`)) n++; key = `${key} (${n})`; }
     const vals    = [];
     for (let r = 9; r <= 16; r++) {
       const v = grid[r][colIdx];

@@ -442,7 +442,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.47.11 &nbsp;·&nbsp; 19/11/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.48.0 &nbsp;·&nbsp; 19/11/2026</div>
 
 <script>
 'use strict';
@@ -1416,7 +1416,13 @@ function set384Mode(on) {
   chk.checked = on;
   on384Toggle();
 }
-let layoutOpen = true, pairOpen = false;   // remembered open state of the two collapsible upload-area blocks
+let layoutOpen = (() => { try { return localStorage.getItem('elisaLayoutOpen') !== '0'; } catch (e) { return true; } })(), pairOpen = false;
+// Remembers (across visits) whether the layout example is open; the guided tour may open it without changing that choice.
+function saveLayoutOpen(open) {
+  if (tour) return;
+  layoutOpen = open;
+  try { localStorage.setItem('elisaLayoutOpen', open ? '1' : '0'); } catch (e) {}
+}   // remembered open state of the two collapsible upload-area blocks
 function render384Pattern() {
   const box = document.getElementById('pattern384');
   const on = document.getElementById('plate384Chk').checked;
@@ -1479,7 +1485,7 @@ function render384Pattern() {
       <div style="font-size:12px;color:#6e6e73;margin-top:6px"><b>Every 384-well file is split into four 96-well plates</b> (A, B on top, C, D below; in the order A, B, C, D per file), each with the same layout as a 96-well plate.</div>
       <div style="font-size:12px;color:#6e6e73;margin-top:8px">A1 → Subplate A · A2 → Subplate B · I1 → Subplate C · I2 → Subplate D. The metadata needs four Names rows per file.</div>`;
   }
-  box.innerHTML = `<details ${layoutOpen ? 'open' : ''} ontoggle="layoutOpen=this.open"><summary style="cursor:pointer;font-weight:600;font-size:13px;margin-bottom:10px">Plate Layout example</summary>
+  box.innerHTML = `<details ${layoutOpen ? 'open' : ''} ontoggle="saveLayoutOpen(this.open)"><summary style="cursor:pointer;font-weight:600;font-size:13px;margin-bottom:10px">Plate Layout example</summary>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">${tab(false, '96-well')}${tab(true, '384-well')}</div>${body}</details>`;
 }
 
@@ -4125,6 +4131,8 @@ const TOUR_STEPS = [
    next: 'Load sample data and start'},
   {view: 'setup', enter: tourLoadSample, busy: 'Loading the sample plates…', target: '#csvZone', title: '1 · Plate reader files',
    body: '<p>One export per plate. BMG, BioTek, Tecan and SpectraMax files are recognised automatically; 384-well plates are split into four 96-well plates.</p><p>The 15 sample plates are loaded here.</p>'},
+  {view: 'setup', enter: () => { const d = document.querySelector('#pattern384 details'); if (d) d.open = true; }, target: '#pattern384', title: '1 · Plate Layout example',
+   body: '<p>Shows how a plate is expected to be laid out: a <b>blank</b> column, the <b>samples</b> and the <b>standard</b>, each column a dilution series from row A (strongest) down to row H.</p><p>Switch to <b>384-well</b> to see how one 384-well plate is split into four 96-well subplates (A–D). Open or close this block as you like; the app remembers your choice.</p>'},
   {view: 'setup', target: tourCard('metaZone'), title: '1 · Metadata workbook',
    body: '<p>Holds the sample names for every plate, the standard and sample dilution series, and optional fit bounds.</p><p><b>Download Metadata Template File</b> builds a matching blank workbook for your own plates.</p>'},
   {view: 'setup', target: tourCard('subtractBgChk'), title: '2 · Analysis options',

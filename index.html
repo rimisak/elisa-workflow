@@ -128,7 +128,11 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .info-i:hover .info-pop,.info-i:focus .info-pop{display:block}
 .chart-key{font-size:11px;color:#6e6e73;margin-top:6px;line-height:1.6}
 .chart-key svg{vertical-align:middle;margin-right:4px}
-.step-btns{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:#6e6e73}
+.curve-stepper{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;padding:10px 14px;background:#eef5ff;border:1px solid #bcd7ff;border-radius:12px;font-size:13px;color:#1d1d1f}
+.curve-stepper .cs-title{font-weight:700}
+.curve-stepper .cs-status{color:#0a58ca;font-weight:600}
+.curve-stepper .cs-help{flex-basis:100%;font-size:12px;color:#48484a}
+.curve-stepper .btn{font-size:13px}
 .chart-legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin-bottom:8px}
 .chart-legend.legend-below{margin:10px 0 8px}
 .legend-item{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#3a3a3c}
@@ -343,7 +347,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
   <div style="margin-top:8px;display:flex;gap:8px;align-items:center;justify-content:space-between">
     <div class="num-plates-row">
-      <button class="btn btn-secondary btn-sm" onclick="createTemplate()">Download Metadata Template file</button>
+      <button class="btn btn-secondary btn-sm" onclick="createTemplate()">Download Metadata Template File</button>
     </div>
     <button class="btn btn-secondary btn-sm" onclick="clearMeta()">Clear</button>
   </div>
@@ -437,7 +441,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.47.0 &nbsp;·&nbsp; 19/11/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.47.1 &nbsp;·&nbsp; 19/11/2026</div>
 
 <script>
 'use strict';
@@ -765,7 +769,7 @@ function showCSVState() {
   zone.classList.add('has-files');
   document.getElementById('csvZoneText').textContent = `${csvFiles.length} file(s) loaded`;
   const list = document.getElementById('csvFileList');
-  list.innerHTML = csvFiles.map(f => `<div class="file-item">${escapeXml(f.name)}${f.reader && f.reader !== 'BMG LABTECH' ? ` <span style="color:#b26a00">· ${escapeXml(f.reader)} (experimental)</span>` : ''}${(f.warnings || []).map(w => `<div style="color:#b26a00;font-size:11px">⚠ ${escapeXml(w)}</div>`).join('')}</div>`).join('');
+  list.innerHTML = csvFiles.map(f => `<div class="file-item">${escapeXml(f.name)}${f.reader && f.reader !== 'BMG LABTECH' && !f.reader.startsWith('384-well') ? ` <span style="color:#b26a00">· ${escapeXml(f.reader)} (experimental)</span>` : ''}${(f.warnings || []).map(w => `<div style="color:#b26a00;font-size:11px">⚠ ${escapeXml(w)}</div>`).join('')}</div>`).join('');
   updateProcessBtn();
   updateMetaInfo();
 }
@@ -839,7 +843,7 @@ function updateMetaInfo() {
       const rlab = nm ? `Names row ${i + 1}` : '<i style="color:#b26a00">no Names row</i>';
       rows.push(`<div>${lab} → ${rlab}</div>`);
     }
-    h += `<div><b>Which plate belongs to which Names row.</b> Plates are matched in file-name order (numbers sorted naturally: 2 before 10), top Names row first.</div>${rows.join('')}`;
+    h += `<details ${pairOpen ? 'open' : ''} ontoggle="pairOpen=this.open"><summary style="cursor:pointer;font-weight:600">Which plate belongs to which Names row</summary><div>Plates are matched in file-name order (numbers sorted naturally: 2 before 10), top Names row first.</div>${rows.join('')}</details>`;
   }
   h += metaCheck(meta.names).map(m => `<div style="color:#b26a00">⚠ ${escapeXml(m)}</div>`).join('');
   box.innerHTML = h;
@@ -897,7 +901,7 @@ function logError(err, stage) {
   else if (/all fits failed|insufficient|No data/.test(raw))
     hints.push('A curve could not be fitted. Likely causes: wells left empty or not pipetted, a flat curve (no OD change over the dilution series), the Dilutions values in the metadata not matching the plate, or fit bounds on the Settings sheet that exclude the data.');
   else if (/Cannot read prop|undefined|null|is not iterable|reading '/.test(raw) && /metadata/i.test(stage))
-    hints.push('The metadata workbook does not match the expected layout. It needs the sheets Names (header "Plate" in A1, one row per plate) and Dilutions (values in B2/B3 and B6/B7). Use "Download Metadata Template file" and copy your values into it.');
+    hints.push('The metadata workbook does not match the expected layout. It needs the sheets Names (header "Plate" in A1, one row per plate) and Dilutions (values in B2/B3 and B6/B7). Use "Download Metadata Template File" and copy your values into it.');
   else if (/Cannot read prop|undefined|null|is not iterable|reading '/.test(raw))
     hints.push('An input file is missing data this step expects. Check that the CSVs are complete exports (both the 450 nm and the reference-wavelength block) and that the metadata has one Names row per plate (' + (csvFiles ? csvFiles.length : '?') + ' plate(s) loaded).');
   else if (/worker|Worker/.test(raw))
@@ -1411,48 +1415,62 @@ function set384Mode(on) {
   chk.checked = on;
   on384Toggle();
 }
+let layoutOpen = true, pairOpen = false;   // remembered open state of the two collapsible upload-area blocks
 function render384Pattern() {
   const box = document.getElementById('pattern384');
   const on = document.getElementById('plate384Chk').checked;
   const tab = (v, label) => `<button type="button" class="btn btn-sm ${on === v ? 'btn-black' : 'btn-secondary'}" onclick="set384Mode(${v})">${label}</button>`;
-  const head = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap"><b style="font-size:13px">Plate layout</b>${tab(false, '96-well')}${tab(true, '384-well')}</div>`;
   const dot = (cx, cy, rr, fill, op, extra = '') => `<circle cx="${cx}" cy="${cy}" r="${rr}" fill="${fill}" fill-opacity="${op}"${extra}/>`;
+  // Role colour and dilution gradient of a well: column j (0-11) of a 96-well plate, row i (0-7) = dilution step.
+  const role = (j, i) => j === 0 ? ['#aeaeb2', .5] : [j === 11 ? '#ff9500' : '#007aff', 1 - i * 0.095];
+  const sw = (c, t) => `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:14px;white-space:nowrap"><span style="width:10px;height:10px;border-radius:50%;background:${c}"></span>${t}</span>`;
+  const roleLegend = `${sw('#aeaeb2', '<b>blank</b> (no sample)')}${sw('#007aff', '<b>samples</b>')}${sw('#ff9500', '<b>standard</b>')}`;
+  // One 96-well plate drawn with the given cell size; colourRing outlines every well (used for the subplates).
+  const plate96 = (cs, labels, ring) => {
+    const x0 = labels ? 30 : 0, y0 = labels ? 44 : 0, W = x0 + 12 * cs + (labels ? 70 : 0);
+    let svg = `<svg viewBox="0 0 ${W} ${y0 + 8 * cs + 4}" style="width:100%;max-width:${labels ? 560 : 150}px;display:block" role="img" aria-label="96-well plate: blank, samples and standard columns with dilution series down the rows">`;
+    if (labels) {
+      const names = ['blank', ...Array.from({length: 10}, (_, i) => `sample ${i + 1}`), 'standard'];
+      names.forEach((n, i) => svg += `<text x="${x0 + i * cs + cs / 2}" y="${y0 - 8}" text-anchor="middle" font-size="9" fill="#6e6e73" transform="rotate(-40 ${x0 + i * cs + cs / 2} ${y0 - 8})">${n}</text>`);
+    }
+    for (let i = 0; i < 8; i++) {
+      if (labels) svg += `<text x="${x0 - 7}" y="${y0 + i * cs + cs / 2 + 3}" text-anchor="end" font-size="9" fill="#8e8e93">${'ABCDEFGH'[i]}</text>`;
+      for (let j = 0; j < 12; j++) { const [col, op] = role(j, i); svg += dot(x0 + j * cs + cs / 2, y0 + i * cs + cs / 2, cs / 2 - (labels ? 3 : 1), col, op, ring ? ` stroke="${ring}" stroke-width="1.2"` : ''); }
+    }
+    if (labels) {
+      const ax = x0 + 12 * cs + 14;
+      svg += `<line x1="${ax}" y1="${y0 + 6}" x2="${ax}" y2="${y0 + 8 * cs - 6}" stroke="#6e6e73" stroke-width="1.5"/><polygon points="${ax - 4},${y0 + 8 * cs - 10} ${ax + 4},${y0 + 8 * cs - 10} ${ax},${y0 + 8 * cs - 2}" fill="#6e6e73"/>`;
+      svg += `<text x="${ax + 8}" y="${y0 + 4 * cs}" font-size="9" fill="#6e6e73" transform="rotate(90 ${ax + 8} ${y0 + 4 * cs})" text-anchor="middle">more diluted</text>`;
+    }
+    return svg + '</svg>';
+  };
   let body;
   if (!on) {
-    const cs = 30, x0 = 30, y0 = 44, W = x0 + 12 * cs + 70;
-    let svg = `<svg viewBox="0 0 ${W} ${y0 + 8 * cs + 6}" style="width:100%;max-width:560px;display:block" role="img" aria-label="96-well plate: blank, samples and standard columns with dilution series down the rows">`;
-    const cols = [['blank', '#aeaeb2', 'blank'], ...Array.from({length: 10}, (_, i) => [String(i + 1), '#007aff', `sample ${i + 1}`]), ['std', '#ff9500', 'standard']];
-    cols.forEach((c, i) => svg += `<text x="${x0 + i * cs + cs / 2}" y="${y0 - 8}" text-anchor="middle" font-size="9" fill="#6e6e73" transform="rotate(-40 ${x0 + i * cs + cs / 2} ${y0 - 8})">${c[2]}</text>`);
-    for (let rI = 0; rI < 8; rI++) {
-      svg += `<text x="${x0 - 7}" y="${y0 + rI * cs + cs / 2 + 3}" text-anchor="end" font-size="9" fill="#8e8e93">${'ABCDEFGH'[rI]}</text>`;
-      cols.forEach((c, i) => svg += dot(x0 + i * cs + cs / 2, y0 + rI * cs + cs / 2, cs / 2 - 3, c[1], c[0] === 'blank' ? .5 : 1 - rI * 0.095));
-    }
-    const ax = x0 + 12 * cs + 14;
-    svg += `<line x1="${ax}" y1="${y0 + 6}" x2="${ax}" y2="${y0 + 8 * cs - 6}" stroke="#6e6e73" stroke-width="1.5"/><polygon points="${ax - 4},${y0 + 8 * cs - 10} ${ax + 4},${y0 + 8 * cs - 10} ${ax},${y0 + 8 * cs - 2}" fill="#6e6e73"/>`;
-    svg += `<text x="${ax + 8}" y="${y0 + 4 * cs}" font-size="9" fill="#6e6e73" transform="rotate(90 ${ax + 8} ${y0 + 4 * cs})" text-anchor="middle">more diluted</text></svg>`;
-    const sw = (c, t) => `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:14px;white-space:nowrap"><span style="width:10px;height:10px;border-radius:50%;background:${c}"></span>${t}</span>`;
-    body = svg + `<div style="font-size:12px;color:#6e6e73;margin-top:6px;line-height:1.7">${sw('#aeaeb2', '<b>blank</b> (no sample)')}${sw('#007aff', '<b>samples</b>')}${sw('#ff9500', '<b>standard</b>')}</div>
+    body = plate96(30, true) + `<div style="font-size:12px;color:#6e6e73;margin-top:6px;line-height:1.7">${roleLegend}</div>
       <div style="font-size:12px;color:#6e6e73">Each column is one dilution series: row A is the first (most concentrated) step, row H the most diluted. The fading colour shows the dilution. This is the usual layout; the metadata <i>Names</i> sheet says which column holds what, so name the standard column <b>standard</b> and empty wells <b>blank</b>.</div>`;
   } else {
     const cs = 22, x0 = 22, y0 = 20;
-    let svg = `<svg viewBox="0 0 ${x0 + 24 * cs + 4} ${y0 + 16 * cs + 4}" style="width:100%;max-width:560px;display:block" role="img" aria-label="384-well plate colour-coded by subplate">`;
+    let svg = `<svg viewBox="0 0 ${x0 + 24 * cs + 4} ${y0 + 16 * cs + 4}" style="width:100%;max-width:560px;display:block" role="img" aria-label="384-well plate: each well coloured by its role in its subplate, outlined in the subplate colour">`;
     for (let c = 0; c < 24; c++) svg += `<text x="${x0 + c * cs + cs / 2}" y="13" text-anchor="middle" font-size="9" fill="#8e8e93">${c + 1}</text>`;
     for (let rI = 0; rI < 16; rI++) {
       svg += `<text x="${x0 - 6}" y="${y0 + rI * cs + cs / 2 + 3}" text-anchor="end" font-size="9" fill="#8e8e93">${'ABCDEFGHIJKLMNOP'[rI]}</text>`;
       for (let c = 0; c < 24; c++) {
-        const sp = subplateOf384(rI, c);
-        const mark = (c < 2 && (rI === 0 || rI === 8));
-        svg += dot(x0 + c * cs + cs / 2, y0 + rI * cs + cs / 2, cs / 2 - 2, SUB_COLORS[sp], mark ? 1 : .55, mark ? ' stroke="#1d1d1f" stroke-width="1.5"' : '');
-        if (mark) svg += `<text x="${x0 + c * cs + cs / 2}" y="${y0 + rI * cs + cs / 2 + 3}" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">${SUBPLATES[sp]}</text>`;
+        const sp = subplateOf384(rI, c), [col, op] = role(c >> 1, rI % 8);
+        svg += dot(x0 + c * cs + cs / 2, y0 + rI * cs + cs / 2, cs / 2 - 2, col, op, ` stroke="${SUB_COLORS[sp]}" stroke-width="1.6"`);
       }
     }
     svg += `<line x1="${x0}" x2="${x0 + 24 * cs}" y1="${y0 + 8 * cs}" y2="${y0 + 8 * cs}" stroke="#1d1d1f" stroke-opacity=".25" stroke-dasharray="3 3"/></svg>`;
-    const rule = [['A', 'rows A–H', 'odd columns'], ['B', 'rows A–H', 'even columns'], ['C', 'rows I–P', 'odd columns'], ['D', 'rows I–P', 'even columns']];
-    const legend = rule.map((x, sp) => `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:12px;white-space:nowrap"><span style="width:10px;height:10px;border-radius:50%;background:${SUB_COLORS[sp]}"></span><b>Subplate ${x[0]}</b> ${x[1]}, ${x[2]}</span>`).join('');
-    body = svg + `<div style="font-size:12px;color:#6e6e73;margin-top:6px;line-height:1.7">${legend}</div>
-      <div style="font-size:12px;color:#6e6e73">Each file is a 384-well plate that holds four interleaved 96-well subplates (pipetted every other well). A1 → Subplate A · A2 → Subplate B · I1 → Subplate C · I2 → Subplate D. Each subplate becomes its own plate, in the order A, B, C, D per file, and follows the 96-well layout (blank · samples · standard, row A to H = dilution series). The metadata needs four Names rows per file.</div>`;
+    const rule = [['A', 'rows A–H, odd columns'], ['B', 'rows A–H, even columns'], ['C', 'rows I–P, odd columns'], ['D', 'rows I–P, even columns']];
+    const ringLegend = rule.map((x, sp) => `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:12px;white-space:nowrap"><span style="width:10px;height:10px;border-radius:50%;border:2px solid ${SUB_COLORS[sp]}"></span><b>Subplate ${x[0]}</b> ${x[1]}</span>`).join('');
+    const minis = SUBPLATES.map((L, sp) => `<div style="flex:1 1 130px;min-width:120px;border:2px solid ${SUB_COLORS[sp]};border-radius:10px;padding:6px 8px"><div style="font-size:11px;font-weight:700;color:${SUB_COLORS[sp]};margin-bottom:4px">Plate ${L}</div>${plate96(10, false, SUB_COLORS[sp])}</div>`).join('');
+    body = svg + `<div style="font-size:12px;color:#6e6e73;margin-top:6px;line-height:1.7">${ringLegend}</div>
+      <div style="font-size:12px;color:#6e6e73;line-height:1.7">${roleLegend}</div>
+      <div style="font-size:12px;color:#6e6e73;margin:10px 0 6px"><b>Every 384-well file is split into four 96-well plates</b> (A, B, C, D, in that order per file), each with the same layout as a 96-well plate:</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">${minis}</div>
+      <div style="font-size:12px;color:#6e6e73;margin-top:8px">A1 → Subplate A · A2 → Subplate B · I1 → Subplate C · I2 → Subplate D. The metadata needs four Names rows per file.</div>`;
   }
-  box.innerHTML = head + body;
+  box.innerHTML = `<details ${layoutOpen ? 'open' : ''} ontoggle="layoutOpen=this.open"><summary style="cursor:pointer;font-weight:600;font-size:13px;margin-bottom:10px">Plate Layout example</summary>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">${tab(false, '96-well')}${tab(true, '384-well')}</div>${body}</details>`;
 }
 
 // Excel plate exports (Tecan i-control / Magellan): flatten every sheet to CSV text first.
@@ -2958,7 +2976,6 @@ function plateBlockHtml(pc) {
     ${onlyPoor
       ? `<button class="btn btn-secondary btn-sm" data-showall="${p}" title="Show every dilution curve again">Show all</button>`
       : `<button class="btn btn-secondary btn-sm" data-poorfit="${p}" ${poorSet.size ? '' : 'disabled'} title="Show only curves with a failed fit, low R² or a parameter at its fit bound">Show only poor fits</button>`}
-    <span class="step-btns" title="Show the curves of this plate one at a time"><button class="btn btn-secondary btn-sm" data-act="curvePrev">▲ <kbd class="keycap">↑</kbd></button><button class="btn btn-secondary btn-sm" data-act="curveNext">▼ <kbd class="keycap">↓</kbd></button>one curve at a time</span>
     <button class="btn btn-secondary btn-sm" data-act="toggleShowExcl" title="Applies to all graphs">${review.showExcl ? 'Hide' : 'Show'} excluded points</button></span>`;
   if (!legend) legend = '<span class="legend-item" style="color:#aeaeb2">No sample curves for this plate</span>';
 
@@ -3030,6 +3047,14 @@ function plateBlockHtml(pc) {
     ${banner}
     ${stdBar}
     ${rowBarHtml(p)}
+    ${pc.samples.length > 1 ? (() => {
+      const k = pc.samples.findIndex(s => !isHidden(pc, s)), one = nHid === pc.samples.length - 1 && k >= 0;
+      return `<div class="curve-stepper"><span class="cs-title">Look at one curve at a time</span>
+        <button class="btn btn-black btn-sm" data-act="curvePrev">▲ Previous curve <kbd class="keycap">↑</kbd></button>
+        <button class="btn btn-black btn-sm" data-act="curveNext">▼ Next curve <kbd class="keycap">↓</kbd></button>
+        <span class="cs-status">${one ? `Showing curve ${k + 1} of ${pc.samples.length}: ${escapeXml(pc.samples[k].name)}` : `Showing all ${pc.samples.length - nHid} curves`}</span>
+        <span class="cs-help">Use the buttons or the <b>↑</b> / <b>↓</b> arrow keys on your keyboard. Each press hides all other sample curves and shows only the next one; after the last curve, all curves are shown again. (<b>←</b> / <b>→</b> switch between plates.)</span></div>`;
+    })() : ''}
     <div class="plate-charts-row">
       <div class="chart-card"><div class="chart-title">Sample dose–response &amp; ED50<span class="info-i" tabindex="0">i<span class="info-pop"><b>ED50</b> is the dilution factor at which a sample's fitted curve reaches half-way between its top and bottom OD. A lower ED50 means a stronger sample. The dashed vertical line marks it for each sample.</span></span>${nHid && nHid < pc.samples.length ? `<span class="chart-note">Showing ${pc.samples.length - nHid} of ${pc.samples.length} curves</span>` : ''}</div>${renderSampleChart(pc)}<div class="chart-key"><svg width="22" height="8"><line x1="11" y1="0" x2="11" y2="8" stroke="#8e8e93" stroke-width="1.5" stroke-dasharray="2 2"/></svg>Dashed vertical line = ED50 of that sample's fitted curve</div></div>
       <div class="chart-card"><div class="chart-title">Standard curve &amp; interpolation${pc.std.from != null ? ` (plate ${pc.std.from + 1}'s standard)` : ''}<span class="info-i" tabindex="0">i<span class="info-pop"><b>How the concentration is chosen.</b> For each sample the least-diluted reading with OD ≤ 1.5 is used (higher ODs are too close to saturation). That OD is read off the standard curve and multiplied by the sample's dilution factor at that reading. If every reading is above 1.5, OD 1.49 at the last dilution is assumed. Reported values never fall below 0.01.</span></span></div>${renderStandardChart(pc)}<div class="chart-key"><svg width="22" height="12"><polyline points="1,2 11,2 11,12" fill="none" stroke="#8e8e93" stroke-width="1.5" stroke-dasharray="2 2"/></svg>Dashed line = the reading chosen for that sample (horizontal), read down to its concentration on the standard curve (vertical)</div></div>
@@ -4080,7 +4105,7 @@ const TOUR_STEPS = [
   {view: 'setup', enter: tourLoadSample, busy: 'Loading the sample plates…', target: '#csvZone', title: '1 · Plate reader files',
    body: '<p>One export per plate. BMG, BioTek, Tecan and SpectraMax files are recognised automatically; 384-well plates are split into four 96-well plates.</p><p>The 15 sample plates are loaded here.</p>'},
   {view: 'setup', target: tourCard('metaZone'), title: '1 · Metadata workbook',
-   body: '<p>Holds the sample names for every plate, the standard and sample dilution series, and optional fit bounds.</p><p><b>Download Metadata Template file</b> builds a matching blank workbook for your own plates.</p>'},
+   body: '<p>Holds the sample names for every plate, the standard and sample dilution series, and optional fit bounds.</p><p><b>Download Metadata Template File</b> builds a matching blank workbook for your own plates.</p>'},
   {view: 'setup', target: tourCard('subtractBgChk'), title: '2 · Analysis options',
    body: '<p><b>Background subtraction</b> replaces each well by signal − reference read (here 450 − 570 nm) before anything is fitted.</p><p><b>Detect outliers</b> adds suggestions for points to exclude; nothing is removed until you decide.</p>'},
   {view: 'setup', target: '#processBtn', title: '2 · Process',
@@ -4090,7 +4115,7 @@ const TOUR_STEPS = [
    body: '<p>Plates are fitted in parallel and appear here as they finish. Each tile is a plate; its colour shows its state and accepted plates get a ✓. Click a tile to jump to it.</p><p><b>Needs review</b> narrows the list to plates with something to check.</p>'},
   {view: 'review', enter: () => tourGoPlate(false), target: tourPlate('.plate-charts-row'), title: '3 · Curves and ED50',
    body: '<p><b>Left:</b> each sample\'s dose–response with its fitted curve and ED50.</p><p><b>Right:</b> the standard curve, with the sample readings interpolated onto it.</p><p>Click a legend entry to hide a curve, shift-click to show only that one.</p>'},
-  {view: 'review', target: tourPlate('.step-btns'), title: '3 · One curve at a time',
+  {view: 'review', target: tourPlate('.curve-stepper'), title: '3 · One curve at a time',
    body: '<p>Step through this plate\'s sample curves one by one with the <b>▲ ▼</b> buttons or the <kbd>↑</kbd> <kbd>↓</kbd> keys. Past the last curve all curves are shown again.</p><p>The <b>i</b> next to a chart title explains ED50 and how the concentration is chosen.</p>'},
   {view: 'review', target: tourPlate('.res-wrap'), title: '3 · Results table',
    body: '<p>The fitted values and interpolated concentrations for every sample on this plate. They update immediately whenever you change anything above.</p>'},

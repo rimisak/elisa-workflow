@@ -458,7 +458,7 @@ body.rv-lock #reviewAI{margin-bottom:10px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.50.1 &nbsp;·&nbsp; 19/11/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.51.0 &nbsp;·&nbsp; 19/11/2026</div>
 
 <script>
 'use strict';
@@ -4300,25 +4300,52 @@ async function aiAsk() {
     const unreviewed = poor.filter(x => !reviews.some(v => v.series === x.name)).map(x => x.name);
     // Suggested points Claude gave no decision for stay as they are for the scientist.
     const undecided = [...pts.values()].filter(q => !q.excluded && review.suggested.has(q.key) && !seen.has(q.key)).length;
+    const op = {review, p, excl: excl.map(x => x.key).filter(k => !review.excl.has(k)), ign: ign.map(x => x.key).filter(k => review.suggested.has(k)), wasAccepted: review.accepted.has(p)};
     aiState.proposal = {p, decision: out.decision, notes: String(out.notes || ''), excl, ign, undecided, reviews, unreviewed, skipped, usage: data.usage || null, model: data.model || aiState.model};
-    aiSet(null);
+    aiState.busy = false;
+    aiApplyOp(op);
+    aiUndoStack.push(op); aiRedoStack.length = 0;
+    aiSet(`Claude's decisions for plate ${p + 1} are applied: ${op.excl.length} exclusion${op.excl.length === 1 ? '' : 's'}, ${op.ign.length} suggestion${op.ign.length === 1 ? '' : 's'} ignored. Use Undo if you disagree; accepting the plate is still up to you.`, 'ok');
+    return;
   } catch (e) { aiSet(e.message, 'err'); }
   aiState.busy = false; aiRefresh();
 }
-function aiApply() {
-  const pr = aiState.proposal;
-  if (!pr || !review) return;
-  const nIgn = ignoreSuggestions(pr.p, pr.ign.map(x => x.key), true);
-  const keys = pr.excl.map(x => x.key).filter(k => !review.excl.has(k));
-  keys.forEach(k => { review.excl.add(k); review.suggested.delete(k); });
-  review.accepted.delete(pr.p);
-  review.flagCache = null;
-  review.out = null; review.prepFailed = false; review.blobTok = (review.blobTok || 0) + 1;
-  aiState.proposal = null;
-  aiSet(`Applied on plate ${pr.p + 1}: ${keys.length} exclusion${keys.length === 1 ? '' : 's'}, ${nIgn} suggestion${nIgn === 1 ? '' : 's'} ignored. Check the curves, then accept the plate.`, 'ok');
-  if (keys.length) reanalyze();
-  refreshReview(pr.p);
-  aiRefresh();
+// Claude's decisions are applied at once. Each application is one operation that can be undone and redone.
+const aiUndoStack = [], aiRedoStack = [];
+function aiApplyOp(op) {
+  const r = review;
+  op.ign.forEach(k => { r.ignored.add(k); r.suggested.delete(k); });
+  op.excl.forEach(k => r.excl.add(k));
+  r.accepted.delete(op.p);
+  r.flagCache = null;
+  r.out = null; r.prepFailed = false; r.blobTok = (r.blobTok || 0) + 1;
+  if (op.excl.length) reanalyze();
+  refreshReview(op.p);
+}
+function aiRevertOp(op) {
+  const r = review;
+  op.excl.forEach(k => r.excl.delete(k));
+  op.ign.forEach(k => r.ignored.delete(k));
+  refilterSuggested();
+  if (op.wasAccepted) r.accepted.add(op.p);
+  r.out = null; r.prepFailed = false; r.blobTok = (r.blobTok || 0) + 1;
+  if (op.excl.length) reanalyze();
+  refreshReview(op.p);
+}
+function aiLive(stack) { return stack.filter(o => o.review === review); }
+function aiUndo() {
+  const op = aiLive(aiUndoStack).pop();
+  if (!op) return;
+  aiUndoStack.splice(aiUndoStack.indexOf(op), 1);
+  aiRevertOp(op); aiRedoStack.push(op);
+  aiSet(`Undid Claude's changes on plate ${op.p + 1}.`, 'info');
+}
+function aiRedo() {
+  const op = aiLive(aiRedoStack).pop();
+  if (!op) return;
+  aiRedoStack.splice(aiRedoStack.indexOf(op), 1);
+  aiApplyOp(op); aiUndoStack.push(op);
+  aiSet(`Re-applied Claude's changes on plate ${op.p + 1}.`, 'ok');
 }
 function aiSet(text, kind) { aiState.msg = text ? {text, kind: kind || 'info'} : null; aiRefresh(); }
 // Enable/disable the buttons in place (a re-render between mouse-down and click would swallow the click).
@@ -4343,8 +4370,7 @@ function aiCardHtml() {
       + (pr.unreviewed.length ? `<div class="adv-note" style="color:#c0392b">Claude gave no justification for: ${esc(pr.unreviewed.join(', '))}. Look at ${pr.unreviewed.length > 1 ? 'these curves' : 'this curve'} yourself or ask again.</div>` : '')
       + (pr.undecided ? `<div class="adv-note">${pr.undecided} suggested point(s) got no decision and stay suggested for you.</div>` : '')
       + (pr.skipped ? `<div class="adv-note">${pr.skipped} suggestion(s) were ignored (unknown or already excluded point).</div>` : '')
-      + `<div class="adv-btns">${pr.excl.length || pr.ign.length ? '<button class="btn btn-black btn-sm" data-ai="apply">Apply decisions</button>' : ''}<button class="btn btn-secondary btn-sm" data-ai="dismiss">Dismiss</button></div>`
-      + `<div class="adv-note">Nothing is applied until you click Apply. You still accept the plate yourself.</div></div>`;
+      + `<div class="adv-btns"><button class="btn btn-secondary btn-sm" data-ai="dismiss">Hide this report</button></div></div>`;
   }
   return `<summary>Auto-review with Claude (beta)</summary>
     <div class="ai-body">
@@ -4356,10 +4382,14 @@ function aiCardHtml() {
       <label class="ai-check ai-consent"><input type="checkbox" data-aifield="consent" ${s.consent ? 'checked' : ''}> I agree to send this plate's OD values, fit results and sample names to the Anthropic API.</label>
       <div class="adv-btns">
         <button class="btn btn-secondary btn-sm" data-ai="test" ${s.busy ? 'disabled' : ''}>Test connection</button>
-        <button class="btn btn-black btn-sm" data-ai="ask" ${s.busy || p == null || !s.consent || !s.key.trim() ? 'disabled' : ''}>Ask Claude about this plate</button>
+        <button class="btn btn-black btn-sm" data-ai="ask" ${s.busy || p == null || !s.consent || !s.key.trim() ? 'disabled' : ''}>Review this plate with Claude</button>
         <button class="btn btn-secondary btn-sm" data-ai="forget" ${s.key ? '' : 'disabled'}>Forget key</button>
       </div>
-      <div class="adv-note">Estimated cost per plate with ${esc(m.label)}: about $${est.usd < 0.01 ? est.usd.toFixed(4) : est.usd.toFixed(3)} (${est.inTok.toLocaleString()} input and up to ${est.outTok.toLocaleString()} output tokens). Based on prices as of November 2026, not updated automatically.</div>
+      <div class="adv-btns">
+        <button class="btn btn-secondary btn-sm" data-ai="undo" ${aiLive(aiUndoStack).length ? '' : 'disabled'} title="Undo the last change Claude made">↶ Undo Claude</button>
+        <button class="btn btn-secondary btn-sm" data-ai="redo" ${aiLive(aiRedoStack).length ? '' : 'disabled'} title="Redo what you undid">↷ Redo</button>
+      </div>
+      <div class="adv-note">Claude's decisions are applied immediately; Undo and Redo revert them. You still accept each plate yourself. Estimated cost per plate with ${esc(m.label)}: about $${est.usd < 0.01 ? est.usd.toFixed(4) : est.usd.toFixed(3)} (${est.inTok.toLocaleString()} input and up to ${est.outTok.toLocaleString()} output tokens). Based on prices as of November 2026, not updated automatically.</div>
       ${msg}${prop}
     </div>`;
 }
@@ -4369,7 +4399,8 @@ document.addEventListener('click', e => {
   switch (b.dataset.ai) {
     case 'test': aiTest(); break;
     case 'ask': aiAsk(); break;
-    case 'apply': aiApply(); break;
+    case 'undo': aiUndo(); break;
+    case 'redo': aiRedo(); break;
     case 'dismiss': aiState.proposal = null; aiRefresh(); break;
     case 'forget':
       aiState.key = ''; aiState.remember = false; aiState.consent = false; aiState.proposal = null; aiState.msg = null;

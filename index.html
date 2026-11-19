@@ -306,18 +306,17 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
     <span class="sec-badge idle" id="badgeUpload">Waiting for files</span><span class="sec-chev">▾</span>
   </div>
   <div class="sec-body">
-<div style="margin-bottom:10px;text-align:right"><button class="btn btn-secondary btn-sm" onclick="loadSampleData()">Load sample data</button></div>
 <!-- CSV Drop Zone -->
 <div class="card">
   <div class="card-label">Plate Reader CSV Files</div>
   <div class="drop-zone" id="csvZone" onclick="browseCSV()" ondragover="onDragOver(event,'csvZone')" ondragleave="onDragLeave('csvZone')" ondrop="onDropCSV(event)">
     <div class="drop-zone-icon">📂</div>
     <div class="drop-zone-text" id="csvZoneText">Drop plate files here or click to browse</div>
-    <div class="drop-zone-sub">Plate reader exports from BMG, BioTek (Gen5), Tecan (i-control / Magellan) or SpectraMax (SoftMax Pro): .csv, .txt or .xlsx, one plate per file. The metadata workbook is moved to its own slot automatically.</div>
+    <div class="drop-zone-sub">Tested with BMG Omega CSV exports (one plate per file). BioTek (Gen5), Tecan and SpectraMax (SoftMax Pro) import (.csv, .txt, .xlsx) is experimental, so please check the result. The metadata workbook is moved to its own slot automatically.</div>
     <div class="file-list" id="csvFileList"></div>
   </div>
   <div style="margin-top:8px;display:flex;gap:8px;justify-content:space-between">
-    <button class="btn btn-secondary btn-sm" onclick="createCsvTemplate()">Create a template file</button>
+    <button class="btn btn-secondary btn-sm" onclick="createCsvTemplate()">Download plate CSV template file</button>
     <button class="btn btn-secondary btn-sm" onclick="clearCSV()">Clear</button>
   </div>
   <input type="file" id="csvInput" accept=".csv,.txt,.tsv,.xlsx,.xls" multiple style="display:none" onchange="onCSVInputChange()">
@@ -346,7 +345,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
   <div style="margin-top:8px;display:flex;gap:8px;align-items:center;justify-content:space-between">
     <div class="num-plates-row">
-      <button class="btn btn-secondary btn-sm" onclick="createTemplate()">Create a template file</button>
+      <button class="btn btn-secondary btn-sm" onclick="createTemplate()">Download Metadata Template file</button>
     </div>
     <button class="btn btn-secondary btn-sm" onclick="clearMeta()">Clear</button>
   </div>
@@ -439,7 +438,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.44.2 &nbsp;·&nbsp; 05/11/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.45.0 &nbsp;·&nbsp; 19/11/2026</div>
 
 <script>
 'use strict';
@@ -764,7 +763,7 @@ function showCSVState() {
   zone.classList.add('has-files');
   document.getElementById('csvZoneText').textContent = `${csvFiles.length} file(s) loaded`;
   const list = document.getElementById('csvFileList');
-  list.innerHTML = csvFiles.map(f => `<div class="file-item">${escapeXml(f.name)}${f.reader && f.reader !== 'BMG LABTECH' ? ` <span style="color:#8e8e93">· ${escapeXml(f.reader)}</span>` : ''}${(f.warnings || []).map(w => `<div style="color:#b26a00;font-size:11px">⚠ ${escapeXml(w)}</div>`).join('')}</div>`).join('');
+  list.innerHTML = csvFiles.map(f => `<div class="file-item">${escapeXml(f.name)}${f.reader && f.reader !== 'BMG LABTECH' ? ` <span style="color:#b26a00">· ${escapeXml(f.reader)} (experimental)</span>` : ''}${(f.warnings || []).map(w => `<div style="color:#b26a00;font-size:11px">⚠ ${escapeXml(w)}</div>`).join('')}</div>`).join('');
   updateProcessBtn();
 }
 function clearCSV() {
@@ -861,7 +860,7 @@ function logError(err, stage) {
   else if (/all fits failed|insufficient|No data/.test(raw))
     hints.push('A curve could not be fitted. Likely causes: wells left empty or not pipetted, a flat curve (no OD change over the dilution series), the Dilutions values in the metadata not matching the plate, or fit bounds on the Settings sheet that exclude the data.');
   else if (/Cannot read prop|undefined|null|is not iterable|reading '/.test(raw) && /metadata/i.test(stage))
-    hints.push('The metadata workbook does not match the expected layout. It needs the sheets Names (header "Plate" in A1, one row per plate) and Dilutions (values in B2/B3 and B6/B7). Use "Create a template file" and copy your values into it.');
+    hints.push('The metadata workbook does not match the expected layout. It needs the sheets Names (header "Plate" in A1, one row per plate) and Dilutions (values in B2/B3 and B6/B7). Use "Download Metadata Template file" and copy your values into it.');
   else if (/Cannot read prop|undefined|null|is not iterable|reading '/.test(raw))
     hints.push('An input file is missing data this step expects. Check that the CSVs are complete exports (both the 450 nm and the reference-wavelength block) and that the metadata has one Names row per plate (' + (csvFiles ? csvFiles.length : '?') + ' plate(s) loaded).');
   else if (/worker|Worker/.test(raw))
@@ -3026,7 +3025,7 @@ function acceptBarHtml() {
     + `<div class="ra-row"><button class="btn btn-black process-btn" ${first ? 'disabled' : `data-prevplate="${p}"`} title="${first ? 'This is the first plate' : 'Previous plate (←)'}">Back <kbd class="keycap">←</kbd></button>`
     + `<button class="btn btn-black process-btn" ${last ? 'disabled' : `data-nextplate="${p}"`} title="${last ? 'This is the last plate' : 'Next plate (→)'}">Next <kbd class="keycap">→</kbd></button>`
     + '</div>'
-    + (last && r.accepted.size < r.numPlates ? `<button class="btn process-btn btn-black" data-act="acceptAll" ${r.fitting ? 'disabled' : ''}>Accept all remaining plates (${r.numPlates - r.accepted.size})</button>` : '');
+    + (r.accepted.size < r.numPlates ? `<button class="btn process-btn btn-black" data-act="acceptAll" ${r.fitting ? 'disabled' : ''}>Accept all remaining plates (${r.numPlates - r.accepted.size})</button>` : '');
 }
 
 // Shows the "Scroll for more" pill while the current plate has content below the visible part.
@@ -3992,7 +3991,7 @@ const TOUR_STEPS = [
   {view: 'setup', enter: tourLoadSample, busy: 'Loading the sample plates…', target: '#csvZone', title: '1 · Plate reader files',
    body: '<p>One export per plate. BMG, BioTek, Tecan and SpectraMax files are recognised automatically; 384-well plates are split into four 96-well plates.</p><p>The 15 sample plates are loaded here.</p>'},
   {view: 'setup', target: tourCard('metaZone'), title: '1 · Metadata workbook',
-   body: '<p>Holds the sample names for every plate, the standard and sample dilution series, and optional fit bounds.</p><p><b>Create a template file</b> builds a matching blank workbook for your own plates.</p>'},
+   body: '<p>Holds the sample names for every plate, the standard and sample dilution series, and optional fit bounds.</p><p><b>Download Metadata Template file</b> builds a matching blank workbook for your own plates.</p>'},
   {view: 'setup', target: tourCard('subtractBgChk'), title: '2 · Analysis options',
    body: '<p><b>Background subtraction</b> replaces each well by signal − reference read (here 450 − 570 nm) before anything is fitted.</p><p><b>Detect outliers</b> adds suggestions for points to exclude; nothing is removed until you decide.</p>'},
   {view: 'setup', target: '#processBtn', title: '2 · Process',

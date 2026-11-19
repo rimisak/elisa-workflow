@@ -327,17 +327,8 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
     <button class="btn btn-secondary btn-sm" onclick="clearCSV()">Clear</button>
   </div>
   <input type="file" id="csvInput" accept=".csv,.txt,.tsv,.xlsx,.xls" multiple style="display:none" onchange="onCSVInputChange()">
-  <div class="option-row" style="margin-top:14px;border-top:1px solid #f0f0f0;padding-top:14px">
-    <span class="option-text">
-      <span class="option-title">384-well plates</span>
-      <span class="option-sub">Each file is a 384-well plate that holds four interleaved 96-well subplates (A–D, pipetted every other well). They are split back into four separate plates.</span>
-    </span>
-    <label class="switch">
-      <input type="checkbox" id="plate384Chk" onchange="on384Toggle()">
-      <span class="slider"></span>
-    </label>
-  </div>
-  <div id="pattern384" style="display:none;margin-top:12px"></div>
+  <input type="checkbox" id="plate384Chk" style="display:none" onchange="on384Toggle()">
+  <div id="pattern384" style="margin-top:14px;border-top:1px solid #f0f0f0;padding-top:14px"></div>
 </div>
 
 <!-- Metadata -->
@@ -347,7 +338,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
     <div class="drop-zone meta-drop-zone" id="metaZone" onclick="browseMeta()" ondragover="onDragOver(event,'metaZone')" ondragleave="onDragLeave('metaZone')" ondrop="onDropMeta(event)">
       <div class="drop-zone-icon">📋</div>
       <div class="drop-zone-text" id="metaZoneText">Drop MetaData.xlsx here or click to browse</div>
-      <div class="drop-zone-sub">Contains sample names and dilution parameters</div>
+      <div class="drop-zone-sub">Contains sample names and dilution parameters. Call your standard column <b>standard</b> and empty wells <b>blank</b>.</div>
     </div>
   </div>
   <div style="margin-top:8px;display:flex;gap:8px;align-items:center;justify-content:space-between">
@@ -357,6 +348,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
     <button class="btn btn-secondary btn-sm" onclick="clearMeta()">Clear</button>
   </div>
   <input type="file" id="metaInput" accept=".xlsx,.XLSX" style="display:none" onchange="onMetaInputChange()">
+  <div id="metaInfo" style="margin-top:10px;font-size:12px;color:#6e6e73;line-height:1.6"></div>
 </div>
 
 
@@ -445,7 +437,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.46.0 &nbsp;·&nbsp; 19/11/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.47.0 &nbsp;·&nbsp; 19/11/2026</div>
 
 <script>
 'use strict';
@@ -775,6 +767,7 @@ function showCSVState() {
   const list = document.getElementById('csvFileList');
   list.innerHTML = csvFiles.map(f => `<div class="file-item">${escapeXml(f.name)}${f.reader && f.reader !== 'BMG LABTECH' ? ` <span style="color:#b26a00">· ${escapeXml(f.reader)} (experimental)</span>` : ''}${(f.warnings || []).map(w => `<div style="color:#b26a00;font-size:11px">⚠ ${escapeXml(w)}</div>`).join('')}</div>`).join('');
   updateProcessBtn();
+  updateMetaInfo();
 }
 function clearCSV() {
   csvFiles = []; lastPlateFiles = [];
@@ -786,6 +779,7 @@ function clearCSV() {
   storeDel('csvFiles');
   staleSession();
   updateProcessBtn();
+  updateMetaInfo();
 }
 
 // Meta zone
@@ -817,6 +811,38 @@ function showMetaState() {
   document.getElementById('metaZone').classList.add('has-files');
   document.getElementById('metaZoneText').textContent = `✅ ${metaName}`;
   updateProcessBtn();
+  updateMetaInfo();
+}
+// Under the metadata zone: which plate file goes with which Names row, and warnings for missing standard / blank.
+function metaCheck(names) {
+  const w = [];
+  names.forEach((row, i) => {
+    const lab = `Names row ${i + 1}`;
+    if (!row.some(n => n === 'standard')) w.push(`${lab}: no column named "standard" (names are matched ignoring upper/lower case)`);
+    if (!row.some(n => n.startsWith('blank'))) w.push(`${lab}: no column named "blank"`);
+  });
+  return w;
+}
+function updateMetaInfo() {
+  const box = document.getElementById('metaInfo');
+  if (!box) return;
+  if (!metaBytes) { box.innerHTML = ''; return; }
+  let meta;
+  try { meta = parseMetadata(metaBytes); } catch (_) { box.innerHTML = ''; return; }
+  let h = '';
+  if (csvFiles.length) {
+    const n = Math.max(csvFiles.length, meta.names.length);
+    const rows = [];
+    for (let i = 0; i < n; i++) {
+      const f = csvFiles[i], nm = meta.names[i];
+      const lab = f ? escapeXml(f.name) : '<i style="color:#b26a00">no plate file</i>';
+      const rlab = nm ? `Names row ${i + 1}` : '<i style="color:#b26a00">no Names row</i>';
+      rows.push(`<div>${lab} → ${rlab}</div>`);
+    }
+    h += `<div><b>Which plate belongs to which Names row.</b> Plates are matched in file-name order (numbers sorted naturally: 2 before 10), top Names row first.</div>${rows.join('')}`;
+  }
+  h += metaCheck(meta.names).map(m => `<div style="color:#b26a00">⚠ ${escapeXml(m)}</div>`).join('');
+  box.innerHTML = h;
 }
 function clearMeta() {
   metaBytes = null; metaName = '';
@@ -826,6 +852,7 @@ function clearMeta() {
   storeDel('meta');
   staleSession();
   updateProcessBtn();
+  updateMetaInfo();
 }
 
 // Log
@@ -977,7 +1004,7 @@ function buildTemplateWorkbook(numPlates, plateLabel = p => `plate ${p+1} - dXX 
   wsDil['!cols'] = [{wch:42},{wch:12}];
   XLSX.utils.book_append_sheet(wb, wsDil, 'Dilutions');
 
-  // Settings sheet: 4PL fit bounds and starting values (delete the sheet to use the built-in defaults)
+  // Advanced sheet: 4PL fit bounds and starting values (delete the sheet to use the built-in defaults)
   const setData = [['Parameter', 'Lower Bound', 'Initial Guess', 'Upper Bound']];
   FIT_PARAMS.forEach((name, i) => setData.push([
     name === 'ic50' ? 'IC50' : name[0].toUpperCase() + name.slice(1),
@@ -992,7 +1019,21 @@ function buildTemplateWorkbook(numPlates, plateLabel = p => `plate ${p+1} - dXX 
   setData.push(['Hill: enter positive values (sample curves fall with dilution); the standard curve uses the mirrored negative range automatically.']);
   const wsSet = XLSX.utils.aoa_to_sheet(setData);
   wsSet['!cols'] = [{wch:34},{wch:14},{wch:14},{wch:14}];
-  XLSX.utils.book_append_sheet(wb, wsSet, 'Settings');
+  XLSX.utils.book_append_sheet(wb, wsSet, ADV_SHEET);
+
+  // Required cells in yellow, optional blocks in grey. (Name cells B–M are left unfilled on purpose:
+  // a fill there is read as the sample colour.)
+  const req = {fill:{patternType:'solid', fgColor:{rgb:'FFF3B0'}}, font:{bold:true}};
+  const opt = {fill:{patternType:'solid', fgColor:{rgb:'E5E5EA'}}, font:{bold:true, color:{rgb:'6E6E73'}}};
+  const mark = (ws, addr, st) => { if (ws[addr]) ws[addr].s = st; };
+  mark(wsNames, 'A1', req);
+  for (let p = 0; p < numPlates; p++) mark(wsNames, XLSX.utils.encode_cell({r:p+1, c:0}), req);
+  ['B1','C1','D1','E1','F1','G1','H1','I1','J1','K1','L1','M1'].forEach(a => mark(wsNames, a, req));
+  XLSX.utils.sheet_add_aoa(wsNames, [['Yellow = must be filled in. Fill every column of every plate row: call the standard "standard" and empty wells "blank". One row per plate file, in file-name order.']], {origin:'O1'});
+  ['B2','B3','B6','B7'].forEach(a => mark(wsDil, a, req));
+  XLSX.utils.sheet_add_aoa(wsDil, [['Yellow = must be filled in.'], [], [], [], ['Standard: start concentration (B2) and the dilution factor per step (B3).'], ['Samples: start dilution (B6) and the dilution factor per step (B7).']], {origin:'D1'});
+  mark(wsSet, 'A1', opt); mark(wsSet, 'B1', opt); mark(wsSet, 'C1', opt); mark(wsSet, 'D1', opt);
+  mark(wsSet, 'A8', opt); mark(wsSet, 'B8', opt);
 
   return wb;
 }
@@ -1357,33 +1398,61 @@ function split384Text(text, fileName) {
   });
 }
 
+document.addEventListener('DOMContentLoaded', () => render384Pattern());
 function on384Toggle() {
   render384Pattern();
   if (lastPlateFiles.length) loadCSVFiles(lastPlateFiles, document.getElementById('plate384Chk').checked);
 }
 
-// Colour-coded map of the 384 → 96 assignment, shown while 384-well mode is on.
+// Layout guide under the plate files: a 96 / 384 switch (it is also the 384-well mode switch).
+function set384Mode(on) {
+  const chk = document.getElementById('plate384Chk');
+  if (chk.checked === on) return;
+  chk.checked = on;
+  on384Toggle();
+}
 function render384Pattern() {
   const box = document.getElementById('pattern384');
-  if (!document.getElementById('plate384Chk').checked) { box.style.display = 'none'; box.innerHTML = ''; return; }
-  const cs = 22, x0 = 22, y0 = 20;
-  let svg = `<svg viewBox="0 0 ${x0 + 24 * cs + 4} ${y0 + 16 * cs + 4}" style="width:100%;max-width:560px;display:block" role="img" aria-label="384-well plate colour-coded by subplate">`;
-  for (let c = 0; c < 24; c++) svg += `<text x="${x0 + c * cs + cs / 2}" y="13" text-anchor="middle" font-size="9" fill="#8e8e93">${c + 1}</text>`;
-  for (let r = 0; r < 16; r++) {
-    svg += `<text x="${x0 - 6}" y="${y0 + r * cs + cs / 2 + 3}" text-anchor="end" font-size="9" fill="#8e8e93">${'ABCDEFGHIJKLMNOP'[r]}</text>`;
-    for (let c = 0; c < 24; c++) {
-      const s = subplateOf384(r, c);
-      const mark = (c < 2 && (r === 0 || r === 8));
-      svg += `<circle cx="${x0 + c * cs + cs / 2}" cy="${y0 + r * cs + cs / 2}" r="${cs / 2 - 2}" fill="${SUB_COLORS[s]}" fill-opacity="${mark ? 1 : .55}"${mark ? ' stroke="#1d1d1f" stroke-width="1.5"' : ''}/>`;
-      if (mark) svg += `<text x="${x0 + c * cs + cs / 2}" y="${y0 + r * cs + cs / 2 + 3}" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">${SUBPLATES[s]}</text>`;
+  const on = document.getElementById('plate384Chk').checked;
+  const tab = (v, label) => `<button type="button" class="btn btn-sm ${on === v ? 'btn-black' : 'btn-secondary'}" onclick="set384Mode(${v})">${label}</button>`;
+  const head = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap"><b style="font-size:13px">Plate layout</b>${tab(false, '96-well')}${tab(true, '384-well')}</div>`;
+  const dot = (cx, cy, rr, fill, op, extra = '') => `<circle cx="${cx}" cy="${cy}" r="${rr}" fill="${fill}" fill-opacity="${op}"${extra}/>`;
+  let body;
+  if (!on) {
+    const cs = 30, x0 = 30, y0 = 44, W = x0 + 12 * cs + 70;
+    let svg = `<svg viewBox="0 0 ${W} ${y0 + 8 * cs + 6}" style="width:100%;max-width:560px;display:block" role="img" aria-label="96-well plate: blank, samples and standard columns with dilution series down the rows">`;
+    const cols = [['blank', '#aeaeb2', 'blank'], ...Array.from({length: 10}, (_, i) => [String(i + 1), '#007aff', `sample ${i + 1}`]), ['std', '#ff9500', 'standard']];
+    cols.forEach((c, i) => svg += `<text x="${x0 + i * cs + cs / 2}" y="${y0 - 8}" text-anchor="middle" font-size="9" fill="#6e6e73" transform="rotate(-40 ${x0 + i * cs + cs / 2} ${y0 - 8})">${c[2]}</text>`);
+    for (let rI = 0; rI < 8; rI++) {
+      svg += `<text x="${x0 - 7}" y="${y0 + rI * cs + cs / 2 + 3}" text-anchor="end" font-size="9" fill="#8e8e93">${'ABCDEFGH'[rI]}</text>`;
+      cols.forEach((c, i) => svg += dot(x0 + i * cs + cs / 2, y0 + rI * cs + cs / 2, cs / 2 - 3, c[1], c[0] === 'blank' ? .5 : 1 - rI * 0.095));
     }
+    const ax = x0 + 12 * cs + 14;
+    svg += `<line x1="${ax}" y1="${y0 + 6}" x2="${ax}" y2="${y0 + 8 * cs - 6}" stroke="#6e6e73" stroke-width="1.5"/><polygon points="${ax - 4},${y0 + 8 * cs - 10} ${ax + 4},${y0 + 8 * cs - 10} ${ax},${y0 + 8 * cs - 2}" fill="#6e6e73"/>`;
+    svg += `<text x="${ax + 8}" y="${y0 + 4 * cs}" font-size="9" fill="#6e6e73" transform="rotate(90 ${ax + 8} ${y0 + 4 * cs})" text-anchor="middle">more diluted</text></svg>`;
+    const sw = (c, t) => `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:14px;white-space:nowrap"><span style="width:10px;height:10px;border-radius:50%;background:${c}"></span>${t}</span>`;
+    body = svg + `<div style="font-size:12px;color:#6e6e73;margin-top:6px;line-height:1.7">${sw('#aeaeb2', '<b>blank</b> (no sample)')}${sw('#007aff', '<b>samples</b>')}${sw('#ff9500', '<b>standard</b>')}</div>
+      <div style="font-size:12px;color:#6e6e73">Each column is one dilution series: row A is the first (most concentrated) step, row H the most diluted. The fading colour shows the dilution. This is the usual layout; the metadata <i>Names</i> sheet says which column holds what, so name the standard column <b>standard</b> and empty wells <b>blank</b>.</div>`;
+  } else {
+    const cs = 22, x0 = 22, y0 = 20;
+    let svg = `<svg viewBox="0 0 ${x0 + 24 * cs + 4} ${y0 + 16 * cs + 4}" style="width:100%;max-width:560px;display:block" role="img" aria-label="384-well plate colour-coded by subplate">`;
+    for (let c = 0; c < 24; c++) svg += `<text x="${x0 + c * cs + cs / 2}" y="13" text-anchor="middle" font-size="9" fill="#8e8e93">${c + 1}</text>`;
+    for (let rI = 0; rI < 16; rI++) {
+      svg += `<text x="${x0 - 6}" y="${y0 + rI * cs + cs / 2 + 3}" text-anchor="end" font-size="9" fill="#8e8e93">${'ABCDEFGHIJKLMNOP'[rI]}</text>`;
+      for (let c = 0; c < 24; c++) {
+        const sp = subplateOf384(rI, c);
+        const mark = (c < 2 && (rI === 0 || rI === 8));
+        svg += dot(x0 + c * cs + cs / 2, y0 + rI * cs + cs / 2, cs / 2 - 2, SUB_COLORS[sp], mark ? 1 : .55, mark ? ' stroke="#1d1d1f" stroke-width="1.5"' : '');
+        if (mark) svg += `<text x="${x0 + c * cs + cs / 2}" y="${y0 + rI * cs + cs / 2 + 3}" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">${SUBPLATES[sp]}</text>`;
+      }
+    }
+    svg += `<line x1="${x0}" x2="${x0 + 24 * cs}" y1="${y0 + 8 * cs}" y2="${y0 + 8 * cs}" stroke="#1d1d1f" stroke-opacity=".25" stroke-dasharray="3 3"/></svg>`;
+    const rule = [['A', 'rows A–H', 'odd columns'], ['B', 'rows A–H', 'even columns'], ['C', 'rows I–P', 'odd columns'], ['D', 'rows I–P', 'even columns']];
+    const legend = rule.map((x, sp) => `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:12px;white-space:nowrap"><span style="width:10px;height:10px;border-radius:50%;background:${SUB_COLORS[sp]}"></span><b>Subplate ${x[0]}</b> ${x[1]}, ${x[2]}</span>`).join('');
+    body = svg + `<div style="font-size:12px;color:#6e6e73;margin-top:6px;line-height:1.7">${legend}</div>
+      <div style="font-size:12px;color:#6e6e73">Each file is a 384-well plate that holds four interleaved 96-well subplates (pipetted every other well). A1 → Subplate A · A2 → Subplate B · I1 → Subplate C · I2 → Subplate D. Each subplate becomes its own plate, in the order A, B, C, D per file, and follows the 96-well layout (blank · samples · standard, row A to H = dilution series). The metadata needs four Names rows per file.</div>`;
   }
-  svg += `<line x1="${x0}" x2="${x0 + 24 * cs}" y1="${y0 + 8 * cs}" y2="${y0 + 8 * cs}" stroke="#1d1d1f" stroke-opacity=".25" stroke-dasharray="3 3"/></svg>`;
-  const rule = [['A', 'rows A–H', 'odd columns'], ['B', 'rows A–H', 'even columns'], ['C', 'rows I–P', 'odd columns'], ['D', 'rows I–P', 'even columns']];
-  const legend = rule.map((x, s) => `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:12px;white-space:nowrap"><span style="width:10px;height:10px;border-radius:50%;background:${SUB_COLORS[s]}"></span><b>Subplate ${x[0]}</b> ${x[1]}, ${x[2]}</span>`).join('');
-  box.innerHTML = svg + `<div style="font-size:12px;color:#6e6e73;margin-top:6px;line-height:1.7">${legend}</div>
-    <div style="font-size:12px;color:#6e6e73">A1 → Subplate A · A2 → Subplate B · I1 → Subplate C · I2 → Subplate D. Subplate well (row, column) = plate well (row, 2·column − 1 or 2·column). Each subplate becomes its own plate, in the order A, B, C, D per file (metadata needs four Names rows per file).</div>`;
-  box.style.display = 'block';
+  box.innerHTML = head + body;
 }
 
 // Excel plate exports (Tecan i-control / Magellan): flatten every sheet to CSV text first.
@@ -1472,11 +1541,12 @@ function subtractBackground(grid, numPlates) {
 // "Settings" sheet: rows Bottom / Top / IC50 / Hill, columns Lower Bound / Initial Guess / Upper Bound.
 // Missing sheet, row or unusable numbers fall back to DEFAULT_FIT (per parameter).
 const FIT_PARAMS = ['bottom', 'top', 'ic50', 'hill'];
+const ADV_SHEET = 'Advanced (optional)';
 function parseFitSettings(wb) {
   const fit = JSON.parse(JSON.stringify(DEFAULT_FIT));
   const warnings = [];
-  const sheet = wb.Sheets['Settings'];
-  if (!sheet) return {fit, fitSource: 'defaults (no Settings sheet)', fitWarnings: warnings};
+  const sheet = wb.Sheets[ADV_SHEET] || wb.Sheets['Settings'];   // "Settings" is the pre-1.47 name
+  if (!sheet) return {fit, fitSource: 'defaults (no Advanced sheet)', fitWarnings: warnings};
   const rows = XLSX.utils.sheet_to_json(sheet, {header:1});
   let used = 0;
   FIT_PARAMS.forEach((name, i) => {
@@ -1489,11 +1559,11 @@ function parseFitSettings(wb) {
     fit.lower[i] = lo; fit.p0[i] = Math.min(Math.max(p0, lo), hi); fit.upper[i] = hi;
     used++;
   });
-  return {fit, fitSource: used ? 'Settings sheet' : 'defaults', fitWarnings: warnings,
+  return {fit, fitSource: used ? 'Advanced sheet' : 'defaults', fitWarnings: warnings,
           universalStd: parseUniversalStd(rows, warnings)};
 }
 
-// Optional "Universal Standard Curve" block on the Settings sheet: a header row, then Bottom/Top/IC50/Hill
+// Optional "Universal Standard Curve" block on the Advanced sheet: a header row, then Bottom/Top/IC50/Hill
 // with the value in column B. All four numbers → every plate interpolates against this one curve.
 function parseUniversalStd(rows, warnings) {
   const h = rows.findIndex(r => r && /^universal standard/i.test(String(r[0] == null ? '' : r[0]).trim()));
@@ -1531,11 +1601,16 @@ function parseMetadata(bytes) {
   const dataRows  = hasHeader ? allRows.slice(1) : allRows;
   const colorStartRow = hasHeader ? 1 : 0;  // 0-indexed sheet row where data begins
 
+  // "standard" and "blank…" are matched ignoring case and surrounding spaces (the fit code compares exact lower-case names).
+  const normName = v => {
+    const t = String(v).trim(), l = t.toLowerCase();
+    return l === 'standard' ? 'standard' : (l.startsWith('blank') ? 'blank' + t.slice(5) : String(v));
+  };
   const names = dataRows.map(row => {
     const arr = [];
     for (let c = 1; c <= 12; c++) {
       const v = row[c];
-      arr.push(v !== undefined && v !== null ? String(v) : '');
+      arr.push(v !== undefined && v !== null ? normName(v) : '');
     }
     return arr;
   });
@@ -2401,7 +2476,7 @@ function buildProtocolSheet(meta, plateFits, plateCharts, fit) {
   data[10]= [{v:'Dilution Series', t:'s', s:lblS},
              ...seriesSA.map(v=>({v:Math.round(v*100)/100, t:'n'}))];
   data[11]= [];
-  // Bounds used by the fits (source: Settings sheet of the metadata workbook, or the built-in defaults)
+  // Bounds used by the fits (source: Advanced sheet of the metadata workbook, or the built-in defaults)
   const std = stdFitConfig(fit);
   data[12]= [{v:'Fit Bounds Used (4PL)', t:'s', s:hdrS}, {v:`Source: ${meta.fitSource}`, t:'s'}];
   data[13]= ['Parameter','Lower Bound','Initial Guess','Upper Bound'].map(v=>({v,t:'s',s:boldS}));
@@ -2414,7 +2489,7 @@ function buildProtocolSheet(meta, plateFits, plateCharts, fit) {
 
   if (meta.universalStd) {
     const [bottom, top, ic50, hill] = meta.universalStd;
-    data.push([{v:'Universal Standard Curve (4PL), from the Settings sheet, used for all plates', t:'s', s:hdrS}]);
+    data.push([{v:'Universal Standard Curve (4PL), from the Advanced sheet, used for all plates', t:'s', s:hdrS}]);
     data.push(['','Bottom','Top','IC50 (ng/mL)','Hill'].map(v=>({v,t:'s',s:boldS})));
     data.push([{v:'All plates', t:'s', s:lblS}, {v:r4(bottom), t:'n'}, {v:r4(top), t:'n'}, {v:r4(ic50), t:'n'}, {v:r4(hill), t:'n'}]);
   } else {
@@ -3787,6 +3862,7 @@ async function runProcessing(saved) {
     const meta = parseMetadata(metaBytes);
     meta.detectOutliers = document.getElementById('detectChk').checked;
     log(`  ${meta.names.length} plate name row(s) found.`);
+    for (const m of metaCheck(meta.names)) log(`  ${m}`, 'warn');
     log(`  Standard: ${meta.stdStart} ng/mL, 1:${meta.stdDil} dilution.`);
     log(`  Samples: 1:${meta.sampleStart} start, 1:${meta.sampleDil} dilution.`);
     meta.fitDefault = JSON.parse(JSON.stringify(meta.fit));
@@ -3800,7 +3876,7 @@ async function runProcessing(saved) {
     if (ri) ri.innerHTML = runInfoHtml;
     log(`  Curve-fit settings: ${meta.fitSource}.`);
     for (const w of meta.fitWarnings) log(`  Settings: ${w}`, 'warn');
-    if (meta.universalStd) log('  Universal standard curve from the Settings sheet is used for all plates.');
+    if (meta.universalStd) log('  Universal standard curve from the Advanced sheet is used for all plates.');
 
     // Names must be on the grid before series are keyed by sample name.
     for (let p = 0; p < numPlates; p++) {
@@ -4025,7 +4101,7 @@ const TOUR_STEPS = [
   {view: 'review', target: '#reviewImpact', pos: 'left', title: '3 · Outlier sensitivity',
    body: '<p>A candidate is suggested when excluding it would shift the ED50 by at least this percentage. Slide towards 0 % to see more candidates, higher to keep only the influential ones. No refit is needed.</p>'},
   {view: 'review', target: '#reviewAdv', pos: 'left', title: '3 · Advanced fit settings',
-   body: '<p>Lower, initial and upper bounds of the 4PL parameters. Applying them refits every plate and clears the accepted plates. The defaults, or the <i>Settings</i> sheet in the metadata, are usually enough.</p>'},
+   body: '<p>Lower, initial and upper bounds of the 4PL parameters. Applying them refits every plate and clears the accepted plates. The defaults, or the <i>Advanced (optional)</i> sheet in the metadata, are usually enough.</p>'},
   {view: 'review', target: '#reviewActions', pos: 'left', title: '3 · Accept plates',
    body: '<p>When a plate looks right, accept it and move on. <kbd>A</kbd> accepts, <kbd>←</kbd> <kbd>→</kbd> step through plates and <kbd>↑</kbd> <kbd>↓</kbd> walk the curves one at a time.</p><p>Download unlocks once every plate is accepted. Next accepts all of them for the tour.</p>',
    next: 'Accept all plates'},

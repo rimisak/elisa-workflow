@@ -452,7 +452,7 @@ body.rv-lock #reviewAI{margin-bottom:10px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.49.0 &nbsp;·&nbsp; 19/11/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.49.1 &nbsp;·&nbsp; 19/11/2026</div>
 
 <script>
 'use strict';
@@ -4117,7 +4117,9 @@ How the data behaves:
 - A reading is an outlier when it breaks the monotone dose-response shape or sits far from the fitted curve for no biological reason (pipetting error, bubble, spill).
 - Edge effects: readings in rows G/H (dose_index 6, 7) that are higher than the lower dilutions suggest, and rows A/B (dose_index 0, 1) that are lower than later readings, are typical plate-edge artefacts. Exclude such points when they distort the fit.
 - Readings near saturation (OD above about 1.5) are not outliers by themselves.
-- Never exclude a point just because it is the highest or lowest; a clean sigmoid with scatter at the plateaus needs no exclusion.
+- Isolated spike: one reading far above the rest of its series, typically dose_index 0 high while ALL later dilutions sit flat at baseline with no intermediate values, is a clear outlier (contamination, carry-over, pipetting error). A real dose-response passes through intermediate ODs. Exclude it even if the software did not suggest it; the sample then simply shows no signal.
+- Other than such an isolated spike, never exclude a point just because it is the highest or lowest; a clean sigmoid with scatter at the plateaus needs no exclusion.
+- Check EVERY series, including the standard (is_standard true). The standard should rise smoothly with concentration; exclude readings that break that shape, as long as enough points remain for a curve.
 - Exclude as few points as possible, but do not leave clear outliers in. The software's suggestions are only candidates; confirm the clear ones and reject doubtful ones.
 
 Decision: use "accept" whenever the plate is fine once your exclusions are applied. The goal is LESS manual work for the scientist, so decide yourself whenever you reasonably can. Use "needs_human" only for things that excluding points cannot fix: no usable standard curve (flat, missing, failed fit), a failed fit on many samples, or data so ambiguous that you cannot tell which readings are wrong. Give a one-sentence reason in notes.
@@ -4268,6 +4270,7 @@ function aiCardHtml() {
       <label>API key <input type="password" autocomplete="off" spellcheck="false" data-aifield="key" value="${esc(s.key)}" placeholder="sk-ant-…"></label>
       <label class="ai-check"><input type="checkbox" data-aifield="remember" ${s.remember ? 'checked' : ''}> Remember the key on this device</label>
       <div class="adv-note">Without this the key stays in memory until you reload. A remembered key can be read by anyone who uses this browser profile. It is never saved in the session or the downloaded workbook.</div>
+      <div class="adv-note">No key yet? <a href="https://platform.claude.com/settings/keys" target="_blank" rel="noopener">Create one in the Claude Console</a> (<a href="https://platform.claude.com/docs/en/get-started" target="_blank" rel="noopener">how it works</a>). API usage is billed separately from a claude.ai subscription.</div>
       <label>Model <select data-aifield="model">${AI_MODELS.map(x => `<option value="${x.id}" ${x.id === s.model ? 'selected' : ''}>${esc(x.label)}</option>`).join('')}</select></label>
       <label class="ai-check ai-consent"><input type="checkbox" data-aifield="consent" ${s.consent ? 'checked' : ''}> I agree to send this plate's OD values, fit results and sample names to the Anthropic API.</label>
       <div class="adv-btns">
@@ -4275,7 +4278,7 @@ function aiCardHtml() {
         <button class="btn btn-black btn-sm" data-ai="ask" ${s.busy || p == null || !s.consent || !s.key.trim() ? 'disabled' : ''}>Ask Claude about this plate</button>
         <button class="btn btn-secondary btn-sm" data-ai="forget" ${s.key ? '' : 'disabled'}>Forget key</button>
       </div>
-      <div class="adv-note">Estimated cost per plate with ${esc(m.label)}: about $${est.usd < 0.01 ? est.usd.toFixed(4) : est.usd.toFixed(3)} (${est.inTok.toLocaleString()} input and up to ${est.outTok.toLocaleString()} output tokens). Based on current prices, not updated automatically.</div>
+      <div class="adv-note">Estimated cost per plate with ${esc(m.label)}: about $${est.usd < 0.01 ? est.usd.toFixed(4) : est.usd.toFixed(3)} (${est.inTok.toLocaleString()} input and up to ${est.outTok.toLocaleString()} output tokens). Based on prices as of November 2026, not updated automatically.</div>
       ${msg}${prop}
     </div>`;
 }

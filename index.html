@@ -128,7 +128,8 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .info-i:hover .info-pop,.info-i:focus .info-pop{display:block}
 .chart-key{font-size:11px;color:#6e6e73;margin-top:6px;line-height:1.6}
 .chart-key svg{vertical-align:middle;margin-right:4px}
-.curve-stepper{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;padding:10px 14px;background:#eef5ff;border:1px solid #bcd7ff;border-radius:12px;font-size:13px;color:#1d1d1f}
+.curve-stepper{position:relative;display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:18px 0 12px;padding-right:38px !important;padding:10px 14px;background:#eef5ff;border:1px solid #bcd7ff;border-radius:12px;font-size:13px;color:#1d1d1f}
+.curve-stepper .cs-x{position:absolute;top:6px;right:10px;background:none;border:none;font-size:20px;line-height:1;color:#0a58ca;cursor:pointer}
 .curve-stepper .cs-title{font-weight:700}
 .curve-stepper .cs-status{color:#0a58ca;font-weight:600}
 .curve-stepper .cs-help{flex-basis:100%;font-size:12px;color:#48484a}
@@ -441,7 +442,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.47.3 &nbsp;·&nbsp; 19/11/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.47.4 &nbsp;·&nbsp; 19/11/2026</div>
 
 <script>
 'use strict';
@@ -1450,21 +1451,22 @@ function render384Pattern() {
       <div style="font-size:12px;color:#6e6e73">Each column is one dilution series: row A is the first (most concentrated) step, row H the most diluted. The fading colour shows the dilution. This is the usual layout; the metadata <i>Names</i> sheet says which column holds what, so name the standard column <b>standard</b> and empty wells <b>blank</b>.</div>`;
   } else {
     const cs = 22, x0 = 22, y0 = 20;
-    let svg = `<svg viewBox="0 0 ${x0 + 24 * cs + 4} ${y0 + 16 * cs + 4}" style="width:100%;max-width:560px;display:block" role="img" aria-label="384-well plate: each well coloured by its role in its subplate, outlined in the subplate colour">`;
+    let svg = `<svg viewBox="0 0 ${x0 + 24 * cs + 4} ${y0 + 16 * cs + 4}" style="width:100%;max-width:560px;display:block" role="img" aria-label="384-well plate: each well coloured by its subplate, with the dilution gradient; blank columns pale, standard columns outlined">`;
     for (let c = 0; c < 24; c++) svg += `<text x="${x0 + c * cs + cs / 2}" y="13" text-anchor="middle" font-size="9" fill="#8e8e93">${c + 1}</text>`;
     for (let rI = 0; rI < 16; rI++) {
       svg += `<text x="${x0 - 6}" y="${y0 + rI * cs + cs / 2 + 3}" text-anchor="end" font-size="9" fill="#8e8e93">${'ABCDEFGHIJKLMNOP'[rI]}</text>`;
       for (let c = 0; c < 24; c++) {
-        const sp = subplateOf384(rI, c), [col, op0] = role(c >> 1, rI % 8), op = (c >> 1) === 0 ? .5 : 1;   // flat colours here; the gradient is shown on the 96-well plates
-        svg += dot(x0 + c * cs + cs / 2, y0 + rI * cs + cs / 2, cs / 2 - 2, col, op, ` stroke="${SUB_COLORS[sp]}" stroke-width="1.6"`);
+        const sp = subplateOf384(rI, c), j = c >> 1, i = rI % 8;
+        // Subplate colour with the dilution gradient; blank columns pale, standard columns outlined dark.
+        svg += dot(x0 + c * cs + cs / 2, y0 + rI * cs + cs / 2, cs / 2 - 2, SUB_COLORS[sp], j === 0 ? .25 : 1 - i * 0.095, j === 11 ? ' stroke="#1d1d1f" stroke-width="1.4"' : '');
       }
     }
     svg += `<line x1="${x0}" x2="${x0 + 24 * cs}" y1="${y0 + 8 * cs}" y2="${y0 + 8 * cs}" stroke="#1d1d1f" stroke-opacity=".25" stroke-dasharray="3 3"/></svg>`;
     const rule = [['A', 'rows A–H, odd columns'], ['B', 'rows A–H, even columns'], ['C', 'rows I–P, odd columns'], ['D', 'rows I–P, even columns']];
-    const ringLegend = rule.map((x, sp) => `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:12px;white-space:nowrap"><span style="width:10px;height:10px;border-radius:50%;border:2px solid ${SUB_COLORS[sp]}"></span><b>Subplate ${x[0]}</b> ${x[1]}</span>`).join('');
+    const ringLegend = rule.map((x, sp) => `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:12px;white-space:nowrap"><span style="width:10px;height:10px;border-radius:50%;background:${SUB_COLORS[sp]}"></span><b>Subplate ${x[0]}</b> ${x[1]}</span>`).join('');
     const minis = SUBPLATES.map((L, sp) => `<div style="flex:1 1 130px;min-width:120px;border:2px solid ${SUB_COLORS[sp]};border-radius:10px;padding:6px 8px"><div style="font-size:11px;font-weight:700;color:${SUB_COLORS[sp]};margin-bottom:4px">Plate ${L}</div>${plate96(10, false, SUB_COLORS[sp])}</div>`).join('');
     body = svg + `<div style="font-size:12px;color:#6e6e73;margin-top:6px;line-height:1.7">${ringLegend}</div>
-      <div style="font-size:12px;color:#6e6e73;line-height:1.7">${roleLegend}</div>
+      <div style="font-size:12px;color:#6e6e73;line-height:1.7">Fading colour = dilution (row A of a subplate strongest, row H most diluted) · pale column = <b>blank</b> · dark-outlined column = <b>standard</b> · the rest are <b>samples</b></div>
       <div style="font-size:12px;color:#6e6e73;margin:10px 0 6px"><b>Every 384-well file is split into four 96-well plates</b> (A, B, C, D, in that order per file), each with the same layout as a 96-well plate:</div>
       <div style="display:flex;gap:10px;flex-wrap:wrap">${minis}</div>
       <div style="font-size:12px;color:#6e6e73;margin-top:8px">A1 → Subplate A · A2 → Subplate B · I1 → Subplate C · I2 → Subplate D. The metadata needs four Names rows per file.</div>`;
@@ -3051,9 +3053,9 @@ function plateBlockHtml(pc) {
       <div class="chart-card"><div class="chart-title">Sample dose–response &amp; ED50<span class="info-i" tabindex="0">i<span class="info-pop"><b>ED50</b> is the dilution factor at which a sample's fitted curve reaches half-way between its top and bottom OD. A lower ED50 means a stronger sample. The dashed vertical line marks it for each sample.</span></span>${nHid && nHid < pc.samples.length ? `<span class="chart-note">Showing ${pc.samples.length - nHid} of ${pc.samples.length} curves</span>` : ''}</div>${renderSampleChart(pc)}<div class="chart-key"><svg width="22" height="8"><line x1="11" y1="0" x2="11" y2="8" stroke="#8e8e93" stroke-width="1.5" stroke-dasharray="2 2"/></svg>Dashed vertical line = ED50 of that sample's fitted curve</div></div>
       <div class="chart-card"><div class="chart-title">Standard curve &amp; interpolation${pc.std.from != null ? ` (plate ${pc.std.from + 1}'s standard)` : ''}<span class="info-i" tabindex="0">i<span class="info-pop"><b>How the concentration is chosen.</b> For each sample the least-diluted reading with OD ≤ 1.5 is used (higher ODs are too close to saturation). That OD is read off the standard curve and multiplied by the sample's dilution factor at that reading. If every reading is above 1.5, OD 1.49 at the last dilution is assumed. Reported values never fall below 0.01.</span></span></div>${renderStandardChart(pc)}<div class="chart-key"><svg width="22" height="12"><polyline points="1,2 11,2 11,12" fill="none" stroke="#8e8e93" stroke-width="1.5" stroke-dasharray="2 2"/></svg>Dashed line = the reading chosen for that sample (horizontal), read down to its concentration on the standard curve (vertical)</div></div>
     </div>
-    ${pc.samples.length > 1 ? (() => {
+    ${pc.samples.length > 1 && (!stepperDismissed() || tour) ? (() => {
       const k = pc.samples.findIndex(s => !isHidden(pc, s)), one = nHid === pc.samples.length - 1 && k >= 0;
-      return `<div class="curve-stepper"><span class="cs-title">Look at one curve at a time</span>
+      return `<div class="curve-stepper"><button class="cs-x" data-act="dismissStepper" aria-label="Hide this box" title="Hide this box (the ↑ ↓ keys keep working)">×</button><span class="cs-title">Look at one curve at a time</span>
         <button class="btn btn-black btn-sm" data-act="curvePrev">▲ Previous curve <kbd class="keycap">↑</kbd></button>
         <button class="btn btn-black btn-sm" data-act="curveNext">▼ Next curve <kbd class="keycap">↓</kbd></button>
         <span class="cs-status">${one ? `Showing curve ${k + 1} of ${pc.samples.length}: ${escapeXml(pc.samples[k].name)}` : `Showing all ${pc.samples.length - nHid} curves`}</span>
@@ -3138,7 +3140,7 @@ function acceptBarHtml() {
     + '</div>'
     + (r.accepted.size < r.numPlates
         ? `<button class="btn process-btn btn-black" data-act="acceptAll" ${r.fitting ? 'disabled' : ''}>Accept all remaining plates (${r.numPlates - r.accepted.size})</button>`
-        : `<button class="btn process-btn btn-accepted" data-act="toDownload">Proceed to download ↓</button>`);
+        : `<button class="btn process-btn btn-accepted" data-act="toDownload">Proceed to download</button>`);
 }
 
 // Shows the "Scroll for more" pill while the current plate has content below the visible part.
@@ -3596,6 +3598,10 @@ document.addEventListener('click', e => {
   switch (act.dataset.act) {
     case 'excludeSuggested': setAllExclusions(ex => new Set([...ex, ...review.suggested])); break;
     case 'clearExcl': setAllExclusions(() => new Set()); break;
+    case 'dismissStepper':
+      try { localStorage.setItem('elisaStepperDismissed', '1'); } catch (e) {}
+      document.querySelectorAll('.curve-stepper').forEach(el => el.remove());
+      break;
     case 'toDownload':
       setSection('secReview', false); setSection('secDownload', true);
       requestAnimationFrame(() => document.getElementById('secDownload').scrollIntoView({block: 'start', behavior: 'smooth'}));
@@ -4091,6 +4097,7 @@ async function tourRun() {
   if (!review) throw new Error('Processing did not finish');
 }
 // Current plate: the first one, or (with `flagged`) the first plate that still has something to look at.
+function stepperDismissed() { try { return localStorage.getItem('elisaStepperDismissed') === '1'; } catch (e) { return false; } }
 function tourGoPlate(flagged) {
   const r = review; if (!r) return;
   const ok = q => r.analysis.plateCharts[q];
@@ -4121,7 +4128,7 @@ const TOUR_STEPS = [
    body: '<p>Plates are fitted in parallel and appear here as they finish. Each tile is a plate; its colour shows its state and accepted plates get a ✓. Click a tile to jump to it.</p><p><b>Needs review</b> narrows the list to plates with something to check.</p>'},
   {view: 'review', enter: () => tourGoPlate(false), target: tourPlate('.plate-charts-row'), title: '3 · Curves and ED50',
    body: '<p><b>Left:</b> each sample\'s dose–response with its fitted curve and ED50.</p><p><b>Right:</b> the standard curve, with the sample readings interpolated onto it.</p><p>Click a legend entry to hide a curve, shift-click to show only that one.</p>'},
-  {view: 'review', target: tourPlate('.curve-stepper'), title: '3 · One curve at a time',
+  {view: 'review', enter: () => { if (stepperDismissed()) renderReview(); }, target: tourPlate('.curve-stepper'), title: '3 · One curve at a time',
    body: '<p>Step through this plate\'s sample curves one by one with the <b>▲ ▼</b> buttons or the <kbd>↑</kbd> <kbd>↓</kbd> keys. Past the last curve all curves are shown again.</p><p>The <b>i</b> next to a chart title explains ED50 and how the concentration is chosen.</p>'},
   {view: 'review', target: tourPlate('.res-wrap'), title: '3 · Results table',
    body: '<p>The fitted values and interpolated concentrations for every sample on this plate. They update immediately whenever you change anything above.</p>'},

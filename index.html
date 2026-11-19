@@ -226,6 +226,16 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
 .adv-fit .adv-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .adv-fit .adv-note{font-size:11px;color:#636366;margin-top:6px}
 .adv-fit .adv-err{font-size:12px;color:#c0392b;margin-top:6px}
+body.rv-lock #reviewAI{margin-bottom:10px}
+.adv-fit .ai-body label{display:block;font-size:12px;color:#3a3a3c;margin-top:8px}
+.adv-fit .ai-body label input[type=password],.adv-fit .ai-body label select{display:block;width:100%;box-sizing:border-box;margin-top:3px;font-size:12px;padding:4px 6px;border:1px solid #c7c7cc;border-radius:6px;background:#fff}
+.adv-fit .ai-body .ai-check{display:flex;gap:6px;align-items:flex-start}
+.adv-fit .ai-body .ai-check input{width:auto;margin-top:2px}
+.adv-fit .ai-consent{background:#fff7e6;border:1px solid #ffd99a;border-radius:8px;padding:6px 8px}
+.ai-msg{font-size:12px;margin-top:8px;padding:6px 8px;border-radius:8px}
+.ai-msg.info{background:#eef5ff;color:#0a58ca}.ai-msg.ok{background:#e8f7ec;color:#1b7a3a}.ai-msg.err{background:#fdecea;color:#c0392b}
+.ai-prop{font-size:12px;margin-top:8px;padding:8px 10px;border:1px solid #d1d1d6;border-radius:10px;background:#fafafa}
+.ai-prop ul{margin:6px 0 0 16px;padding:0}
 .std-bar select{font-size:13px;padding:3px 6px;border-radius:6px;border:1px solid #c7c7cc}
 .flag-banner.ok{border-color:#34c759;background:#eefaf1}
 .flag-head{font-size:15px;font-weight:600;color:#a35c00;line-height:1.35}
@@ -442,7 +452,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.48.0 &nbsp;·&nbsp; 19/11/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.49.0 &nbsp;·&nbsp; 19/11/2026</div>
 
 <script>
 'use strict';
@@ -3271,6 +3281,7 @@ function renderReview(animate) {
     + `<div id="reviewHeader" class="card">${reviewHeaderHtml()}</div>`
     + `<div id="reviewImpact" class="card imp-card">${impactCardHtml()}</div>`
     + `<details id="reviewAdv" class="card adv-fit"${review.advOpen ? ' open' : ''}>${advFitHtml()}</details>`
+    + `<details id="reviewAI" class="card adv-fit"${review.aiOpen ? ' open' : ''}>${aiCardHtml()}</details>`
     + `</div><div id="reviewActions">${acceptBarHtml()}</div></div>`
     + `<div id="reviewList">${reviewListHtml()}</div>`
     + `<div id="scrollHint">↓ Scroll for more</div>`;
@@ -4079,6 +4090,225 @@ async function runProcessing(saved) {
   btn.textContent = 'Process and start review';
   updateProcessBtn();
 }
+// ─── CLAUDE AUTO-REVIEW (Phase 1: one plate, proposal only) ──────────────────
+// The user's own Anthropic API key (memory, or localStorage if "remember" is ticked) is used from the browser.
+// Only numbers go out (plate number, sample names, ODs, fit values, flags), and only after the opt-in box is ticked.
+// The key is never part of the saved session or the downloaded workbook.
+let API_URL = 'https://api.anthropic.com/v1/messages';   // overridable in the console (tests use a local stub)
+// $ per million tokens at the time of writing (input, output); the UI says these are not updated automatically.
+const AI_MODELS = [
+  {id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5 (recommended)', inp: 2, out: 10, fallback: true},
+  {id: 'claude-opus-5-5', label: 'Claude Opus 5.5', inp: 4, out: 20, fallback: true},
+  {id: 'claude-fable-5-2', label: 'Claude Fable 5.2', inp: 8, out: 40, fallback: true},
+  {id: 'claude-haiku-5-5', label: 'Claude Haiku 5.5 (cheapest)', inp: 0.1, out: 0.5, fallback: false}
+];
+const AI_KEY_STORE = 'elisaApiKey';
+const aiState = (() => {
+  let k = '';
+  try { k = localStorage.getItem(AI_KEY_STORE) || ''; } catch (e) {}
+  return {key: k, remember: !!k, model: AI_MODELS[0].id, consent: false, busy: false, msg: null, proposal: null};
+})();
+const AI_SYSTEM = `You review one 96-well ELISA plate for a lab analysis tool. Your job is to decide which individual readings are technical outliers and should be excluded from curve fitting, so the scientist has less manual work.
+
+Data you get (JSON): per series (a sample dilution series, or the standard) the OD readings by dose_index 0-7 (row A to H of the plate; null = no reading), the 4PL fit (bottom, top, ed50, hill, r2), the points the software already suggests as outliers (with the relative ED50 shift their removal causes), and the software's flags for the plate.
+
+How the data behaves:
+- Samples fall with increasing dilution (OD decreases from dose_index 0 to 7). The standard rises (it is diluted the other way round).
+- A reading is an outlier when it breaks the monotone dose-response shape or sits far from the fitted curve for no biological reason (pipetting error, bubble, spill).
+- Edge effects: readings in rows G/H (dose_index 6, 7) that are higher than the lower dilutions suggest, and rows A/B (dose_index 0, 1) that are lower than later readings, are typical plate-edge artefacts. Exclude such points when they distort the fit.
+- Readings near saturation (OD above about 1.5) are not outliers by themselves.
+- Never exclude a point just because it is the highest or lowest; a clean sigmoid with scatter at the plateaus needs no exclusion.
+- Exclude as few points as possible, but do not leave clear outliers in. The software's suggestions are only candidates; confirm the clear ones and reject doubtful ones.
+
+Decision: use "accept" whenever the plate is fine once your exclusions are applied. The goal is LESS manual work for the scientist, so decide yourself whenever you reasonably can. Use "needs_human" only for things that excluding points cannot fix: no usable standard curve (flat, missing, failed fit), a failed fit on many samples, or data so ambiguous that you cannot tell which readings are wrong. Give a one-sentence reason in notes.
+
+Answer only with the requested JSON. For each exclusion give the well-column (column, 1-12, as in the data), the dose_index and a short reason.`;
+const AI_SCHEMA = {
+  type: 'object',
+  properties: {
+    decision: {type: 'string', enum: ['accept', 'needs_human']},
+    exclude: {type: 'array', items: {type: 'object', properties: {column: {type: 'integer'}, dose_index: {type: 'integer'}, reason: {type: 'string'}}, required: ['column', 'dose_index', 'reason'], additionalProperties: false}},
+    notes: {type: 'string'}
+  },
+  required: ['decision', 'exclude', 'notes'], additionalProperties: false
+};
+function aiModel() { return AI_MODELS.find(m => m.id === aiState.model) || AI_MODELS[0]; }
+function aiCurrentPlate() {
+  const r = review;
+  if (!r || !r.analysis) return null;
+  const p = r.cur != null ? r.cur : visiblePlates()[0];
+  return p != null && r.analysis.plateCharts[p] ? p : null;
+}
+// Numbers only: no file names, no ID fields, no metadata text.
+function aiPlatePayload(p) {
+  const r = review, pc = r.analysis.plateCharts[p], fl = plateFlags(pc);
+  const rnd = (v, d = 4) => typeof v === 'number' && isFinite(v) ? Math.round(v * 10 ** d) / 10 ** d : null;
+  const mk = (name, s, isStd) => {
+    const od = Array(8).fill(null), already = [], sug = [];
+    let column = null;
+    for (const q of s.points) {
+      const [, c, i] = q.key.split('|').map(Number);
+      column = c; od[i] = rnd(q.y);
+      if (q.excluded) already.push(i);
+      else if (r.suggested.has(q.key)) sug.push({dose_index: i, ed50_shift: rnd(r.sugImpact.get(q.key), 3)});
+    }
+    const live = s.points.filter(q => !q.excluded);
+    const r2 = s.params ? r2Of(live, s.params) : null;
+    return {name, column, is_standard: isStd, od_by_dose_index: od, already_excluded: already,
+      fit: s.params ? {bottom: rnd(s.params[0]), top: rnd(s.params[1]), ed50: rnd(s.params[2], 2), hill: rnd(s.params[3], 3), r2: rnd(r2, 4)} : null,
+      software_suggested_outliers: sug};
+  };
+  return {
+    plate: p + 1,
+    sample_dilution_factors: r.meta.seriesSA, standard_concentrations: r.meta.seriesST,
+    series: [...pc.samples.map(s => mk(s.name, s, false)), mk('standard', pc.std, true)],
+    software_flags: fl.reasons
+  };
+}
+function aiEstimate(nPlates, payloadChars) {
+  const m = aiModel(), inTok = (AI_SYSTEM.length + (payloadChars || 6000)) / 4 * nPlates, outTok = 1500 * nPlates;
+  return {inTok: Math.round(inTok), outTok, usd: (inTok * m.inp + outTok * m.out) / 1e6};
+}
+async function aiCall(body, withFallback) {
+  const m = aiModel();
+  const headers = {'content-type': 'application/json', 'x-api-key': aiState.key.trim(), 'anthropic-version': '2023-06-01',
+                   'anthropic-dangerous-direct-browser-access': 'true'};
+  if (withFallback && m.fallback) { headers['anthropic-beta'] = 'server-side-fallback-2026-07-01'; body = {...body, fallbacks: 'default'}; }
+  let res;
+  try { res = await fetch(API_URL, {method: 'POST', headers, body: JSON.stringify(body)}); }
+  catch (e) { throw new Error('Could not reach the API (network, firewall or a browser extension blocked the request).'); }
+  let data = null;
+  try { data = await res.json(); } catch (e) {}
+  if (!res.ok) {
+    const msg = data && data.error && data.error.message ? data.error.message : `HTTP ${res.status}`;
+    if (res.status === 400 && withFallback && /fallback/i.test(msg)) return aiCall(body && (({fallbacks, ...rest}) => rest)(body), false);
+    if (res.status === 401) throw new Error('The API key was rejected (401). Check that it is complete and active.');
+    if (res.status === 403) throw new Error('This key is not allowed to use that model or the API (403). ' + msg);
+    if (res.status === 429) throw new Error('Rate limit reached (429). Wait a moment and try again.' + (res.headers.get('retry-after') ? ` Retry after ${res.headers.get('retry-after')} s.` : ''));
+    throw new Error(`API error ${res.status}: ${msg}`);
+  }
+  return data;
+}
+async function aiTest() {
+  if (!aiState.key.trim()) return aiSet('Enter an API key first.', 'err');
+  aiState.busy = true; aiSet('Testing the connection…', 'info');
+  try {
+    await aiCall({model: aiState.model, max_tokens: 64, messages: [{role: 'user', content: 'Reply with the single word OK.'}]}, false);
+    aiSet(`Connection works with ${aiModel().label}.`, 'ok');
+  } catch (e) { aiSet(e.message, 'err'); }
+  aiState.busy = false; aiRefresh();
+}
+async function aiAsk() {
+  const p = aiCurrentPlate();
+  if (p == null) return aiSet('No plate is shown yet.', 'err');
+  if (!aiState.key.trim()) return aiSet('Enter an API key first.', 'err');
+  if (!aiState.consent) return aiSet('Tick the box that allows sending this plate\'s data first.', 'err');
+  const payload = aiPlatePayload(p), text = JSON.stringify(payload);
+  aiState.busy = true; aiState.proposal = null; aiSet(`Asking Claude about plate ${p + 1}…`, 'info'); aiRefresh();
+  try {
+    const data = await aiCall({model: aiState.model, max_tokens: 16000, system: AI_SYSTEM,
+      messages: [{role: 'user', content: text}],
+      output_config: {effort: 'medium', format: {type: 'json_schema', schema: AI_SCHEMA}}}, true);
+    if (data.stop_reason === 'refusal') throw new Error('Claude declined this request (refusal). Review this plate by hand.');
+    const block = (data.content || []).find(b => b.type === 'text');
+    if (!block) throw new Error('The answer had no text part. Try again.');
+    let out;
+    try { out = JSON.parse(block.text); } catch (e) { throw new Error('The answer could not be read as JSON' + (data.stop_reason === 'max_tokens' ? ' (it was cut off at the token limit)' : '') + '. Try again.'); }
+    const pc = review.analysis.plateCharts[p], pts = new Map();
+    for (const q of [...pc.samples.flatMap(s => s.points), ...pc.std.points]) pts.set(q.key, q);
+    const excl = [], seen = new Set();
+    let skipped = 0;
+    for (const x of out.exclude || []) {
+      const key = exKey(p, x.column, x.dose_index), q = pts.get(key);
+      if (!q || q.excluded || seen.has(key)) { skipped++; continue; }
+      seen.add(key);
+      excl.push({key, label: 'ABCDEFGH'[x.dose_index] + x.column, reason: String(x.reason || ''), od: q.y});
+    }
+    aiState.proposal = {p, decision: out.decision, notes: String(out.notes || ''), excl, skipped, usage: data.usage || null, model: data.model || aiState.model};
+    aiSet(null);
+  } catch (e) { aiSet(e.message, 'err'); }
+  aiState.busy = false; aiRefresh();
+}
+function aiApply() {
+  const pr = aiState.proposal;
+  if (!pr || !review) return;
+  const keys = pr.excl.map(x => x.key).filter(k => !review.excl.has(k));
+  keys.forEach(k => review.excl.add(k));
+  review.accepted.delete(pr.p);
+  review.out = null; review.prepFailed = false; review.blobTok = (review.blobTok || 0) + 1;
+  aiState.proposal = null;
+  aiSet(`Applied ${keys.length} exclusion${keys.length === 1 ? '' : 's'} on plate ${pr.p + 1}. Check the curves, then accept the plate.`, 'ok');
+  if (keys.length) { reanalyze(); refreshReview(pr.p); }
+  aiRefresh();
+}
+function aiSet(text, kind) { aiState.msg = text ? {text, kind: kind || 'info'} : null; aiRefresh(); }
+// Enable/disable the buttons in place (a re-render between mouse-down and click would swallow the click).
+function aiSyncButtons() {
+  const el = document.getElementById('reviewAI'); if (!el) return;
+  const ask = el.querySelector('[data-ai="ask"]'), forget = el.querySelector('[data-ai="forget"]');
+  if (ask) ask.disabled = aiState.busy || aiCurrentPlate() == null || !aiState.consent || !aiState.key.trim();
+  if (forget) forget.disabled = !aiState.key;
+}
+function aiRefresh() { const el = document.getElementById('reviewAI'); if (el) el.innerHTML = aiCardHtml(); }
+function aiCardHtml() {
+  const s = aiState, esc = escapeXml, p = aiCurrentPlate();
+  const est = aiEstimate(1, 6000), m = aiModel();
+  const msg = s.msg ? `<div class="ai-msg ${s.msg.kind}">${esc(s.msg.text)}</div>` : '';
+  let prop = '';
+  if (s.proposal) {
+    const pr = s.proposal;
+    prop = `<div class="ai-prop"><b>Plate ${pr.p + 1}: Claude says ${pr.decision === 'accept' ? 'accept' : 'needs your look'}.</b> ${esc(pr.notes)}`
+      + (pr.excl.length ? `<ul>${pr.excl.map(x => `<li><b>${esc(x.label)}</b> (OD ${x.od.toFixed(3)}): ${esc(x.reason)}</li>`).join('')}</ul>` : '<div>No readings to exclude.</div>')
+      + (pr.skipped ? `<div class="adv-note">${pr.skipped} suggestion(s) were ignored (unknown or already excluded point).</div>` : '')
+      + `<div class="adv-btns">${pr.excl.length ? '<button class="btn btn-black btn-sm" data-ai="apply">Apply exclusions</button>' : ''}<button class="btn btn-secondary btn-sm" data-ai="dismiss">Dismiss</button></div>`
+      + `<div class="adv-note">Nothing is applied until you click Apply. You still accept the plate yourself.</div></div>`;
+  }
+  return `<summary>Auto-review with Claude (beta)</summary>
+    <div class="ai-body">
+      <label>API key <input type="password" autocomplete="off" spellcheck="false" data-aifield="key" value="${esc(s.key)}" placeholder="sk-ant-…"></label>
+      <label class="ai-check"><input type="checkbox" data-aifield="remember" ${s.remember ? 'checked' : ''}> Remember the key on this device</label>
+      <div class="adv-note">Without this the key stays in memory until you reload. A remembered key can be read by anyone who uses this browser profile. It is never saved in the session or the downloaded workbook.</div>
+      <label>Model <select data-aifield="model">${AI_MODELS.map(x => `<option value="${x.id}" ${x.id === s.model ? 'selected' : ''}>${esc(x.label)}</option>`).join('')}</select></label>
+      <label class="ai-check ai-consent"><input type="checkbox" data-aifield="consent" ${s.consent ? 'checked' : ''}> I agree to send this plate's OD values, fit results and sample names to the Anthropic API.</label>
+      <div class="adv-btns">
+        <button class="btn btn-secondary btn-sm" data-ai="test" ${s.busy ? 'disabled' : ''}>Test connection</button>
+        <button class="btn btn-black btn-sm" data-ai="ask" ${s.busy || p == null || !s.consent || !s.key.trim() ? 'disabled' : ''}>Ask Claude about this plate</button>
+        <button class="btn btn-secondary btn-sm" data-ai="forget" ${s.key ? '' : 'disabled'}>Forget key</button>
+      </div>
+      <div class="adv-note">Estimated cost per plate with ${esc(m.label)}: about $${est.usd < 0.01 ? est.usd.toFixed(4) : est.usd.toFixed(3)} (${est.inTok.toLocaleString()} input and up to ${est.outTok.toLocaleString()} output tokens). Based on current prices, not updated automatically.</div>
+      ${msg}${prop}
+    </div>`;
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('[data-ai]');
+  if (!b || b.disabled) return;
+  switch (b.dataset.ai) {
+    case 'test': aiTest(); break;
+    case 'ask': aiAsk(); break;
+    case 'apply': aiApply(); break;
+    case 'dismiss': aiState.proposal = null; aiRefresh(); break;
+    case 'forget':
+      aiState.key = ''; aiState.remember = false; aiState.consent = false; aiState.proposal = null; aiState.msg = null;
+      try { localStorage.removeItem(AI_KEY_STORE); } catch (err) {}
+      aiRefresh(); break;
+  }
+});
+document.addEventListener('change', e => {
+  const f = e.target.closest && e.target.closest('[data-aifield]');
+  if (!f) return;
+  const k = f.dataset.aifield;
+  if (k === 'key') aiState.key = f.value;
+  else if (k === 'remember') aiState.remember = f.checked;
+  else if (k === 'consent') aiState.consent = f.checked;
+  else if (k === 'model') aiState.model = f.value;
+  try {
+    if (aiState.remember && aiState.key.trim()) localStorage.setItem(AI_KEY_STORE, aiState.key.trim());
+    else localStorage.removeItem(AI_KEY_STORE);
+  } catch (err) {}
+  if (k === 'model') aiRefresh(); else aiSyncButtons();
+});
+document.addEventListener('toggle', e => { if (review && e.target.id === 'reviewAI') review.aiOpen = e.target.open; }, true);
+
 // ─── GUIDED TOUR ──────────────────────────────────────────────────────────────
 // Walks through a whole analysis on the sample data: a dimmed page with a spotlight on the target element and
 // a popover beside it. A step may `enter` (load data, run the fit, pick a plate), switch the page `view`

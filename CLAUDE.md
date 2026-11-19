@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Working rules for every change
 
-- **Update the footer on every change.** The page footer in `index.html` (`.page-footer`, near the end of the markup) reads `Kasimir Reich · v<version> · <DD/MM/YYYY>`. Set the date to today's date and bump the version in the same edit. Version scheme: `MAJOR.MINOR.PATCH` — patch for fixes and tweaks, minor for new features, major for breaking changes to the workflow or output layout. Current: v1.48.0
+- **Update the footer on every change.** The page footer in `index.html` (`.page-footer`, near the end of the markup) reads `Kasimir Reich · v<version> · <DD/MM/YYYY>`. Set the date to today's date and bump the version in the same edit. Version scheme: `MAJOR.MINOR.PATCH` — patch for fixes and tweaks, minor for new features, major for breaking changes to the workflow or output layout. Current: v1.49.0
 - **Commit after each edit.** When a change is finished, commit it straight away (small, focused commits; message explains the why). Don't let edits pile up uncommitted.
 
 ## What this is
@@ -74,6 +74,10 @@ Processing shows a progress bar with percentage and an ETA (pace so far). Fittin
 - **`parseCsvText` uses `Number()`, not `parseFloat()`** — deliberately, so labels like `"1. Raw Data (450 1)"` stay strings instead of becoming `1`.
 - **Reading vs writing styles differ in `xlsx-js-style`.** When reading the metadata Names sheet, fill info is on `cell.s` directly (`s.patternType`, `s.fgColor`); when writing, it's nested under `s.fill`. `parseMetadata` handles both forms.
 - **Metadata format is positional.** `Dilutions` sheet reads fixed cells `B2/B3` (standard start/dilution) and `B6/B7` (sample start/dilution). `Advanced (optional)` sheet (formerly `Settings`, both read) holds the 4PL bounds; `standard`/`blank…` names are matched ignoring case. `Names` sheet has one row per plate; header row is detected by `A1 === 'Plate'`. `createTemplate` generates a matching blank workbook (one Names row per loaded CSV, 6 if none).
+
+## Claude auto-review (Phase 1, "CLAUDE AUTO-REVIEW" block before the tour)
+
+Card `#reviewAI` in the review's right column (`aiCardHtml`, state in `aiState`). The user's own API key is used straight from the browser (`aiCall`: `fetch` to `API_URL`, header `anthropic-dangerous-direct-browser-access`); it lives in memory, or in `localStorage` (`elisaApiKey`) only with "Remember", and must never go into `saveSession`/`buildSessionSheet`/the workbook. Plate data (numbers and sample names only, `aiPlatePayload`) is sent only after the consent box is ticked. `aiAsk` sends the current plate with a system prompt (`AI_SYSTEM`) and a JSON-schema answer (`output_config.format`; forced `tool_choice` is not allowed on the 5.x models), maps `{column, dose_index}` to `exKey` and shows a proposal; `aiApply` adds the exclusions (same path as `excludeSuggestedInPlate`). Nothing is applied or accepted without a click. `AI_MODELS` holds the model ids and prices (shown as an estimate, not auto-updated). `needs_human` must stay rare (goal: less manual work). Phases 2 (all plates, auto-accept, undo) and 3 (reasons in the Excluded Points sheet and session) are planned. `API_URL` can be pointed at a local stub for tests.
 
 ## Restoring from a downloaded workbook
 

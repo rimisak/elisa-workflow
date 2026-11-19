@@ -235,7 +235,8 @@ body.rv-lock #reviewAI{margin-bottom:10px}
 .ai-msg{font-size:12px;margin-top:8px;padding:6px 8px;border-radius:8px}
 .ai-msg.info{background:#eef5ff;color:#0a58ca}.ai-msg.ok{background:#e8f7ec;color:#1b7a3a}.ai-msg.err{background:#fdecea;color:#c0392b}
 .ai-prop{font-size:12px;margin-top:8px;padding:8px 10px;border:1px solid #d1d1d6;border-radius:10px;background:#fafafa}
-.ai-prop ul{margin:6px 0 0 16px;padding:0}
+.ai-prop ul{margin:4px 0 0 16px;padding:0}
+.ai-prop .ai-sub{font-weight:600;margin-top:6px}
 .std-bar select{font-size:13px;padding:3px 6px;border-radius:6px;border:1px solid #c7c7cc}
 .flag-banner.ok{border-color:#34c759;background:#eefaf1}
 .flag-head{font-size:15px;font-weight:600;color:#a35c00;line-height:1.35}
@@ -270,6 +271,11 @@ body.rv-lock #reviewAI{margin-bottom:10px}
 .chip-sec{margin-bottom:6px}.chip-sec-title{display:block;font-size:12px;font-weight:600;color:#636366;margin-bottom:4px}
 .chip.poor{border-color:#c7c7cc;color:#1c1c1e}
 .chip.suggested{border-color:#ff9500;color:#a35c00;background:#fff6e8}
+.chip-wrap{display:inline-flex;align-items:center;gap:2px}
+.chip-wrap .chip.suggested{border-top-right-radius:0;border-bottom-right-radius:0;border-right:none}
+.chip-ign{border:1px solid #ff9500;border-left:1px dashed #ffcc80;border-radius:0 999px 999px 0;padding:3px 9px 3px 7px;font-size:11px;cursor:pointer;background:#fff6e8;color:#a35c00}
+.chip-ign:hover{background:#ffe3bd}
+.chip.ignored{border-color:#34c759;color:#1b7a3a;background:#eefaf1}
 .chip.excluded{border-color:#8e8e93;color:#636366;background:#f2f2f7;text-decoration:line-through}
 .pt:hover circle:last-child{fill:rgba(0,0,0,.08)}
 .legend-swatch{width:11px;height:11px;border-radius:3px;display:inline-block;flex-shrink:0}
@@ -452,7 +458,7 @@ body.rv-lock #reviewAI{margin-bottom:10px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.49.1 &nbsp;·&nbsp; 19/11/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.50.0 &nbsp;·&nbsp; 19/11/2026</div>
 
 <script>
 'use strict';
@@ -612,7 +618,7 @@ function saveSession() {
   const r = review;
   if (!r || r.stale) return;
   storeSet('session', {
-    excl: [...r.excl], accepted: [...r.accepted], hidden: [...r.hidden], stdFrom: r.stdFrom || {},
+    excl: [...r.excl], ignored: [...(r.ignored || [])], accepted: [...r.accepted], hidden: [...r.hidden], stdFrom: r.stdFrom || {},
     files: r.files,
     opts: {
       subtractBg: document.getElementById('subtractBgChk').checked,
@@ -647,7 +653,7 @@ function remapSession(sess, files) {
   const stdFrom = {};
   for (const [d, src] of Object.entries(sess.stdFrom || {})) if (map[d] != null && map[src] != null) stdFrom[map[d]] = map[src];
   return {...sess,
-    excl: keys(sess.excl), hidden: keys(sess.hidden), stdFrom,
+    excl: keys(sess.excl), ignored: keys(sess.ignored), hidden: keys(sess.hidden), stdFrom,
     accepted: (sess.accepted || []).map(i => map[i]).filter(n => n != null),
     kept: Object.keys(map).length, lost: sess.files.length - Object.keys(map).length};
 }
@@ -3009,7 +3015,8 @@ function plateBlockHtml(pc) {
   // Clicking an entry shows only that sample's curve (excluded entries also reveal the excluded points).
   // Standard-curve points have no sample curve, so their chips still toggle the exclusion.
   const poor = poorNames(pc);
-  const sections = [[], [], []];
+  const sections = [[], [], [], []];
+  const ignoreBtn = k => `<button class="chip-ign" data-ignore="${k}" title="Ignore this suggestion: keep the point and stop suggesting it">Ignore</button>`;
   const only = (name, extra) => `data-only="${p}|${escapeXml(name)}"${extra || ''}`;
   pc.samples.forEach((s, i) => {
     const col = sampleColor(i);
@@ -3017,15 +3024,25 @@ function plateBlockHtml(pc) {
     for (const q of s.points) {
       if (!q.excluded && !q.suggested) continue;
       const ex = q.excluded;
-      sections[ex ? 2 : 1].push(`<button class="chip ${ex ? 'excluded' : 'suggested'}" ${only(s.name, ` data-key="${q.key}"` + (ex ? ' data-showexcl="1"' : ''))} title="${escapeXml(`${s.name} · ${'ABCDEFGH'[q.i]} · OD ${q.y.toFixed(3)} — click to show only this curve; click again to ${ex ? 'restore' : 'exclude'} the point`)}"><span class="chip-dot" style="background:${col}"></span>${escapeXml(s.name)} · Dilution ${Math.round(q.x * 100) / 100}</button>`);
+      const chip = `<button class="chip ${ex ? 'excluded' : 'suggested'}" ${only(s.name, ` data-key="${q.key}"` + (ex ? ' data-showexcl="1"' : ''))} title="${escapeXml(`${s.name} · ${'ABCDEFGH'[q.i]} · OD ${q.y.toFixed(3)} — click to show only this curve; click again to ${ex ? 'restore' : 'exclude'} the point`)}"><span class="chip-dot" style="background:${col}"></span>${escapeXml(s.name)} · Dilution ${Math.round(q.x * 100) / 100}</button>`;
+      sections[ex ? 2 : 1].push(ex ? chip : `<span class="chip-wrap">${chip}${ignoreBtn(q.key)}</span>`);
+    }
+    for (const q of s.points) {
+      if (q.excluded || q.suggested || !r.ignored.has(q.key)) continue;
+      sections[3].push(`<span class="chip-wrap"><button class="chip ignored" data-unignore="${q.key}" title="${escapeXml(`${s.name} · ${'ABCDEFGH'[q.i]} · OD ${q.y.toFixed(3)} — ignored suggestion; click to suggest it again`)}"><span class="chip-dot" style="background:${col}"></span>${escapeXml(s.name)} · Dilution ${Math.round(q.x * 100) / 100}</button></span>`);
     }
   });
   for (const q of pc.std.points) {
     if (!q.excluded && !q.suggested) continue;
     const ex = q.excluded;
-    sections[ex ? 2 : 1].push(`<button class="chip ${ex ? 'excluded' : 'suggested'}" data-k="${q.key}" title="${escapeXml(`Standard · ${'ABCDEFGH'[q.i]} · OD ${q.y.toFixed(3)} — click to ${ex ? 'restore' : 'exclude'}`)}"><span class="chip-dot" style="background:#1c1c1e"></span>Standard · Conc. ${Math.round(q.x * 100) / 100}</button>`);
+    const chip = `<button class="chip ${ex ? 'excluded' : 'suggested'}" data-k="${q.key}" title="${escapeXml(`Standard · ${'ABCDEFGH'[q.i]} · OD ${q.y.toFixed(3)} — click to ${ex ? 'restore' : 'exclude'}`)}"><span class="chip-dot" style="background:#1c1c1e"></span>Standard · Conc. ${Math.round(q.x * 100) / 100}</button>`;
+    sections[ex ? 2 : 1].push(ex ? chip : `<span class="chip-wrap">${chip}${ignoreBtn(q.key)}</span>`);
   }
-  const chips = ['Poorly fit curves', 'Suggested outliers', 'Already excluded points'].map((t, i) =>
+  for (const q of pc.std.points) {
+    if (q.excluded || q.suggested || !r.ignored.has(q.key)) continue;
+    sections[3].push(`<span class="chip-wrap"><button class="chip ignored" data-unignore="${q.key}" title="${escapeXml(`Standard · ${'ABCDEFGH'[q.i]} · OD ${q.y.toFixed(3)} — ignored suggestion; click to suggest it again`)}"><span class="chip-dot" style="background:#1c1c1e"></span>Standard · Conc. ${Math.round(q.x * 100) / 100}</button></span>`);
+  }
+  const chips = ['Poorly fit curves', 'Suggested outliers', 'Already excluded points', 'Ignored suggestions'].map((t, i) => i === 3 && !sections[3].length ? '' :
     `<div class="chip-sec"><span class="chip-sec-title">${i + 1}. ${t}</span><div class="chip-row">${sections[i].join('') || '<span class="focus-note">None</span>'}</div></div>`).join('');
   const acc = r.accepted.has(p);
   const nEx = plateExclCount(p);
@@ -3043,7 +3060,7 @@ function plateBlockHtml(pc) {
     banner = `<div class="flag-banner"><div class="flag-head">⚠ Plate flagged.</div>
       <div class="flag-cols">
       ${group(1, 'Standard curve fit', !stdBad.length, stdTxt)}
-      ${group(2, 'Outliers', !nOut, nOut ? `${nOut} suggested` : 'None detected', nOut ? (nVis ? `<button class="btn btn-secondary btn-sm" data-exclplate="${p}" title="Exclude the suggested outliers on the curves currently shown">Exclude ${nVis > 1 ? 'all ' : ''}${nVis} visible outlier${nVis > 1 ? 's' : ''} <kbd class="keycap">X</kbd></button>` : `<button class="btn btn-secondary btn-sm" disabled title="No suggested outliers on the curves currently shown">No visible outliers</button>`) : '')}
+      ${group(2, 'Outliers', !nOut, nOut ? `${nOut} suggested` : 'None detected', nOut ? (nVis ? `<button class="btn btn-secondary btn-sm" data-exclplate="${p}" title="Exclude the suggested outliers on the curves currently shown">Exclude ${nVis > 1 ? 'all ' : ''}${nVis} visible outlier${nVis > 1 ? 's' : ''} <kbd class="keycap">X</kbd></button> <button class="btn btn-secondary btn-sm" data-ignplate="${p}" title="Keep these points and stop suggesting them">Ignore ${nVis > 1 ? 'all ' : ''}${nVis} <kbd class="keycap">I</kbd></button>` : `<button class="btn btn-secondary btn-sm" disabled title="No suggested outliers on the curves currently shown">No visible outliers</button>`) : '')}
       ${group(3, 'Poorly fitted curves', !nFit, nFit ? `${nFit} curve${nFit > 1 ? 's' : ''}` : 'None', nFit ? (onlyPoor ? `<button class="btn btn-secondary btn-sm" data-showall="${p}" title="Show every dilution curve again">Show all</button>` : `<button class="btn btn-secondary btn-sm" data-poorfit="${p}" title="Show only curves with a failed fit, low R² or a parameter at its fit bound">Show only poor fits</button>`) : '')}
       </div></div>`;
   } else if (plateResolved(p)) {
@@ -3195,7 +3212,7 @@ function observeReviewList() {
 function refilterSuggested() {
   const r = review;
   if (!r) return;
-  r.suggested = new Set([...r.sugImpact].filter(([, v]) => v >= OUTLIER.MIN_IMPACT).map(([k]) => k));
+  r.suggested = new Set([...r.sugImpact].filter(([k, v]) => v >= OUTLIER.MIN_IMPACT && !(r.ignored && r.ignored.has(k))).map(([k]) => k));
   r.flagCache = null;
 }
 function impactCardHtml() {
@@ -3208,7 +3225,7 @@ function impactCardHtml() {
 function impactNoteHtml() {
   const r = review;
   if (r.meta.detectOutliers === false) return 'Outlier detection is off.';
-  return `<b>${r.suggested.size}</b> of ${r.sugImpact.size} candidate points shown. A candidate is shown when excluding it would shift the ED50 by at least this much. 0 % shows all.`;
+  return `<b>${r.suggested.size}</b> of ${r.sugImpact.size} candidate points shown${r.ignored && r.ignored.size ? ` (${r.ignored.size} ignored by you or Claude)` : ''}. A candidate is shown when excluding it would shift the ED50 by at least this much. 0 % shows all.`;
 }
 document.addEventListener('change', e => { if (e.target.id === 'impRange') e.target.blur(); });   // hand the arrow-key shortcuts back
 let impactRaf = 0;
@@ -3488,6 +3505,35 @@ function excludeSuggestedInPlate(p) {
   reanalyze();
   refreshReview(p);
 }
+// Ignore a suggestion: the point stays in the fit and stops being suggested (until restored). Used by hand and by Claude.
+function ignoreSuggestions(p, keys, quiet) {
+  const r = review;
+  keys = keys.filter(k => r.suggested.has(k));
+  if (!keys.length) return 0;
+  keys.forEach(k => { r.ignored.add(k); r.suggested.delete(k); });
+  r.flagCache = null;
+  if (!quiet) refreshReview(p);
+  return keys.length;
+}
+function unignoreSuggestion(key) {
+  const r = review;
+  if (!r.ignored.delete(key)) return;
+  refilterSuggested();
+  refreshReview(Number(key.split('|')[0]));
+}
+function ignoreSuggestedInPlate(p) {
+  const keys = visibleSuggestedKeys(p);
+  if (keys.length) ignoreSuggestions(p, keys);
+}
+document.addEventListener('click', e => {
+  if (!review || !review.analysis) return;
+  const ig = e.target.closest && e.target.closest('[data-ignore]');
+  if (ig) { e.stopPropagation(); ignoreSuggestions(Number(ig.dataset.ignore.split('|')[0]), [ig.dataset.ignore]); return; }
+  const un = e.target.closest && e.target.closest('[data-unignore]');
+  if (un) { e.stopPropagation(); unignoreSuggestion(un.dataset.unignore); return; }
+  const ip = e.target.closest && e.target.closest('[data-ignplate]');
+  if (ip) { e.stopPropagation(); ignoreSuggestedInPlate(Number(ip.dataset.ignplate)); }
+}, true);
 function clearPlateExclusions(p) {
   const keys = [...review.excl].filter(k => k.startsWith(p + '|'));
   if (!keys.length) return;
@@ -3694,6 +3740,7 @@ document.addEventListener('keydown', e => {
     case 'arrowup': e.preventDefault(); stepCurve(-1); break;
     case 'a': if (cur != null) { e.preventDefault(); acceptPlate(cur); } break;
     case 'x': if (cur != null) { e.preventDefault(); excludeSuggestedInPlate(cur); } break;
+    case 'i': if (cur != null) { e.preventDefault(); ignoreSuggestedInPlate(cur); } break;
     case 'c': if (cur != null) { e.preventDefault(); clearPlateExclusions(cur); } break;
     case 'f': e.preventDefault(); review.view = review.view === 'todo' ? 'all' : 'todo'; review.limit = FLAG.BATCH; review.cur = null; renderReview(); break;
   }
@@ -3785,7 +3832,7 @@ function buildSessionSheet() {
     app: 'elisa', v: 1,
     csv: csvFiles, meta: {name: metaName, b64: bytesToB64(metaBytes)},
     plate384: document.getElementById('plate384Chk').checked,
-    sess: {excl: [...r.excl], accepted: [...r.accepted], hidden: [...r.hidden], stdFrom: r.stdFrom || {}, files: r.files,
+    sess: {excl: [...r.excl], ignored: [...(r.ignored || [])], accepted: [...r.accepted], hidden: [...r.hidden], stdFrom: r.stdFrom || {}, files: r.files,
            opts: {subtractBg: document.getElementById('subtractBgChk').checked,
                   detectOutliers: document.getElementById('detectChk').checked, minImpact: Math.round(OUTLIER.MIN_IMPACT * 100),
                   outputName: document.getElementById('outputName').value}},
@@ -3959,7 +4006,7 @@ async function runProcessing(saved) {
       }
     }
     review = {grid, numPlates, meta, outputName,
-              excl: new Set(saved && saved.excl || []), suggested: new Set(), sugImpact: new Map(), hidden: new Set(saved && saved.hidden || []),
+              excl: new Set(saved && saved.excl || []), ignored: new Set(saved && saved.ignored || []), suggested: new Set(), sugImpact: new Map(), hidden: new Set(saved && saved.hidden || []),
               accepted: new Set(saved && saved.accepted || []), analysis: null, cache: new Map(),
               files, view: 'all', cur: null, limit: FLAG.BATCH, flagCache: null, stdFrom: saved && saved.stdFrom || {},
               ready: new Set(), done: new Set(), nextRel: 0, seen: new Set(), fresh: null, fitting: false, shown: false, restoring: !!saved};
@@ -4120,19 +4167,21 @@ How the data behaves:
 - Isolated spike: one reading far above the rest of its series, typically dose_index 0 high while ALL later dilutions sit flat at baseline with no intermediate values, is a clear outlier (contamination, carry-over, pipetting error). A real dose-response passes through intermediate ODs. Exclude it even if the software did not suggest it; the sample then simply shows no signal.
 - Other than such an isolated spike, never exclude a point just because it is the highest or lowest; a clean sigmoid with scatter at the plateaus needs no exclusion.
 - Check EVERY series, including the standard (is_standard true). The standard should rise smoothly with concentration; exclude readings that break that shape, as long as enough points remain for a curve.
-- Exclude as few points as possible, but do not leave clear outliers in. The software's suggestions are only candidates; confirm the clear ones and reject doubtful ones.
+- Exclude as few points as possible, but do not leave clear outliers in. The software's suggestions are only candidates; confirm the clear ones and reject the wrong ones.
 
-Decision: use "accept" whenever the plate is fine once your exclusions are applied. The goal is LESS manual work for the scientist, so decide yourself whenever you reasonably can. Use "needs_human" only for things that excluding points cannot fix: no usable standard curve (flat, missing, failed fit), a failed fit on many samples, or data so ambiguous that you cannot tell which readings are wrong. Give a one-sentence reason in notes.
+Decide EVERY software-suggested outlier: for each entry in software_suggested_outliers return a decision with action "exclude" (it is a real outlier: remove it from the fit) or "ignore" (the reading is fine, the software was wrong: keep it and stop suggesting it). Do not leave any suggested point without a decision. You may additionally return "exclude" for readings the software did not suggest (for example an isolated spike).
 
-Answer only with the requested JSON. For each exclusion give the well-column (column, 1-12, as in the data), the dose_index and a short reason.`;
+Plate decision: use "accept" whenever the plate is fine once your exclusions are applied. The goal is LESS manual work for the scientist, so decide yourself whenever you reasonably can. Use "needs_human" only for things that excluding points cannot fix: no usable standard curve (flat, missing, failed fit), a failed fit on many samples, or data so ambiguous that you cannot tell which readings are wrong. Give a one-sentence reason in notes.
+
+Answer only with the requested JSON. For each decision give the well-column (column, 1-12, as in the data), the dose_index, the action and a short reason.`;
 const AI_SCHEMA = {
   type: 'object',
   properties: {
     decision: {type: 'string', enum: ['accept', 'needs_human']},
-    exclude: {type: 'array', items: {type: 'object', properties: {column: {type: 'integer'}, dose_index: {type: 'integer'}, reason: {type: 'string'}}, required: ['column', 'dose_index', 'reason'], additionalProperties: false}},
+    decisions: {type: 'array', items: {type: 'object', properties: {column: {type: 'integer'}, dose_index: {type: 'integer'}, action: {type: 'string', enum: ['exclude', 'ignore']}, reason: {type: 'string'}}, required: ['column', 'dose_index', 'action', 'reason'], additionalProperties: false}},
     notes: {type: 'string'}
   },
-  required: ['decision', 'exclude', 'notes'], additionalProperties: false
+  required: ['decision', 'decisions', 'notes'], additionalProperties: false
 };
 function aiModel() { return AI_MODELS.find(m => m.id === aiState.model) || AI_MODELS[0]; }
 function aiCurrentPlate() {
@@ -4218,15 +4267,19 @@ async function aiAsk() {
     try { out = JSON.parse(block.text); } catch (e) { throw new Error('The answer could not be read as JSON' + (data.stop_reason === 'max_tokens' ? ' (it was cut off at the token limit)' : '') + '. Try again.'); }
     const pc = review.analysis.plateCharts[p], pts = new Map();
     for (const q of [...pc.samples.flatMap(s => s.points), ...pc.std.points]) pts.set(q.key, q);
-    const excl = [], seen = new Set();
+    const excl = [], ign = [], seen = new Set();
     let skipped = 0;
-    for (const x of out.exclude || []) {
+    for (const x of out.decisions || []) {
       const key = exKey(p, x.column, x.dose_index), q = pts.get(key);
       if (!q || q.excluded || seen.has(key)) { skipped++; continue; }
       seen.add(key);
-      excl.push({key, label: 'ABCDEFGH'[x.dose_index] + x.column, reason: String(x.reason || ''), od: q.y});
+      const item = {key, label: 'ABCDEFGH'[x.dose_index] + x.column, reason: String(x.reason || ''), od: q.y};
+      if (x.action === 'ignore') { if (review.suggested.has(key)) ign.push(item); else skipped++; }
+      else excl.push(item);
     }
-    aiState.proposal = {p, decision: out.decision, notes: String(out.notes || ''), excl, skipped, usage: data.usage || null, model: data.model || aiState.model};
+    // Suggested points Claude gave no decision for stay as they are for the scientist.
+    const undecided = [...pts.values()].filter(q => !q.excluded && review.suggested.has(q.key) && !seen.has(q.key)).length;
+    aiState.proposal = {p, decision: out.decision, notes: String(out.notes || ''), excl, ign, undecided, skipped, usage: data.usage || null, model: data.model || aiState.model};
     aiSet(null);
   } catch (e) { aiSet(e.message, 'err'); }
   aiState.busy = false; aiRefresh();
@@ -4234,13 +4287,16 @@ async function aiAsk() {
 function aiApply() {
   const pr = aiState.proposal;
   if (!pr || !review) return;
+  const nIgn = ignoreSuggestions(pr.p, pr.ign.map(x => x.key), true);
   const keys = pr.excl.map(x => x.key).filter(k => !review.excl.has(k));
-  keys.forEach(k => review.excl.add(k));
+  keys.forEach(k => { review.excl.add(k); review.suggested.delete(k); });
   review.accepted.delete(pr.p);
+  review.flagCache = null;
   review.out = null; review.prepFailed = false; review.blobTok = (review.blobTok || 0) + 1;
   aiState.proposal = null;
-  aiSet(`Applied ${keys.length} exclusion${keys.length === 1 ? '' : 's'} on plate ${pr.p + 1}. Check the curves, then accept the plate.`, 'ok');
-  if (keys.length) { reanalyze(); refreshReview(pr.p); }
+  aiSet(`Applied on plate ${pr.p + 1}: ${keys.length} exclusion${keys.length === 1 ? '' : 's'}, ${nIgn} suggestion${nIgn === 1 ? '' : 's'} ignored. Check the curves, then accept the plate.`, 'ok');
+  if (keys.length) reanalyze();
+  refreshReview(pr.p);
   aiRefresh();
 }
 function aiSet(text, kind) { aiState.msg = text ? {text, kind: kind || 'info'} : null; aiRefresh(); }
@@ -4260,9 +4316,11 @@ function aiCardHtml() {
   if (s.proposal) {
     const pr = s.proposal;
     prop = `<div class="ai-prop"><b>Plate ${pr.p + 1}: Claude says ${pr.decision === 'accept' ? 'accept' : 'needs your look'}.</b> ${esc(pr.notes)}`
-      + (pr.excl.length ? `<ul>${pr.excl.map(x => `<li><b>${esc(x.label)}</b> (OD ${x.od.toFixed(3)}): ${esc(x.reason)}</li>`).join('')}</ul>` : '<div>No readings to exclude.</div>')
+      + (pr.excl.length ? `<div class="ai-sub">Exclude (${pr.excl.length})</div><ul>${pr.excl.map(x => `<li><b>${esc(x.label)}</b> (OD ${x.od.toFixed(3)}): ${esc(x.reason)}</li>`).join('')}</ul>` : '<div>No readings to exclude.</div>')
+      + (pr.ign.length ? `<div class="ai-sub">Ignore suggestion, keep the point (${pr.ign.length})</div><ul>${pr.ign.map(x => `<li><b>${esc(x.label)}</b> (OD ${x.od.toFixed(3)}): ${esc(x.reason)}</li>`).join('')}</ul>` : '')
+      + (pr.undecided ? `<div class="adv-note">${pr.undecided} suggested point(s) got no decision and stay suggested for you.</div>` : '')
       + (pr.skipped ? `<div class="adv-note">${pr.skipped} suggestion(s) were ignored (unknown or already excluded point).</div>` : '')
-      + `<div class="adv-btns">${pr.excl.length ? '<button class="btn btn-black btn-sm" data-ai="apply">Apply exclusions</button>' : ''}<button class="btn btn-secondary btn-sm" data-ai="dismiss">Dismiss</button></div>`
+      + `<div class="adv-btns">${pr.excl.length || pr.ign.length ? '<button class="btn btn-black btn-sm" data-ai="apply">Apply decisions</button>' : ''}<button class="btn btn-secondary btn-sm" data-ai="dismiss">Dismiss</button></div>`
       + `<div class="adv-note">Nothing is applied until you click Apply. You still accept the plate yourself.</div></div>`;
   }
   return `<summary>Auto-review with Claude (beta)</summary>
@@ -4382,7 +4440,7 @@ const TOUR_STEPS = [
   {view: 'review', target: tourPlate('.res-wrap'), title: '3 · Results table',
    body: '<p>The fitted values and interpolated concentrations for every sample on this plate. They update immediately whenever you change anything above.</p>'},
   {view: 'review', enter: () => tourGoPlate(true), target: tourPlate('.chip-secs'), title: '3 · Outliers',
-   body: '<p>Poorly fitted curves, <b>suggested outliers</b> and already excluded points are listed here. Click a chip, or a point in a chart, to exclude or restore it; the plate refits at once.</p><p>Excluded values stay in the output, struck through, and get an <i>Excluded Points</i> sheet. <kbd>X</kbd> excludes the suggestions on this plate, <kbd>C</kbd> clears them.</p>'},
+   body: '<p>Poorly fitted curves, <b>suggested outliers</b>, already excluded points and ignored suggestions are listed here. <b>Ignore</b> next to a suggestion (or <kbd>I</kbd>) keeps the point and stops suggesting it. Click a chip, or a point in a chart, to exclude or restore it; the plate refits at once.</p><p>Excluded values stay in the output, struck through, and get an <i>Excluded Points</i> sheet. <kbd>X</kbd> excludes the suggestions on this plate, <kbd>C</kbd> clears them.</p>'},
   {view: 'review', target: tourPlate('.row-bar'), title: '3 · Edge effects',
    body: '<p>Edge effects are suggested automatically. To drop a whole row, use the <b>A–H</b> buttons: here for this plate, or in the header for all plates.</p>'},
   {view: 'review', target: '#reviewImpact', pos: 'left', title: '3 · Outlier sensitivity',

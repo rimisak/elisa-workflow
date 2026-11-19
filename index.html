@@ -327,7 +327,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
     <div class="file-list" id="csvFileList"></div>
   </div>
   <div style="margin-top:8px;display:flex;gap:8px;justify-content:space-between">
-    <button class="btn btn-secondary btn-sm" onclick="createCsvTemplate()">Download plate CSV template file</button>
+    <button class="btn btn-secondary btn-sm" onclick="createCsvTemplate()">Download Plate CSV Template File</button>
     <button class="btn btn-secondary btn-sm" onclick="clearCSV()">Clear</button>
   </div>
   <input type="file" id="csvInput" accept=".csv,.txt,.tsv,.xlsx,.xls" multiple style="display:none" onchange="onCSVInputChange()">
@@ -441,7 +441,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.47.1 &nbsp;·&nbsp; 19/11/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.47.2 &nbsp;·&nbsp; 19/11/2026</div>
 
 <script>
 'use strict';
@@ -1455,7 +1455,7 @@ function render384Pattern() {
     for (let rI = 0; rI < 16; rI++) {
       svg += `<text x="${x0 - 6}" y="${y0 + rI * cs + cs / 2 + 3}" text-anchor="end" font-size="9" fill="#8e8e93">${'ABCDEFGHIJKLMNOP'[rI]}</text>`;
       for (let c = 0; c < 24; c++) {
-        const sp = subplateOf384(rI, c), [col, op] = role(c >> 1, rI % 8);
+        const sp = subplateOf384(rI, c), [col, op0] = role(c >> 1, rI % 8), op = (c >> 1) === 0 ? .5 : 1;   // flat colours here; the gradient is shown on the 96-well plates
         svg += dot(x0 + c * cs + cs / 2, y0 + rI * cs + cs / 2, cs / 2 - 2, col, op, ` stroke="${SUB_COLORS[sp]}" stroke-width="1.6"`);
       }
     }
@@ -3047,6 +3047,10 @@ function plateBlockHtml(pc) {
     ${banner}
     ${stdBar}
     ${rowBarHtml(p)}
+    <div class="plate-charts-row">
+      <div class="chart-card"><div class="chart-title">Sample dose–response &amp; ED50<span class="info-i" tabindex="0">i<span class="info-pop"><b>ED50</b> is the dilution factor at which a sample's fitted curve reaches half-way between its top and bottom OD. A lower ED50 means a stronger sample. The dashed vertical line marks it for each sample.</span></span>${nHid && nHid < pc.samples.length ? `<span class="chart-note">Showing ${pc.samples.length - nHid} of ${pc.samples.length} curves</span>` : ''}</div>${renderSampleChart(pc)}<div class="chart-key"><svg width="22" height="8"><line x1="11" y1="0" x2="11" y2="8" stroke="#8e8e93" stroke-width="1.5" stroke-dasharray="2 2"/></svg>Dashed vertical line = ED50 of that sample's fitted curve</div></div>
+      <div class="chart-card"><div class="chart-title">Standard curve &amp; interpolation${pc.std.from != null ? ` (plate ${pc.std.from + 1}'s standard)` : ''}<span class="info-i" tabindex="0">i<span class="info-pop"><b>How the concentration is chosen.</b> For each sample the least-diluted reading with OD ≤ 1.5 is used (higher ODs are too close to saturation). That OD is read off the standard curve and multiplied by the sample's dilution factor at that reading. If every reading is above 1.5, OD 1.49 at the last dilution is assumed. Reported values never fall below 0.01.</span></span></div>${renderStandardChart(pc)}<div class="chart-key"><svg width="22" height="12"><polyline points="1,2 11,2 11,12" fill="none" stroke="#8e8e93" stroke-width="1.5" stroke-dasharray="2 2"/></svg>Dashed line = the reading chosen for that sample (horizontal), read down to its concentration on the standard curve (vertical)</div></div>
+    </div>
     ${pc.samples.length > 1 ? (() => {
       const k = pc.samples.findIndex(s => !isHidden(pc, s)), one = nHid === pc.samples.length - 1 && k >= 0;
       return `<div class="curve-stepper"><span class="cs-title">Look at one curve at a time</span>
@@ -3055,10 +3059,6 @@ function plateBlockHtml(pc) {
         <span class="cs-status">${one ? `Showing curve ${k + 1} of ${pc.samples.length}: ${escapeXml(pc.samples[k].name)}` : `Showing all ${pc.samples.length - nHid} curves`}</span>
         <span class="cs-help">Use the buttons or the <b>↑</b> / <b>↓</b> arrow keys on your keyboard. Each press hides all other sample curves and shows only the next one; after the last curve, all curves are shown again. (<b>←</b> / <b>→</b> switch between plates.)</span></div>`;
     })() : ''}
-    <div class="plate-charts-row">
-      <div class="chart-card"><div class="chart-title">Sample dose–response &amp; ED50<span class="info-i" tabindex="0">i<span class="info-pop"><b>ED50</b> is the dilution factor at which a sample's fitted curve reaches half-way between its top and bottom OD. A lower ED50 means a stronger sample. The dashed vertical line marks it for each sample.</span></span>${nHid && nHid < pc.samples.length ? `<span class="chart-note">Showing ${pc.samples.length - nHid} of ${pc.samples.length} curves</span>` : ''}</div>${renderSampleChart(pc)}<div class="chart-key"><svg width="22" height="8"><line x1="11" y1="0" x2="11" y2="8" stroke="#8e8e93" stroke-width="1.5" stroke-dasharray="2 2"/></svg>Dashed vertical line = ED50 of that sample's fitted curve</div></div>
-      <div class="chart-card"><div class="chart-title">Standard curve &amp; interpolation${pc.std.from != null ? ` (plate ${pc.std.from + 1}'s standard)` : ''}<span class="info-i" tabindex="0">i<span class="info-pop"><b>How the concentration is chosen.</b> For each sample the least-diluted reading with OD ≤ 1.5 is used (higher ODs are too close to saturation). That OD is read off the standard curve and multiplied by the sample's dilution factor at that reading. If every reading is above 1.5, OD 1.49 at the last dilution is assumed. Reported values never fall below 0.01.</span></span></div>${renderStandardChart(pc)}<div class="chart-key"><svg width="22" height="12"><polyline points="1,2 11,2 11,12" fill="none" stroke="#8e8e93" stroke-width="1.5" stroke-dasharray="2 2"/></svg>Dashed line = the reading chosen for that sample (horizontal), read down to its concentration on the standard curve (vertical)</div></div>
-    </div>
     <div class="chart-legend legend-below">${legend}</div>
     <div class="chip-secs">${chips}</div>
     <div class="res-wrap">${resultsTableHtml(p)}</div>

@@ -458,7 +458,7 @@ body.rv-lock #reviewAI{margin-bottom:10px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.50.0 &nbsp;·&nbsp; 19/11/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.50.1 &nbsp;·&nbsp; 19/11/2026</div>
 
 <script>
 'use strict';
@@ -4171,6 +4171,8 @@ How the data behaves:
 
 Decide EVERY software-suggested outlier: for each entry in software_suggested_outliers return a decision with action "exclude" (it is a real outlier: remove it from the fit) or "ignore" (the reading is fine, the software was wrong: keep it and stop suggesting it). Do not leave any suggested point without a decision. You may additionally return "exclude" for readings the software did not suggest (for example an isolated spike).
 
+Poor-fit curves: the list poor_fit_curves holds every curve (samples and the standard) with a failed fit, a low R2 or a parameter at its fit bound. You MUST review EACH of them, also when you decide to change nothing, and return a curve_review for each with a verdict ("changed" if your exclusions or ignores touch that curve, otherwise "no_change") and a concrete justification of one or two sentences that refers to the readings (for example "the plateau is noisy but no single reading breaks the sigmoid; excluding any would not improve the fit" or "all readings are at baseline, so the sample has no signal"). A bare "looks fine" is not a justification.
+
 Plate decision: use "accept" whenever the plate is fine once your exclusions are applied. The goal is LESS manual work for the scientist, so decide yourself whenever you reasonably can. Use "needs_human" only for things that excluding points cannot fix: no usable standard curve (flat, missing, failed fit), a failed fit on many samples, or data so ambiguous that you cannot tell which readings are wrong. Give a one-sentence reason in notes.
 
 Answer only with the requested JSON. For each decision give the well-column (column, 1-12, as in the data), the dose_index, the action and a short reason.`;
@@ -4179,9 +4181,10 @@ const AI_SCHEMA = {
   properties: {
     decision: {type: 'string', enum: ['accept', 'needs_human']},
     decisions: {type: 'array', items: {type: 'object', properties: {column: {type: 'integer'}, dose_index: {type: 'integer'}, action: {type: 'string', enum: ['exclude', 'ignore']}, reason: {type: 'string'}}, required: ['column', 'dose_index', 'action', 'reason'], additionalProperties: false}},
+    curve_reviews: {type: 'array', items: {type: 'object', properties: {series: {type: 'string'}, verdict: {type: 'string', enum: ['changed', 'no_change']}, justification: {type: 'string'}}, required: ['series', 'verdict', 'justification'], additionalProperties: false}},
     notes: {type: 'string'}
   },
-  required: ['decision', 'decisions', 'notes'], additionalProperties: false
+  required: ['decision', 'decisions', 'curve_reviews', 'notes'], additionalProperties: false
 };
 function aiModel() { return AI_MODELS.find(m => m.id === aiState.model) || AI_MODELS[0]; }
 function aiCurrentPlate() {
@@ -4213,8 +4216,20 @@ function aiPlatePayload(p) {
     plate: p + 1,
     sample_dilution_factors: r.meta.seriesSA, standard_concentrations: r.meta.seriesST,
     series: [...pc.samples.map(s => mk(s.name, s, false)), mk('standard', pc.std, true)],
+    poor_fit_curves: aiPoorFits(pc, fl),
     software_flags: fl.reasons
   };
+}
+// Curves the software flags for a bad fit (failed fit, R² below the limit, parameter at its bound), the standard included.
+function aiPoorFits(pc, fl) {
+  const out = [];
+  for (const [name, w] of fl.samples) {
+    const bad = w.filter(x => ['failed', 'r2', 'bound'].includes(x.kind));
+    if (bad.length) out.push({name, is_standard: false, problems: bad.map(x => x.text)});
+  }
+  const stdBad = fl.notes.filter(t => !/standard outlier/.test(t));
+  if (stdBad.length) out.push({name: 'standard', is_standard: true, problems: stdBad});
+  return out;
 }
 function aiEstimate(nPlates, payloadChars) {
   const m = aiModel(), inTok = (AI_SYSTEM.length + (payloadChars || 6000)) / 4 * nPlates, outTok = 1500 * nPlates;
@@ -4277,9 +4292,15 @@ async function aiAsk() {
       if (x.action === 'ignore') { if (review.suggested.has(key)) ign.push(item); else skipped++; }
       else excl.push(item);
     }
+    const poor = payload.poor_fit_curves, reviews = [];
+    for (const c of out.curve_reviews || []) {
+      const m = poor.find(x => x.name === c.series);
+      if (m && String(c.justification || '').trim() && !reviews.some(v => v.series === m.name)) reviews.push({series: m.name, is_standard: m.is_standard, verdict: c.verdict, justification: String(c.justification), problems: m.problems});
+    }
+    const unreviewed = poor.filter(x => !reviews.some(v => v.series === x.name)).map(x => x.name);
     // Suggested points Claude gave no decision for stay as they are for the scientist.
     const undecided = [...pts.values()].filter(q => !q.excluded && review.suggested.has(q.key) && !seen.has(q.key)).length;
-    aiState.proposal = {p, decision: out.decision, notes: String(out.notes || ''), excl, ign, undecided, skipped, usage: data.usage || null, model: data.model || aiState.model};
+    aiState.proposal = {p, decision: out.decision, notes: String(out.notes || ''), excl, ign, undecided, reviews, unreviewed, skipped, usage: data.usage || null, model: data.model || aiState.model};
     aiSet(null);
   } catch (e) { aiSet(e.message, 'err'); }
   aiState.busy = false; aiRefresh();
@@ -4318,6 +4339,8 @@ function aiCardHtml() {
     prop = `<div class="ai-prop"><b>Plate ${pr.p + 1}: Claude says ${pr.decision === 'accept' ? 'accept' : 'needs your look'}.</b> ${esc(pr.notes)}`
       + (pr.excl.length ? `<div class="ai-sub">Exclude (${pr.excl.length})</div><ul>${pr.excl.map(x => `<li><b>${esc(x.label)}</b> (OD ${x.od.toFixed(3)}): ${esc(x.reason)}</li>`).join('')}</ul>` : '<div>No readings to exclude.</div>')
       + (pr.ign.length ? `<div class="ai-sub">Ignore suggestion, keep the point (${pr.ign.length})</div><ul>${pr.ign.map(x => `<li><b>${esc(x.label)}</b> (OD ${x.od.toFixed(3)}): ${esc(x.reason)}</li>`).join('')}</ul>` : '')
+      + (pr.reviews.length ? `<div class="ai-sub">Poor-fit curves checked (${pr.reviews.length})</div><ul>${pr.reviews.map(x => `<li><b>${esc(x.series)}</b> (${esc(x.problems.join(', '))}) — ${x.verdict === 'changed' ? 'changed' : 'no change'}: ${esc(x.justification)}</li>`).join('')}</ul>` : '')
+      + (pr.unreviewed.length ? `<div class="adv-note" style="color:#c0392b">Claude gave no justification for: ${esc(pr.unreviewed.join(', '))}. Look at ${pr.unreviewed.length > 1 ? 'these curves' : 'this curve'} yourself or ask again.</div>` : '')
       + (pr.undecided ? `<div class="adv-note">${pr.undecided} suggested point(s) got no decision and stay suggested for you.</div>` : '')
       + (pr.skipped ? `<div class="adv-note">${pr.skipped} suggestion(s) were ignored (unknown or already excluded point).</div>` : '')
       + `<div class="adv-btns">${pr.excl.length || pr.ign.length ? '<button class="btn btn-black btn-sm" data-ai="apply">Apply decisions</button>' : ''}<button class="btn btn-secondary btn-sm" data-ai="dismiss">Dismiss</button></div>`

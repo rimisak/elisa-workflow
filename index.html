@@ -122,6 +122,13 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .plate-charts-row{display:flex;gap:14px;flex-wrap:wrap}
 .chart-card{background:#fff;border-radius:14px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.08);flex:1;min-width:360px}
 .chart-title{font-size:13px;font-weight:600;color:#3a3a3c;margin-bottom:8px}
+.info-i{position:relative;display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;margin-left:6px;border-radius:50%;border:1.5px solid #8e8e93;color:#8e8e93;font-size:10px;font-weight:700;font-style:normal;cursor:help;vertical-align:1px;outline:none}
+.info-i:hover,.info-i:focus{border-color:#007aff;color:#007aff}
+.info-pop{display:none;position:absolute;left:-8px;top:21px;z-index:30;width:300px;padding:10px 12px;background:#fff;border:1px solid #d1d1d6;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.14);font-size:12px;font-weight:400;line-height:1.5;color:#3a3a3c;text-align:left;cursor:default}
+.info-i:hover .info-pop,.info-i:focus .info-pop{display:block}
+.chart-key{font-size:11px;color:#6e6e73;margin-top:6px;line-height:1.6}
+.chart-key svg{vertical-align:middle;margin-right:4px}
+.step-btns{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:#6e6e73}
 .chart-legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin-bottom:8px}
 .chart-legend.legend-below{margin:10px 0 8px}
 .legend-item{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#3a3a3c}
@@ -438,7 +445,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.45.0 &nbsp;·&nbsp; 19/11/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.46.0 &nbsp;·&nbsp; 19/11/2026</div>
 
 <script>
 'use strict';
@@ -745,17 +752,20 @@ async function loadCSVFiles(files, force) {  // force: true/false from the 384 t
 // (null when unknown, e.g. a file without wavelength information).
 function readWavelengths() {
   const f = csvFiles[0];
-  if (!f) return { sig: null, ref: null };
-  const lines = f.text.split(/\r?\n/);
+  if (!f) return { sig: null, ref: null, mixed: false };
   const wl = l => { const m = (l || '').match(/Raw Data \((\d{3})\b/); return m ? m[1] : null; };
-  return { sig: wl(lines[6]), ref: wl(lines[18]) };
+  const of = x => { const lines = x.text.split(/\r?\n/); return { sig: wl(lines[6]), ref: wl(lines[18]) }; };
+  const first = of(f);
+  const mixed = csvFiles.some(x => { const o = of(x); return o.sig !== first.sig || o.ref !== first.ref; });
+  return { ...first, mixed };
 }
 function updateBgLabels() {
-  const { sig, ref } = readWavelengths();
+  const { sig, ref, mixed } = readWavelengths();
   document.getElementById('bgTitle').textContent = ref ? `Subtract ${ref} nm background` : 'Subtract reference-read background';
-  document.getElementById('bgSub').innerHTML = sig && ref
-    ? `Use (${sig} − ${ref}) per well for EC50, concentration &amp; the ${sig} block`
-    : 'Use (signal − reference read) per well for EC50, concentration &amp; the signal block';
+  document.getElementById('bgSub').innerHTML = (sig && ref
+    ? `Use (${sig} − ${ref}) per well for EC50, concentration &amp; the ${sig} block.<br>Detected from the files: the first read in each file is the detection wavelength (${sig} nm), the second is the correction wavelength (${ref} nm); the longer one is always taken as the correction.`
+    : 'Use (signal − reference read) per well for EC50, concentration &amp; the signal block. No wavelengths could be read from the files.')
+    + (mixed ? '<br><span style="color:#b26a00">⚠ The loaded files do not all use the same wavelengths; the first file is shown.</span>' : '');
 }
 function showCSVState() {
   updateBgLabels();
@@ -2873,6 +2883,7 @@ function plateBlockHtml(pc) {
     ${onlyPoor
       ? `<button class="btn btn-secondary btn-sm" data-showall="${p}" title="Show every dilution curve again">Show all</button>`
       : `<button class="btn btn-secondary btn-sm" data-poorfit="${p}" ${poorSet.size ? '' : 'disabled'} title="Show only curves with a failed fit, low R² or a parameter at its fit bound">Show only poor fits</button>`}
+    <span class="step-btns" title="Show the curves of this plate one at a time"><button class="btn btn-secondary btn-sm" data-act="curvePrev">▲ <kbd class="keycap">↑</kbd></button><button class="btn btn-secondary btn-sm" data-act="curveNext">▼ <kbd class="keycap">↓</kbd></button>one curve at a time</span>
     <button class="btn btn-secondary btn-sm" data-act="toggleShowExcl" title="Applies to all graphs">${review.showExcl ? 'Hide' : 'Show'} excluded points</button></span>`;
   if (!legend) legend = '<span class="legend-item" style="color:#aeaeb2">No sample curves for this plate</span>';
 
@@ -2945,8 +2956,8 @@ function plateBlockHtml(pc) {
     ${stdBar}
     ${rowBarHtml(p)}
     <div class="plate-charts-row">
-      <div class="chart-card"><div class="chart-title">Sample dose–response &amp; ED50${nHid && nHid < pc.samples.length ? `<span class="chart-note">Showing ${pc.samples.length - nHid} of ${pc.samples.length} curves</span>` : ''}</div>${renderSampleChart(pc)}</div>
-      <div class="chart-card"><div class="chart-title">Standard curve &amp; interpolation${pc.std.from != null ? ` (plate ${pc.std.from + 1}'s standard)` : ''}</div>${renderStandardChart(pc)}</div>
+      <div class="chart-card"><div class="chart-title">Sample dose–response &amp; ED50<span class="info-i" tabindex="0">i<span class="info-pop"><b>ED50</b> is the dilution factor at which a sample's fitted curve reaches half-way between its top and bottom OD. A lower ED50 means a stronger sample. The dashed vertical line marks it for each sample.</span></span>${nHid && nHid < pc.samples.length ? `<span class="chart-note">Showing ${pc.samples.length - nHid} of ${pc.samples.length} curves</span>` : ''}</div>${renderSampleChart(pc)}<div class="chart-key"><svg width="22" height="8"><line x1="11" y1="0" x2="11" y2="8" stroke="#8e8e93" stroke-width="1.5" stroke-dasharray="2 2"/></svg>Dashed vertical line = ED50 of that sample's fitted curve</div></div>
+      <div class="chart-card"><div class="chart-title">Standard curve &amp; interpolation${pc.std.from != null ? ` (plate ${pc.std.from + 1}'s standard)` : ''}<span class="info-i" tabindex="0">i<span class="info-pop"><b>How the concentration is chosen.</b> For each sample the least-diluted reading with OD ≤ 1.5 is used (higher ODs are too close to saturation). That OD is read off the standard curve and multiplied by the sample's dilution factor at that reading. If every reading is above 1.5, OD 1.49 at the last dilution is assumed. Reported values never fall below 0.01.</span></span></div>${renderStandardChart(pc)}<div class="chart-key"><svg width="22" height="12"><polyline points="1,2 11,2 11,12" fill="none" stroke="#8e8e93" stroke-width="1.5" stroke-dasharray="2 2"/></svg>Dashed line = the reading chosen for that sample (horizontal), read down to its concentration on the standard curve (vertical)</div></div>
     </div>
     <div class="chart-legend legend-below">${legend}</div>
     <div class="chip-secs">${chips}</div>
@@ -3493,6 +3504,8 @@ document.addEventListener('click', e => {
         document.querySelectorAll('#reviewAdv input[data-fit]').forEach(inp => { const [k, i] = inp.dataset.fit.split('|'); fc[k][+i] = inp.value === '' ? NaN : Number(inp.value); });
       applyFitSettings(fc); break;
     }
+    case 'curvePrev': stepCurve(-1); break;
+    case 'curveNext': stepCurve(1); break;
     case 'toggleShowExcl': review.showExcl = !review.showExcl; renderReview(); break;
     case 'more':
       review.limit += FLAG.BATCH;
@@ -4001,6 +4014,8 @@ const TOUR_STEPS = [
    body: '<p>Plates are fitted in parallel and appear here as they finish. Each tile is a plate; its colour shows its state and accepted plates get a ✓. Click a tile to jump to it.</p><p><b>Needs review</b> narrows the list to plates with something to check.</p>'},
   {view: 'review', enter: () => tourGoPlate(false), target: tourPlate('.plate-charts-row'), title: '3 · Curves and ED50',
    body: '<p><b>Left:</b> each sample\'s dose–response with its fitted curve and ED50.</p><p><b>Right:</b> the standard curve, with the sample readings interpolated onto it.</p><p>Click a legend entry to hide a curve, shift-click to show only that one.</p>'},
+  {view: 'review', target: tourPlate('.step-btns'), title: '3 · One curve at a time',
+   body: '<p>Step through this plate\'s sample curves one by one with the <b>▲ ▼</b> buttons or the <kbd>↑</kbd> <kbd>↓</kbd> keys. Past the last curve all curves are shown again.</p><p>The <b>i</b> next to a chart title explains ED50 and how the concentration is chosen.</p>'},
   {view: 'review', target: tourPlate('.res-wrap'), title: '3 · Results table',
    body: '<p>The fitted values and interpolated concentrations for every sample on this plate. They update immediately whenever you change anything above.</p>'},
   {view: 'review', enter: () => tourGoPlate(true), target: tourPlate('.chip-secs'), title: '3 · Outliers',

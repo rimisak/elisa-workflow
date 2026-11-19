@@ -442,7 +442,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.47.4 &nbsp;·&nbsp; 19/11/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.47.5 &nbsp;·&nbsp; 19/11/2026</div>
 
 <script>
 'use strict';
@@ -1426,7 +1426,7 @@ function render384Pattern() {
   const role = (j, i) => j === 0 ? ['#aeaeb2', .5] : [j === 11 ? '#ff9500' : '#007aff', 1 - i * 0.095];
   const sw = (c, t) => `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:14px;white-space:nowrap"><span style="width:10px;height:10px;border-radius:50%;background:${c}"></span>${t}</span>`;
   const roleLegend = `${sw('#aeaeb2', '<b>blank</b> (no sample)')}${sw('#007aff', '<b>samples</b>')}${sw('#ff9500', '<b>standard</b>')}`;
-  // One 96-well plate drawn with the given cell size; colourRing outlines every well (used for the subplates).
+  // One 96-well plate drawn with the given cell size; `ring` = subplate colour (used for the subplates).
   const plate96 = (cs, labels, ring) => {
     const x0 = labels ? 30 : 0, y0 = labels ? 44 : 0, W = x0 + 12 * cs + (labels ? 70 : 0);
     let svg = `<svg viewBox="0 0 ${W} ${y0 + 8 * cs + 4}" style="width:100%;max-width:${labels ? 560 : 150}px;display:block" role="img" aria-label="96-well plate: blank, samples and standard columns with dilution series down the rows">`;
@@ -1436,7 +1436,11 @@ function render384Pattern() {
     }
     for (let i = 0; i < 8; i++) {
       if (labels) svg += `<text x="${x0 - 7}" y="${y0 + i * cs + cs / 2 + 3}" text-anchor="end" font-size="9" fill="#8e8e93">${'ABCDEFGH'[i]}</text>`;
-      for (let j = 0; j < 12; j++) { const [col, op] = role(j, i); svg += dot(x0 + j * cs + cs / 2, y0 + i * cs + cs / 2, cs / 2 - (labels ? 3 : 1), col, op, ring ? ` stroke="${ring}" stroke-width="1.2"` : ''); }
+      for (let j = 0; j < 12; j++) {
+        // With a subplate colour (`ring`): that colour with the gradient, blank pale, standard outlined dark (as on the 384 plate).
+        const [col, op] = ring ? [ring, j === 0 ? .25 : 1 - i * 0.095] : role(j, i);
+        svg += dot(x0 + j * cs + cs / 2, y0 + i * cs + cs / 2, cs / 2 - (labels ? 3 : 1), col, op, ring && j === 11 ? ' stroke="#1d1d1f" stroke-width="1.2"' : '');
+      }
     }
     if (labels) {
       const ax = x0 + 12 * cs + 14;

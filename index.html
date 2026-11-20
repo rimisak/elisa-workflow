@@ -460,7 +460,7 @@ body.rv-lock #reviewAI{margin-bottom:10px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.54.1 &nbsp;·&nbsp; 20/11/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.54.2 &nbsp;·&nbsp; 20/11/2026</div>
 
 <script>
 'use strict';
@@ -892,6 +892,7 @@ function newAnalysis(skipConfirm) {
   if (!skipConfirm && (csvFiles.length || metaBytes || review) &&
       !confirm('Start a new analysis? This clears both files and the current analysis, including any exclusions.')) return;
   runGen++;
+  aiReset();
   document.getElementById('outputName').value = defaultOutputName();
   dropSession();
   review = null;
@@ -4020,6 +4021,7 @@ async function runProcessing(saved) {
         log(`Carrying over the previous review: ${saved.kept} unchanged plate(s)${saved.lost ? `, ${saved.lost} changed or removed (their edits are dropped)` : ''}.`, 'info');
       }
     }
+    aiReset();
     review = {grid, numPlates, meta, outputName,
               excl: new Set(saved && saved.excl || []), ignored: new Set(saved && saved.ignored || []), suggested: new Set(), sugImpact: new Map(), hidden: new Set(saved && saved.hidden || []),
               accepted: new Set(saved && saved.accepted || []), analysis: null, cache: new Map(),
@@ -4333,6 +4335,13 @@ async function aiReviewPlate(p, signal) {
               wasAccepted: review.accepted.has(p), reasons: Object.fromEntries(excl.map(x => [x.key, 1])), note: notes, model: data.model || aiState.model, accept: aiState.autoAccept && canAccept, needs: out.decision === 'needs_human' ? (notes || 'Claude could not decide.') : ''};
   const proposal = {p, decision: out.decision, notes, excl, ign, undecided, reviews, unreviewed, skipped, accepted: op.accept, usage: data.usage || null, secs: (performance.now() - t0) / 1000, model: data.model || aiState.model};
   return {op, proposal, chars: text.length};
+}
+// A new analysis or a new review starts clean: no old message or report, no run in progress, no Undo/Redo history.
+function aiReset() {
+  if (aiState.bulk && aiState.bulk.ctrl) aiState.bulk.ctrl.abort();
+  aiState.bulk = null; aiState.busy = false; aiState.proposal = null; aiState.msg = null;
+  aiUndoStack.length = 0; aiRedoStack.length = 0;
+  aiRefresh();
 }
 function aiPush(op) { aiUndoStack.push(op); aiRedoStack.length = 0; }
 async function aiAsk() {

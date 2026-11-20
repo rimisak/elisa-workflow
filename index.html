@@ -157,6 +157,15 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 .ptile.edit{background:#e4f0ff;border-color:#007aff;color:#0050b3}
 .ptile.res{background:#eefaf1;border:1px dashed #34c759;color:#1d7a35}
 .ptile.acc{background:#dff6e5;border-color:#34c759;color:#1d7a35}
+.ptile.aiacc{background:#eef9f1;border-color:#a9dfb8;color:#4a9a62}
+.ptile.fin{background:#34c759;border-color:#248a3d;color:#fff;font-weight:600}
+.btn-aiacc{background:#bfe8c9;color:#17622c}
+.btn-aiacc:hover{background:#a9dfb8}
+.ai-modal{display:none;position:fixed;inset:0;z-index:900;background:rgba(0,0,0,.4);align-items:center;justify-content:center;padding:20px}
+.ai-modal.open{display:flex}
+.ai-modal #reviewAI{width:min(560px,100%);max-height:88vh;overflow-y:auto;margin:0}
+.ai-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.ai-head b{font-size:14px}
 .ptile{transition:background-color .4s,border-color .4s,color .4s}
 .ptile.pop{animation:tilePop .55s ease-out}
 @keyframes tilePop{from{transform:scale(.8);background:#e5e5ea;opacity:.5}60%{transform:scale(1.12)}to{transform:none}}
@@ -182,7 +191,7 @@ h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
 body.rv-lock #scrollHint.show{display:block;grid-column:1;grid-row:1;align-self:end;justify-self:center;margin-bottom:22px}
 /* Review mode: the page itself does not scroll; the open Review section fills the window and shows one plate at a time. */
 body.rv-lock{height:100vh;overflow:hidden;display:flex;flex-direction:column;padding:8px 24px 12px}
-body.rv-lock>*:not(#secReview):not(.tour-ui){display:none!important}
+body.rv-lock>*:not(#secReview):not(.tour-ui):not(#aiModal){display:none!important}
 body.rv-lock #secReview{flex:1;min-height:0;display:flex;flex-direction:column;margin-bottom:0}
 body.rv-lock #secReview .sec-head{flex:none}
 body.rv-lock #secReview .sec-body{flex:1;min-height:0;display:flex;flex-direction:column;margin-top:10px}
@@ -226,7 +235,7 @@ body.rv-lock #reviewList>.rv-empty:only-child{display:block}
 .adv-fit .adv-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .adv-fit .adv-note{font-size:11px;color:#636366;margin-top:6px}
 .adv-fit .adv-err{font-size:12px;color:#c0392b;margin-top:6px}
-body.rv-lock #reviewAI{margin-bottom:10px}
+body.rv-lock #aiOpenBtn{flex:none;margin-bottom:10px}
 .adv-fit .ai-body label{display:block;font-size:12px;color:#3a3a3c;margin-top:8px}
 .adv-fit .ai-body label input[type=password],.adv-fit .ai-body label select{display:block;width:100%;box-sizing:border-box;margin-top:3px;font-size:12px;padding:4px 6px;border:1px solid #c7c7cc;border-radius:6px;background:#fff}
 .adv-fit .ai-body .ai-check{display:flex;gap:6px;align-items:flex-start}
@@ -460,7 +469,8 @@ body.rv-lock #reviewAI{margin-bottom:10px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.54.2 &nbsp;·&nbsp; 20/11/2026</div>
+<div id="aiModal" class="ai-modal"><div id="reviewAI" class="card adv-fit"></div></div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.55.0 &nbsp;·&nbsp; 20/11/2026</div>
 
 <script>
 'use strict';
@@ -495,7 +505,7 @@ function updateSections() {
     return;
   }
   const n = r.numPlates, acc = r.accepted.size, all = acc === n && !r.fitting;
-  setBadge('badgeReview', all ? '✓ All plates accepted' : `${acc}/${n} plates accepted`, all ? 'done' : 'busy');
+  setBadge('badgeReview', all ? '✓ All plates accepted' : `${acc}/${n} plates accepted${r.aiAcc.size ? ` (${[...r.aiAcc].filter(p => r.accepted.has(p)).length} by Claude, not yet confirmed)` : ''}`, all ? 'done' : 'busy');
   if (!all) {
     r.dlOpened = false;
     if (acc < n) r.sawOpen = true;   // only a plate accepted during this review jumps to Download, not a restored session
@@ -620,7 +630,7 @@ function storeGet(k)    { return storeOp('readonly',  st => st.get(k)); }
 // are part of the session (never the API key).
 function aiSessionPart(r) {
   return {aiReasons: Object.fromEntries(r.aiReasons || []), aiNotes: Object.fromEntries(r.aiNotes || []),
-          aiFlags: Object.fromEntries(r.aiFlags || []), aiRun: r.aiRun || null};
+          aiFlags: Object.fromEntries(r.aiFlags || []), aiAcc: Object.fromEntries([...(r.aiAcc || [])].map(p => [p, 1])), aiRun: r.aiRun || null};
 }
 function saveSession() {
   const r = review;
@@ -662,7 +672,7 @@ function remapSession(sess, files) {
   for (const [d, src] of Object.entries(sess.stdFrom || {})) if (map[d] != null && map[src] != null) stdFrom[map[d]] = map[src];
   const byPlate = o => Object.fromEntries(Object.entries(o || {}).filter(([i]) => map[i] != null).map(([i, v]) => [map[i], v]));
   const byKey = o => Object.fromEntries(Object.entries(o || {}).map(([k, v]) => [key(k), v]).filter(([k]) => k != null));
-  return {...sess, aiReasons: byKey(sess.aiReasons), aiNotes: byPlate(sess.aiNotes), aiFlags: byPlate(sess.aiFlags),
+  return {...sess, aiReasons: byKey(sess.aiReasons), aiNotes: byPlate(sess.aiNotes), aiFlags: byPlate(sess.aiFlags), aiAcc: byPlate(sess.aiAcc),
     excl: keys(sess.excl), ignored: keys(sess.ignored), hidden: keys(sess.hidden), stdFrom,
     accepted: (sess.accepted || []).map(i => map[i]).filter(n => n != null),
     kept: Object.keys(map).length, lost: sess.files.length - Object.keys(map).length};
@@ -3129,9 +3139,9 @@ function plateTilesHtml() {
     if (!r.analysis.plateCharts[p]) return `<button class="ptile pend" disabled title="${escapeXml(plateLabel(p))} — still fitting…">${p + 1}</button>`;
     const f = plateFlags(r.analysis.plateCharts[p]), ex = plateExclCount(p);
     const res = !r.accepted.has(p) && plateResolved(p);
-    const cls = r.accepted.has(p) ? 'acc' : f.count ? 'flag' : res ? 'res' : ex ? 'edit' : 'acc';
-    const tip = plateLabel(p) + (r.accepted.has(p) ? ' — accepted' : f.count ? ' — ' + f.reasons.slice(0, 4).join('; ') : res ? ' — resolved by exclusion' : ex ? ' — edited' : ' — clean');
-    return `<button class="ptile ${cls}${r.cur === p ? ' cur' : ''}${r.fresh && r.fresh.has(p) ? ' pop' : ''}" data-goto="${p}" title="${escapeXml(tip)}">${p + 1}${r.accepted.has(p) ? '✓' : ''}</button>`;
+    const cls = r.accepted.has(p) ? (r.aiAcc.has(p) ? 'aiacc' : 'fin') : f.count ? 'flag' : res ? 'res' : ex ? 'edit' : 'acc';
+    const tip = plateLabel(p) + (r.accepted.has(p) ? (r.aiAcc.has(p) ? ' — accepted by Claude (not yet confirmed by you)' : ' — accepted') : f.count ? ' — ' + f.reasons.slice(0, 4).join('; ') : res ? ' — resolved by exclusion' : ex ? ' — edited' : ' — clean');
+    return `<button class="ptile ${cls}${r.cur === p ? ' cur' : ''}${r.fresh && r.fresh.has(p) ? ' pop' : ''}" data-goto="${p}" title="${escapeXml(tip)}">${p + 1}${r.accepted.has(p) ? (r.aiAcc.has(p) ? '✓' : '✓✓') : ''}</button>`;
   }).join('');
 }
 
@@ -3188,9 +3198,9 @@ function refreshActions() {
 function acceptBarHtml() {
   const r = review, p = r && r.cur;
   if (p == null || !r.analysis.plateCharts[p]) return '';
-  const acc = r.accepted.has(p);
+  const acc = r.accepted.has(p), byAi = acc && r.aiAcc.has(p);
   const list = visiblePlates(), i = list.indexOf(p), first = i <= 0, last = i < 0 || i >= list.length - 1;
-  return `<button class="btn process-btn ${acc ? 'btn-accepted' : 'btn-black'}" data-accept="${p}">${acc ? '✓ Accepted' : 'Accept plate and show next <kbd class="keycap">A</kbd>'}</button>`
+  return `<button class="btn process-btn ${byAi ? 'btn-aiacc' : acc ? 'btn-accepted' : 'btn-black'}" data-accept="${p}" ${byAi ? 'title="Claude accepted this plate. Click to confirm it as finally accepted."' : ''}>${byAi ? '✓ Accepted by Claude · confirm <kbd class="keycap">A</kbd>' : acc ? '✓✓ Accepted' : 'Accept plate and show next <kbd class="keycap">A</kbd>'}</button>`
     + `<div class="ra-row"><button class="btn btn-black process-btn" ${first ? 'disabled' : `data-prevplate="${p}"`} title="${first ? 'This is the first plate' : 'Previous plate (←)'}">Back <kbd class="keycap">←</kbd></button>`
     + `<button class="btn btn-black process-btn" ${last ? 'disabled' : `data-nextplate="${p}"`} title="${last ? 'This is the last plate' : 'Next plate (→)'}">Next <kbd class="keycap">→</kbd></button>`
     + '</div>'
@@ -3308,12 +3318,11 @@ function renderReview(animate) {
   const sec = document.getElementById('chartsSection');
   if (!sec || !review) return;
   const keep = document.getElementById('reviewSideScroll'), top = keep ? keep.scrollTop : 0;
-  sec.innerHTML = `<div id="reviewSide"><div id="reviewSideScroll">`
+  sec.innerHTML = `<div id="reviewSide"><button id="aiOpenBtn" class="btn btn-primary process-btn" data-ai="open">${aiOpenLabel()}</button><div id="reviewSideScroll">`
     + `<div id="reviewRunInfo" class="run-info">${runInfoHtml}</div>`
     + `<div id="reviewHeader" class="card">${reviewHeaderHtml()}</div>`
     + `<div id="reviewImpact" class="card imp-card">${impactCardHtml()}</div>`
     + `<details id="reviewAdv" class="card adv-fit"${review.advOpen ? ' open' : ''}>${advFitHtml()}</details>`
-    + `<details id="reviewAI" class="card adv-fit"${review.aiOpen ? ' open' : ''}>${aiCardHtml()}</details>`
     + `</div><div id="reviewActions">${acceptBarHtml()}</div></div>`
     + `<div id="reviewList">${reviewListHtml()}</div>`
     + `<div id="scrollHint">↓ Scroll for more</div>`;
@@ -3412,8 +3421,9 @@ function stepPlate(dir) {
 // marker moves to the plate that takes its place and the page keeps its scroll position.
 function acceptPlate(p) {
   const r = review, before = visiblePlates(), idx = before.indexOf(p);
-  const accepting = !r.accepted.has(p);
-  if (accepting) r.accepted.add(p); else r.accepted.delete(p);
+  // A plate Claude accepted is confirmed (final) by this click; a final one is un-accepted.
+  const accepting = !r.accepted.has(p) || r.aiAcc.has(p);
+  if (accepting) { r.accepted.add(p); r.aiAcc.delete(p); } else r.accepted.delete(p);
   saveSession(); updateSections();
   const after = visiblePlates();
   if (r.view !== 'all' && !after.includes(p)) {
@@ -3694,6 +3704,7 @@ document.addEventListener('click', e => {
       break;
     case 'acceptAll':
       for (let p = 0; p < review.numPlates; p++) review.accepted.add(p);
+      review.aiAcc.clear();
       renderReview(); break;
     case 'applyFit': case 'resetFit': {
       if (!review) break;
@@ -3740,7 +3751,7 @@ function stepCurve(dir) {
 
 // Keyboard review: ←/→ (or K/J) step through the listed plates, A accepts and moves on.
 document.addEventListener('keydown', e => {
-  if (!review || !review.analysis || review.busy || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (!review || !review.analysis || review.busy || e.metaKey || e.ctrlKey || e.altKey || aiState.open) return;
   const t = e.target, tag = t && t.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;
   const sec = document.getElementById('secReview');
@@ -4026,7 +4037,7 @@ async function runProcessing(saved) {
               excl: new Set(saved && saved.excl || []), ignored: new Set(saved && saved.ignored || []), suggested: new Set(), sugImpact: new Map(), hidden: new Set(saved && saved.hidden || []),
               accepted: new Set(saved && saved.accepted || []), analysis: null, cache: new Map(),
               files, aiReasons: new Map(Object.entries(saved && saved.aiReasons || {})), aiNotes: new Map(Object.entries(saved && saved.aiNotes || {}).map(([i, v]) => [+i, v])),
-              aiFlags: new Map(Object.entries(saved && saved.aiFlags || {}).map(([i, v]) => [+i, v])), aiRun: saved && saved.aiRun || null,
+              aiFlags: new Map(Object.entries(saved && saved.aiFlags || {}).map(([i, v]) => [+i, v])), aiRun: saved && saved.aiRun || null, aiAcc: new Set(Object.keys(saved && saved.aiAcc || {}).map(Number)),
               view: 'all', cur: null, limit: FLAG.BATCH, flagCache: null, stdFrom: saved && saved.stdFrom || {},
               ready: new Set(), done: new Set(), nextRel: 0, seen: new Set(), fresh: null, fitting: false, shown: false, restoring: !!saved};
     // Open the review right away: every plate is a grey tile until its fit is done.
@@ -4332,7 +4343,7 @@ async function aiReviewPlate(p, signal) {
   const notes = String(out.notes || '');
   const canAccept = out.decision === 'accept' && !unreviewed.length && !undecided && !plateFlags(pc).noStd;
   const op = {review, p, excl: excl.map(x => x.key).filter(k => !review.excl.has(k)), ign: ign.map(x => x.key).filter(k => review.suggested.has(k)),
-              wasAccepted: review.accepted.has(p), reasons: Object.fromEntries(excl.map(x => [x.key, 1])), note: notes, model: data.model || aiState.model, accept: aiState.autoAccept && canAccept, needs: out.decision === 'needs_human' ? (notes || 'Claude could not decide.') : ''};
+              wasAccepted: review.accepted.has(p), wasAi: review.aiAcc.has(p), reasons: Object.fromEntries(excl.map(x => [x.key, 1])), note: notes, model: data.model || aiState.model, accept: aiState.autoAccept && canAccept, needs: out.decision === 'needs_human' ? (notes || 'Claude could not decide.') : ''};
   const proposal = {p, decision: out.decision, notes, excl, ign, undecided, reviews, unreviewed, skipped, accepted: op.accept, usage: data.usage || null, secs: (performance.now() - t0) / 1000, model: data.model || aiState.model};
   return {op, proposal, chars: text.length};
 }
@@ -4417,8 +4428,8 @@ function aiApplyOp(op) {
   op.excl.forEach(k => { r.excl.add(k); if (op.reasons && op.reasons[k]) (r.aiReasons || (r.aiReasons = new Map())).set(k, op.reasons[k]); });
   if (op.note) (r.aiNotes || (r.aiNotes = new Map())).set(op.p, op.note);
   if (op.model) r.aiRun = {model: op.model, date: new Date().toISOString().slice(0, 10)};
-  r.accepted.delete(op.p);
-  if (op.accept) r.accepted.add(op.p);
+  r.accepted.delete(op.p); r.aiAcc.delete(op.p);
+  if (op.accept) { r.accepted.add(op.p); r.aiAcc.add(op.p); }
   if (op.needs) (r.aiFlags || (r.aiFlags = new Map())).set(op.p, op.needs);
   r.flagCache = null;
   r.out = null; r.prepFailed = false; r.blobTok = (r.blobTok || 0) + 1;
@@ -4432,8 +4443,8 @@ function aiRevertOp(op) {
   if (op.note && r.aiNotes) r.aiNotes.delete(op.p);
   op.ign.forEach(k => r.ignored.delete(k));
   refilterSuggested();
-  r.accepted.delete(op.p);
-  if (op.wasAccepted) r.accepted.add(op.p);
+  r.accepted.delete(op.p); r.aiAcc.delete(op.p);
+  if (op.wasAccepted) { r.accepted.add(op.p); if (op.wasAi) r.aiAcc.add(op.p); }
   if (op.needs && r.aiFlags) r.aiFlags.delete(op.p);
   r.flagCache = null;
   r.out = null; r.prepFailed = false; r.blobTok = (r.blobTok || 0) + 1;
@@ -4465,7 +4476,21 @@ function aiSyncButtons() {
   if (all) all.disabled = aiState.busy || aiCurrentPlate() == null || review.fitting || !aiState.consent || !aiState.key.trim();
   if (forget) forget.disabled = !aiState.key;
 }
-function aiRefresh() { const el = document.getElementById('reviewAI'); if (el) el.innerHTML = aiCardHtml(); }
+function aiOpenLabel() {
+  const b = aiState.bulk;
+  return b ? `Claude is reviewing… ${b.done}/${b.total}` : 'Review with Claude';
+}
+function aiRefresh() {
+  const el = document.getElementById('reviewAI'); if (el && aiState.open) el.innerHTML = aiCardHtml();
+  const bt = document.getElementById('aiOpenBtn'); if (bt) bt.textContent = aiOpenLabel();
+}
+function aiOpenDialog(open) {
+  aiState.open = open;
+  document.getElementById('aiModal').classList.toggle('open', open);
+  if (open) aiRefresh();
+}
+document.addEventListener('mousedown', e => { if (e.target.id === 'aiModal') aiOpenDialog(false); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && aiState.open) aiOpenDialog(false); });
 function aiCardHtml() {
   const s = aiState, esc = escapeXml, p = aiCurrentPlate();
   const est = aiEstimate(1, 6000), m = aiModel();
@@ -4482,7 +4507,7 @@ function aiCardHtml() {
       + (pr.skipped ? `<div class="adv-note">${pr.skipped} suggestion(s) were ignored (unknown or already excluded point).</div>` : '')
       + `<div class="adv-btns"><button class="btn btn-secondary btn-sm" data-ai="dismiss">Hide this report</button></div></div>`;
   }
-  return `<summary>Auto-review with Claude (beta)</summary>
+  return `<div class="ai-head"><b>Auto-review with Claude (beta)</b><button class="btn btn-secondary btn-sm" data-ai="close">Close</button></div>
     <div class="ai-body">
       <label>API key <input type="password" autocomplete="off" spellcheck="false" data-aifield="key" value="${esc(s.key)}" placeholder="sk-ant-…"></label>
       <label class="ai-check"><input type="checkbox" data-aifield="remember" ${s.remember ? 'checked' : ''}> Remember the key on this device</label>
@@ -4512,6 +4537,8 @@ document.addEventListener('click', e => {
   const b = e.target.closest && e.target.closest('[data-ai]');
   if (!b || b.disabled) return;
   switch (b.dataset.ai) {
+    case 'open': aiOpenDialog(true); break;
+    case 'close': aiOpenDialog(false); break;
     case 'test': aiTest(); break;
     case 'ask': aiAsk(); break;
     case 'all': aiAll(); break;
@@ -4542,7 +4569,6 @@ document.addEventListener('change', e => {
   } catch (err) {}
   if (k === 'model') aiRefresh(); else aiSyncButtons();
 });
-document.addEventListener('toggle', e => { if (review && e.target.id === 'reviewAI') review.aiOpen = e.target.open; }, true);
 
 // ─── GUIDED TOUR ──────────────────────────────────────────────────────────────
 // Walks through a whole analysis on the sample data: a dimmed page with a spotlight on the target element and
@@ -4587,6 +4613,7 @@ function tourGoPlate(flagged) {
 async function tourAcceptAll() {
   if (!review) return;
   for (let p = 0; p < review.numPlates; p++) review.accepted.add(p);
+  review.aiAcc.clear();
   renderReview();
 }
 
@@ -4619,8 +4646,8 @@ const TOUR_STEPS = [
    body: '<p>Edge effects are suggested automatically. To drop a whole row, use the <b>A–H</b> buttons: here for this plate, or in the header for all plates.</p>'},
   {view: 'review', target: '#reviewImpact', pos: 'left', title: '3 · Outlier sensitivity',
    body: '<p>A candidate is suggested when excluding it would shift the ED50 by at least this percentage. Slide towards 0 % to see more candidates, higher to keep only the influential ones. No refit is needed.</p>'},
-  {view: 'review', target: '#reviewAI', pos: 'left', title: '3 · Claude auto-review (optional)',
-   body: '<p>With your own Anthropic API key, Claude can review the plate (or all plates): it decides on every suggested outlier, justifies every poor-fit curve and can accept clean plates. Nothing is sent until you tick the consent box, and only OD values and sample names leave your computer. Everything it does can be undone, and the points it excluded are marked in the <i>Excluded Points</i> sheet.</p><p>This tour never calls the API.</p>'},
+  {view: 'review', target: '#aiOpenBtn', pos: 'left', title: '3 · Claude auto-review (optional)',
+   body: '<p>The blue button opens a dialog. With your own Anthropic API key, Claude can review the plate (or all plates): it decides on every suggested outlier, justifies every poor-fit curve and can accept clean plates. Nothing is sent until you tick the consent box, and only OD values and sample names leave your computer. Everything it does can be undone, and the points it excluded are marked in the <i>Excluded Points</i> sheet.</p><p>This tour never calls the API.</p>'},
   {view: 'review', target: '#reviewAdv', pos: 'left', title: '3 · Advanced fit settings',
    body: '<p>Lower, initial and upper bounds of the 4PL parameters. Applying them refits every plate and clears the accepted plates. The defaults, or the <i>Advanced (optional)</i> sheet in the metadata, are usually enough.</p>'},
   {view: 'review', target: '#reviewActions', pos: 'left', title: '3 · Accept plates',

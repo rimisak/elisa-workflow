@@ -235,6 +235,8 @@ body.rv-lock #reviewAI{margin-bottom:10px}
 .ai-msg{font-size:12px;margin-top:8px;padding:6px 8px;border-radius:8px}
 .ai-msg.info{background:#eef5ff;color:#0a58ca}.ai-msg.ok{background:#e8f7ec;color:#1b7a3a}.ai-msg.err{background:#fdecea;color:#c0392b}
 .ai-prop{font-size:12px;margin-top:8px;padding:8px 10px;border:1px solid #d1d1d6;border-radius:10px;background:#fafafa}
+.ai-bar{height:6px;background:#e5e5ea;border-radius:4px;margin-top:8px;overflow:hidden}.ai-bar>div{height:100%;background:#007aff;transition:width .3s}
+.flag-ai{font-size:12px;color:#8a4b00;background:#fff1d6;border-radius:8px;padding:4px 8px;margin:4px 0}
 .ai-prop ul{margin:4px 0 0 16px;padding:0}
 .ai-prop .ai-sub{font-weight:600;margin-top:6px}
 .std-bar select{font-size:13px;padding:3px 6px;border-radius:6px;border:1px solid #c7c7cc}
@@ -458,7 +460,7 @@ body.rv-lock #reviewAI{margin-bottom:10px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.51.0 &nbsp;·&nbsp; 19/11/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.52.0 &nbsp;·&nbsp; 20/11/2026</div>
 
 <script>
 'use strict';
@@ -2864,7 +2866,9 @@ function plateFlags(pc) {
   }
   const reasons = [...notes];
   for (const [n, w] of samples) reasons.push(`${n}: ${w.map(x => x.text).join(', ')}`);
-  const out = {samples, notes, reasons, noStd, stdR2, stdOpen, count: samples.size + notes.length};
+  const aiNote = (r.aiFlags && r.aiFlags.get(pc.plateIndex)) || '';
+  if (aiNote) reasons.push('Claude: ' + aiNote);
+  const out = {samples, notes, reasons, noStd, stdR2, stdOpen, aiNote, count: samples.size + notes.length + (aiNote ? 1 : 0)};
   if (out.count) (r.everFlagged || (r.everFlagged = new Set())).add(pc.plateIndex);
   (r.flagCache || (r.flagCache = {}))[pc.plateIndex] = out;
   return out;
@@ -3058,6 +3062,7 @@ function plateBlockHtml(pc) {
     const nVis = visibleSuggestedKeys(p).length;
     const group = (i, title, ok, txt, btn = '') => `<div class="flag-group"><span class="flag-gtitle">${i}. ${title}</span>${btn || `<span class="flag-item${ok ? ' ok' : ''}">${txt}</span>`}</div>`;
     banner = `<div class="flag-banner"><div class="flag-head">⚠ Plate flagged.</div>
+      ${fl.aiNote ? `<div class="flag-ai">Claude: needs your look. ${escapeXml(fl.aiNote)}</div>` : ''}
       <div class="flag-cols">
       ${group(1, 'Standard curve fit', !stdBad.length, stdTxt)}
       ${group(2, 'Outliers', !nOut, nOut ? `${nOut} suggested` : 'None detected', nOut ? (nVis ? `<button class="btn btn-secondary btn-sm" data-exclplate="${p}" title="Exclude the suggested outliers on the curves currently shown">Exclude ${nVis > 1 ? 'all ' : ''}${nVis} visible outlier${nVis > 1 ? 's' : ''} <kbd class="keycap">X</kbd></button> <button class="btn btn-secondary btn-sm" data-ignplate="${p}" title="Keep these points and stop suggesting them">Ignore ${nVis > 1 ? 'all ' : ''}${nVis} <kbd class="keycap">I</kbd></button>` : `<button class="btn btn-secondary btn-sm" disabled title="No suggested outliers on the curves currently shown">No visible outliers</button>`) : '')}
@@ -4153,7 +4158,7 @@ const AI_KEY_STORE = 'elisaApiKey';
 const aiState = (() => {
   let k = '';
   try { k = localStorage.getItem(AI_KEY_STORE) || ''; } catch (e) {}
-  return {key: k, remember: !!k, model: AI_MODELS[0].id, consent: false, busy: false, msg: null, proposal: null};
+  return {key: k, remember: !!k, model: AI_MODELS[0].id, consent: false, busy: false, msg: null, proposal: null, autoAccept: false, skipAccepted: true, bulk: null};
 })();
 const AI_SYSTEM = `You review one 96-well ELISA plate for a lab analysis tool. Your job is to decide which individual readings are technical outliers and should be excluded from curve fitting, so the scientist has less manual work.
 
@@ -4235,22 +4240,22 @@ function aiEstimate(nPlates, payloadChars) {
   const m = aiModel(), inTok = (AI_SYSTEM.length + (payloadChars || 6000)) / 4 * nPlates, outTok = 1500 * nPlates;
   return {inTok: Math.round(inTok), outTok, usd: (inTok * m.inp + outTok * m.out) / 1e6};
 }
-async function aiCall(body, withFallback) {
+async function aiCall(body, withFallback, signal) {
   const m = aiModel();
   const headers = {'content-type': 'application/json', 'x-api-key': aiState.key.trim(), 'anthropic-version': '2023-06-01',
                    'anthropic-dangerous-direct-browser-access': 'true'};
   if (withFallback && m.fallback) { headers['anthropic-beta'] = 'server-side-fallback-2026-07-01'; body = {...body, fallbacks: 'default'}; }
   let res;
-  try { res = await fetch(API_URL, {method: 'POST', headers, body: JSON.stringify(body)}); }
-  catch (e) { throw new Error('Could not reach the API (network, firewall or a browser extension blocked the request).'); }
+  try { res = await fetch(API_URL, {method: 'POST', headers, body: JSON.stringify(body), signal}); }
+  catch (e) { if (e.name === 'AbortError') throw e; throw new Error('Could not reach the API (network, firewall or a browser extension blocked the request).'); }
   let data = null;
   try { data = await res.json(); } catch (e) {}
   if (!res.ok) {
     const msg = data && data.error && data.error.message ? data.error.message : `HTTP ${res.status}`;
-    if (res.status === 400 && withFallback && /fallback/i.test(msg)) return aiCall(body && (({fallbacks, ...rest}) => rest)(body), false);
-    if (res.status === 401) throw new Error('The API key was rejected (401). Check that it is complete and active.');
+    if (res.status === 400 && withFallback && /fallback/i.test(msg)) return aiCall(body && (({fallbacks, ...rest}) => rest)(body), false, signal);
+    if (res.status === 401) { const e = new Error('The API key was rejected (401). Check that it is complete and active.'); e.status = 401; throw e; }
     if (res.status === 403) throw new Error('This key is not allowed to use that model or the API (403). ' + msg);
-    if (res.status === 429) throw new Error('Rate limit reached (429). Wait a moment and try again.' + (res.headers.get('retry-after') ? ` Retry after ${res.headers.get('retry-after')} s.` : ''));
+    if (res.status === 429) { const e = new Error('Rate limit reached (429). Wait a moment and try again.' + (res.headers.get('retry-after') ? ` Retry after ${res.headers.get('retry-after')} s.` : '')); e.status = 429; e.retryAfter = Number(res.headers.get('retry-after')) || null; throw e; }
     throw new Error(`API error ${res.status}: ${msg}`);
   }
   return data;
@@ -4264,70 +4269,149 @@ async function aiTest() {
   } catch (e) { aiSet(e.message, 'err'); }
   aiState.busy = false; aiRefresh();
 }
+function aiSleep(ms, signal) {
+  return new Promise((res, rej) => {
+    const t = setTimeout(res, ms);
+    if (signal) signal.addEventListener('abort', () => { clearTimeout(t); rej(Object.assign(new Error('aborted'), {name: 'AbortError'})); }, {once: true});
+  });
+}
+// One plate: ask Claude, check the answer against the real points and build an operation (nothing is applied here).
+async function aiReviewPlate(p, signal) {
+  const payload = aiPlatePayload(p), text = JSON.stringify(payload);
+  let data;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      data = await aiCall({model: aiState.model, max_tokens: 16000, system: AI_SYSTEM,
+        messages: [{role: 'user', content: text}],
+        output_config: {effort: 'medium', format: {type: 'json_schema', schema: AI_SCHEMA}}}, true, signal);
+      break;
+    } catch (e) {
+      if (e.status === 429 && attempt < 3 && !(signal && signal.aborted)) { await aiSleep((e.retryAfter || 20) * 1000, signal); continue; }
+      throw e;
+    }
+  }
+  if (data.stop_reason === 'refusal') throw new Error('Claude declined this request (refusal). Review this plate by hand.');
+  const block = (data.content || []).find(b => b.type === 'text');
+  if (!block) throw new Error('The answer had no text part. Try again.');
+  let out;
+  try { out = JSON.parse(block.text); } catch (e) { throw new Error('The answer could not be read as JSON' + (data.stop_reason === 'max_tokens' ? ' (it was cut off at the token limit)' : '') + '. Try again.'); }
+  const pc = review.analysis.plateCharts[p], pts = new Map();
+  for (const q of [...pc.samples.flatMap(s => s.points), ...pc.std.points]) pts.set(q.key, q);
+  const excl = [], ign = [], seen = new Set();
+  let skipped = 0;
+  for (const x of out.decisions || []) {
+    const key = exKey(p, x.column, x.dose_index), q = pts.get(key);
+    if (!q || q.excluded || seen.has(key)) { skipped++; continue; }
+    seen.add(key);
+    const item = {key, label: 'ABCDEFGH'[x.dose_index] + x.column, reason: String(x.reason || ''), od: q.y};
+    if (x.action === 'ignore') { if (review.suggested.has(key)) ign.push(item); else skipped++; }
+    else excl.push(item);
+  }
+  const poor = payload.poor_fit_curves, reviews = [];
+  for (const c of out.curve_reviews || []) {
+    const m = poor.find(x => x.name === c.series);
+    if (m && String(c.justification || '').trim() && !reviews.some(v => v.series === m.name)) reviews.push({series: m.name, is_standard: m.is_standard, verdict: c.verdict, justification: String(c.justification), problems: m.problems});
+  }
+  const unreviewed = poor.filter(x => !reviews.some(v => v.series === x.name)).map(x => x.name);
+  // Suggested points Claude gave no decision for stay as they are for the scientist.
+  const undecided = [...pts.values()].filter(q => !q.excluded && review.suggested.has(q.key) && !seen.has(q.key)).length;
+  const notes = String(out.notes || '');
+  const canAccept = out.decision === 'accept' && !unreviewed.length && !undecided && !plateFlags(pc).noStd;
+  const op = {review, p, excl: excl.map(x => x.key).filter(k => !review.excl.has(k)), ign: ign.map(x => x.key).filter(k => review.suggested.has(k)),
+              wasAccepted: review.accepted.has(p), accept: aiState.autoAccept && canAccept, needs: out.decision === 'needs_human' ? (notes || 'Claude could not decide.') : ''};
+  const proposal = {p, decision: out.decision, notes, excl, ign, undecided, reviews, unreviewed, skipped, accepted: op.accept, usage: data.usage || null, model: data.model || aiState.model};
+  return {op, proposal, chars: text.length};
+}
+function aiPush(op) { aiUndoStack.push(op); aiRedoStack.length = 0; }
 async function aiAsk() {
   const p = aiCurrentPlate();
   if (p == null) return aiSet('No plate is shown yet.', 'err');
   if (!aiState.key.trim()) return aiSet('Enter an API key first.', 'err');
   if (!aiState.consent) return aiSet('Tick the box that allows sending this plate\'s data first.', 'err');
-  const payload = aiPlatePayload(p), text = JSON.stringify(payload);
-  aiState.busy = true; aiState.proposal = null; aiSet(`Asking Claude about plate ${p + 1}…`, 'info'); aiRefresh();
+  aiState.busy = true; aiState.proposal = null; aiSet(`Asking Claude about plate ${p + 1}…`, 'info');
   try {
-    const data = await aiCall({model: aiState.model, max_tokens: 16000, system: AI_SYSTEM,
-      messages: [{role: 'user', content: text}],
-      output_config: {effort: 'medium', format: {type: 'json_schema', schema: AI_SCHEMA}}}, true);
-    if (data.stop_reason === 'refusal') throw new Error('Claude declined this request (refusal). Review this plate by hand.');
-    const block = (data.content || []).find(b => b.type === 'text');
-    if (!block) throw new Error('The answer had no text part. Try again.');
-    let out;
-    try { out = JSON.parse(block.text); } catch (e) { throw new Error('The answer could not be read as JSON' + (data.stop_reason === 'max_tokens' ? ' (it was cut off at the token limit)' : '') + '. Try again.'); }
-    const pc = review.analysis.plateCharts[p], pts = new Map();
-    for (const q of [...pc.samples.flatMap(s => s.points), ...pc.std.points]) pts.set(q.key, q);
-    const excl = [], ign = [], seen = new Set();
-    let skipped = 0;
-    for (const x of out.decisions || []) {
-      const key = exKey(p, x.column, x.dose_index), q = pts.get(key);
-      if (!q || q.excluded || seen.has(key)) { skipped++; continue; }
-      seen.add(key);
-      const item = {key, label: 'ABCDEFGH'[x.dose_index] + x.column, reason: String(x.reason || ''), od: q.y};
-      if (x.action === 'ignore') { if (review.suggested.has(key)) ign.push(item); else skipped++; }
-      else excl.push(item);
-    }
-    const poor = payload.poor_fit_curves, reviews = [];
-    for (const c of out.curve_reviews || []) {
-      const m = poor.find(x => x.name === c.series);
-      if (m && String(c.justification || '').trim() && !reviews.some(v => v.series === m.name)) reviews.push({series: m.name, is_standard: m.is_standard, verdict: c.verdict, justification: String(c.justification), problems: m.problems});
-    }
-    const unreviewed = poor.filter(x => !reviews.some(v => v.series === x.name)).map(x => x.name);
-    // Suggested points Claude gave no decision for stay as they are for the scientist.
-    const undecided = [...pts.values()].filter(q => !q.excluded && review.suggested.has(q.key) && !seen.has(q.key)).length;
-    const op = {review, p, excl: excl.map(x => x.key).filter(k => !review.excl.has(k)), ign: ign.map(x => x.key).filter(k => review.suggested.has(k)), wasAccepted: review.accepted.has(p)};
-    aiState.proposal = {p, decision: out.decision, notes: String(out.notes || ''), excl, ign, undecided, reviews, unreviewed, skipped, usage: data.usage || null, model: data.model || aiState.model};
+    const {op, proposal} = await aiReviewPlate(p);
+    aiState.proposal = proposal;
     aiState.busy = false;
-    aiApplyOp(op);
-    aiUndoStack.push(op); aiRedoStack.length = 0;
-    aiSet(`Claude's decisions for plate ${p + 1} are applied: ${op.excl.length} exclusion${op.excl.length === 1 ? '' : 's'}, ${op.ign.length} suggestion${op.ign.length === 1 ? '' : 's'} ignored. Use Undo if you disagree; accepting the plate is still up to you.`, 'ok');
+    aiApplyOp(op); aiPush(op);
+    aiSet(`Claude's decisions for plate ${p + 1} are applied: ${op.excl.length} exclusion${op.excl.length === 1 ? '' : 's'}, ${op.ign.length} suggestion${op.ign.length === 1 ? '' : 's'} ignored${op.accept ? ', plate accepted' : ''}${op.needs ? ', flagged for you' : ''}. Use Undo if you disagree.`, 'ok');
     return;
   } catch (e) { aiSet(e.message, 'err'); }
   aiState.busy = false; aiRefresh();
 }
+// All plates: a queue of three requests at a time. Every answer is applied as it arrives; the whole run is one Undo step.
+async function aiAll() {
+  const r = review;
+  if (!r || !r.analysis || r.fitting) return aiSet('Wait until all plates are fitted.', 'err');
+  if (!aiState.key.trim()) return aiSet('Enter an API key first.', 'err');
+  if (!aiState.consent) return aiSet('Tick the box that allows sending the plate data first.', 'err');
+  const plates = [...Array(r.numPlates).keys()].filter(p => r.analysis.plateCharts[p] && !(aiState.skipAccepted && r.accepted.has(p)));
+  if (!plates.length) return aiSet('Nothing to review: every plate is accepted already (or untick "Skip plates I already accepted").', 'info');
+  const chars = plates.reduce((a, p) => a + JSON.stringify(aiPlatePayload(p)).length, 0), est = aiEstimate(plates.length, chars / plates.length);
+  if (!confirm(`Review ${plates.length} plate${plates.length === 1 ? '' : 's'} with ${aiModel().label}?\n\nEstimated cost: about $${est.usd.toFixed(2)} (based on prices as of November 2026, not updated automatically).\n\nOD values, fit results and sample names of these plates are sent to the Anthropic API. Claude's decisions are applied right away${aiState.autoAccept ? ', and plates it marks clean are accepted' : ''}; Undo reverts the whole run.`)) return;
+  const ctrl = new AbortController(), children = [], failed = [];
+  const stats = {excl: 0, ign: 0, accepted: 0, needs: 0};
+  aiState.busy = true; aiState.proposal = null;
+  aiState.bulk = {total: plates.length, done: 0, active: new Set(), ctrl};
+  aiSet(null);
+  let next = 0, fatal = '';
+  const worker = async () => {
+    while (!ctrl.signal.aborted) {
+      const i = next++;
+      if (i >= plates.length) return;
+      const p = plates[i];
+      aiState.bulk.active.add(p + 1); aiRefresh();
+      try {
+        const res = await aiReviewPlate(p, ctrl.signal);
+        if (ctrl.signal.aborted) return;
+        aiApplyOp(res.op); children.push(res.op);
+        stats.excl += res.op.excl.length; stats.ign += res.op.ign.length; stats.accepted += res.op.accept ? 1 : 0; stats.needs += res.op.needs ? 1 : 0;
+      } catch (e) {
+        if (e.name === 'AbortError') return;
+        failed.push(`plate ${p + 1}: ${e.message}`);
+        if (e.status === 401 || e.status === 403) { fatal = e.message; ctrl.abort(); }
+      } finally {
+        aiState.bulk.active.delete(p + 1); aiState.bulk.done++; aiRefresh();
+      }
+    }
+  };
+  await Promise.all([worker(), worker(), worker()]);
+  const cancelled = ctrl.signal.aborted && !fatal;
+  aiState.bulk = null; aiState.busy = false;
+  if (children.length) {
+    children.sort((a, b) => a.p - b.p);
+    aiPush({review: r, p: children[0].p, excl: [], ign: [], wasAccepted: false, children});
+  }
+  const summary = `${cancelled ? 'Cancelled. ' : ''}Claude reviewed ${children.length} of ${plates.length} plate${plates.length === 1 ? '' : 's'}: ${stats.excl} exclusion${stats.excl === 1 ? '' : 's'}, ${stats.ign} suggestion${stats.ign === 1 ? '' : 's'} ignored, ${stats.accepted} plate${stats.accepted === 1 ? '' : 's'} accepted, ${stats.needs} flagged for you.`
+    + (fatal ? ` Stopped: ${fatal}` : '') + (failed.length ? ` Failed: ${failed.join(' | ')}` : '') + (children.length ? ' Undo reverts the whole run.' : '');
+  aiSet(summary, failed.length || fatal ? 'err' : 'ok');
+  if (children.length) { renderReview(); }
+}
 // Claude's decisions are applied at once. Each application is one operation that can be undone and redone.
 const aiUndoStack = [], aiRedoStack = [];
 function aiApplyOp(op) {
+  if (op.children) { op.children.forEach(aiApplyOp); return; }
   const r = review;
   op.ign.forEach(k => { r.ignored.add(k); r.suggested.delete(k); });
   op.excl.forEach(k => r.excl.add(k));
   r.accepted.delete(op.p);
+  if (op.accept) r.accepted.add(op.p);
+  if (op.needs) (r.aiFlags || (r.aiFlags = new Map())).set(op.p, op.needs);
   r.flagCache = null;
   r.out = null; r.prepFailed = false; r.blobTok = (r.blobTok || 0) + 1;
   if (op.excl.length) reanalyze();
   refreshReview(op.p);
 }
 function aiRevertOp(op) {
+  if (op.children) { [...op.children].reverse().forEach(aiRevertOp); return; }
   const r = review;
   op.excl.forEach(k => r.excl.delete(k));
   op.ign.forEach(k => r.ignored.delete(k));
   refilterSuggested();
+  r.accepted.delete(op.p);
   if (op.wasAccepted) r.accepted.add(op.p);
+  if (op.needs && r.aiFlags) r.aiFlags.delete(op.p);
+  r.flagCache = null;
   r.out = null; r.prepFailed = false; r.blobTok = (r.blobTok || 0) + 1;
   if (op.excl.length) reanalyze();
   refreshReview(op.p);
@@ -4337,22 +4421,24 @@ function aiUndo() {
   const op = aiLive(aiUndoStack).pop();
   if (!op) return;
   aiUndoStack.splice(aiUndoStack.indexOf(op), 1);
-  aiRevertOp(op); aiRedoStack.push(op);
-  aiSet(`Undid Claude's changes on plate ${op.p + 1}.`, 'info');
+  aiRevertOp(op); aiRedoStack.push(op); if (op.children) renderReview();
+  aiSet(op.children ? `Undid Claude's changes on ${op.children.length} plates.` : `Undid Claude's changes on plate ${op.p + 1}.`, 'info');
 }
 function aiRedo() {
   const op = aiLive(aiRedoStack).pop();
   if (!op) return;
   aiRedoStack.splice(aiRedoStack.indexOf(op), 1);
-  aiApplyOp(op); aiUndoStack.push(op);
-  aiSet(`Re-applied Claude's changes on plate ${op.p + 1}.`, 'ok');
+  aiApplyOp(op); aiUndoStack.push(op); if (op.children) renderReview();
+  aiSet(op.children ? `Re-applied Claude's changes on ${op.children.length} plates.` : `Re-applied Claude's changes on plate ${op.p + 1}.`, 'ok');
 }
 function aiSet(text, kind) { aiState.msg = text ? {text, kind: kind || 'info'} : null; aiRefresh(); }
 // Enable/disable the buttons in place (a re-render between mouse-down and click would swallow the click).
 function aiSyncButtons() {
   const el = document.getElementById('reviewAI'); if (!el) return;
   const ask = el.querySelector('[data-ai="ask"]'), forget = el.querySelector('[data-ai="forget"]');
+  const all = el.querySelector('[data-ai="all"]');
   if (ask) ask.disabled = aiState.busy || aiCurrentPlate() == null || !aiState.consent || !aiState.key.trim();
+  if (all) all.disabled = aiState.busy || aiCurrentPlate() == null || review.fitting || !aiState.consent || !aiState.key.trim();
   if (forget) forget.disabled = !aiState.key;
 }
 function aiRefresh() { const el = document.getElementById('reviewAI'); if (el) el.innerHTML = aiCardHtml(); }
@@ -4363,7 +4449,7 @@ function aiCardHtml() {
   let prop = '';
   if (s.proposal) {
     const pr = s.proposal;
-    prop = `<div class="ai-prop"><b>Plate ${pr.p + 1}: Claude says ${pr.decision === 'accept' ? 'accept' : 'needs your look'}.</b> ${esc(pr.notes)}`
+    prop = `<div class="ai-prop"><b>Plate ${pr.p + 1}: Claude says ${pr.decision === 'accept' ? 'accept' : 'needs your look'}${pr.accepted ? ' (plate accepted)' : ''}.</b> ${esc(pr.notes)}`
       + (pr.excl.length ? `<div class="ai-sub">Exclude (${pr.excl.length})</div><ul>${pr.excl.map(x => `<li><b>${esc(x.label)}</b> (OD ${x.od.toFixed(3)}): ${esc(x.reason)}</li>`).join('')}</ul>` : '<div>No readings to exclude.</div>')
       + (pr.ign.length ? `<div class="ai-sub">Ignore suggestion, keep the point (${pr.ign.length})</div><ul>${pr.ign.map(x => `<li><b>${esc(x.label)}</b> (OD ${x.od.toFixed(3)}): ${esc(x.reason)}</li>`).join('')}</ul>` : '')
       + (pr.reviews.length ? `<div class="ai-sub">Poor-fit curves checked (${pr.reviews.length})</div><ul>${pr.reviews.map(x => `<li><b>${esc(x.series)}</b> (${esc(x.problems.join(', '))}) — ${x.verdict === 'changed' ? 'changed' : 'no change'}: ${esc(x.justification)}</li>`).join('')}</ul>` : '')
@@ -4380,14 +4466,18 @@ function aiCardHtml() {
       <div class="adv-note">No key yet? <a href="https://platform.claude.com/settings/keys" target="_blank" rel="noopener">Create one in the Claude Console</a> (<a href="https://platform.claude.com/docs/en/get-started" target="_blank" rel="noopener">how it works</a>). API usage is billed separately from a claude.ai subscription.</div>
       <label>Model <select data-aifield="model">${AI_MODELS.map(x => `<option value="${x.id}" ${x.id === s.model ? 'selected' : ''}>${esc(x.label)}</option>`).join('')}</select></label>
       <label class="ai-check ai-consent"><input type="checkbox" data-aifield="consent" ${s.consent ? 'checked' : ''}> I agree to send this plate's OD values, fit results and sample names to the Anthropic API.</label>
+      <label class="ai-check"><input type="checkbox" data-aifield="autoAccept" ${s.autoAccept ? 'checked' : ''}> Also accept plates Claude marks clean (every poor-fit curve justified, no suggestion left undecided)</label>
+      <label class="ai-check"><input type="checkbox" data-aifield="skipAccepted" ${s.skipAccepted ? 'checked' : ''}> Skip plates I already accepted when reviewing all plates</label>
       <div class="adv-btns">
         <button class="btn btn-secondary btn-sm" data-ai="test" ${s.busy ? 'disabled' : ''}>Test connection</button>
         <button class="btn btn-black btn-sm" data-ai="ask" ${s.busy || p == null || !s.consent || !s.key.trim() ? 'disabled' : ''}>Review this plate with Claude</button>
+        <button class="btn btn-black btn-sm" data-ai="all" ${s.busy || p == null || review.fitting || !s.consent || !s.key.trim() ? 'disabled' : ''}>Review all plates with Claude</button>
         <button class="btn btn-secondary btn-sm" data-ai="forget" ${s.key ? '' : 'disabled'}>Forget key</button>
       </div>
+      ${s.bulk ? `<div class="ai-bar"><div style="width:${Math.round(s.bulk.done / s.bulk.total * 100)}%"></div></div><div class="adv-note">Reviewed ${s.bulk.done} of ${s.bulk.total}${s.bulk.active.size ? ` · asking about plate${s.bulk.active.size > 1 ? 's' : ''} ${[...s.bulk.active].sort((a, b) => a - b).join(', ')}` : ''}.</div><div class="adv-btns"><button class="btn btn-secondary btn-sm" data-ai="cancel">Cancel</button></div>` : ''}
       <div class="adv-btns">
-        <button class="btn btn-secondary btn-sm" data-ai="undo" ${aiLive(aiUndoStack).length ? '' : 'disabled'} title="Undo the last change Claude made">↶ Undo Claude</button>
-        <button class="btn btn-secondary btn-sm" data-ai="redo" ${aiLive(aiRedoStack).length ? '' : 'disabled'} title="Redo what you undid">↷ Redo</button>
+        <button class="btn btn-secondary btn-sm" data-ai="undo" ${aiLive(aiUndoStack).length && !s.busy ? '' : 'disabled'} title="Undo the last change Claude made">↶ Undo Claude</button>
+        <button class="btn btn-secondary btn-sm" data-ai="redo" ${aiLive(aiRedoStack).length && !s.busy ? '' : 'disabled'} title="Redo what you undid">↷ Redo</button>
       </div>
       <div class="adv-note">Claude's decisions are applied immediately; Undo and Redo revert them. You still accept each plate yourself. Estimated cost per plate with ${esc(m.label)}: about $${est.usd < 0.01 ? est.usd.toFixed(4) : est.usd.toFixed(3)} (${est.inTok.toLocaleString()} input and up to ${est.outTok.toLocaleString()} output tokens). Based on prices as of November 2026, not updated automatically.</div>
       ${msg}${prop}
@@ -4399,6 +4489,8 @@ document.addEventListener('click', e => {
   switch (b.dataset.ai) {
     case 'test': aiTest(); break;
     case 'ask': aiAsk(); break;
+    case 'all': aiAll(); break;
+    case 'cancel': if (aiState.bulk) aiState.bulk.ctrl.abort(); break;
     case 'undo': aiUndo(); break;
     case 'redo': aiRedo(); break;
     case 'dismiss': aiState.proposal = null; aiRefresh(); break;
@@ -4415,6 +4507,8 @@ document.addEventListener('change', e => {
   if (k === 'key') aiState.key = f.value;
   else if (k === 'remember') aiState.remember = f.checked;
   else if (k === 'consent') aiState.consent = f.checked;
+  else if (k === 'autoAccept') aiState.autoAccept = f.checked;
+  else if (k === 'skipAccepted') aiState.skipAccepted = f.checked;
   else if (k === 'model') aiState.model = f.value;
   try {
     if (aiState.remember && aiState.key.trim()) localStorage.setItem(AI_KEY_STORE, aiState.key.trim());

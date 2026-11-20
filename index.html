@@ -460,7 +460,7 @@ body.rv-lock #reviewAI{margin-bottom:10px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.54.0 &nbsp;·&nbsp; 20/11/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.54.1 &nbsp;·&nbsp; 20/11/2026</div>
 
 <script>
 'use strict';
@@ -4192,13 +4192,13 @@ Poor-fit curves: the list poor_fit_curves holds every curve (samples and the sta
 
 Plate decision: use "accept" whenever the plate is fine once your exclusions are applied. The goal is LESS manual work for the scientist, so decide yourself whenever you reasonably can. Use "needs_human" only for things that excluding points cannot fix: no usable standard curve (flat, missing, failed fit), a failed fit on many samples, or data so ambiguous that you cannot tell which readings are wrong. Give a one-sentence reason in notes.
 
-Answer only with the requested JSON. For each decision give the well-column (column, 1-12, as in the data), the dose_index, and the action. Give no reason for these decisions.`;
+Answer only with the requested JSON. Keep every text field as short as possible (justifications: one sentence of at most 15 words; notes: at most 12 words). For each decision give the well-column (column, 1-12, as in the data), the dose_index, and the action. Give no reason for these decisions.`;
 const AI_SCHEMA = {
   type: 'object',
   properties: {
     decision: {type: 'string', enum: ['accept', 'needs_human']},
     decisions: {type: 'array', items: {type: 'object', properties: {column: {type: 'integer'}, dose_index: {type: 'integer'}, action: {type: 'string', enum: ['exclude', 'ignore']}}, required: ['column', 'dose_index', 'action'], additionalProperties: false}},
-    curve_reviews: {type: 'array', items: {type: 'object', properties: {series: {type: 'string'}, verdict: {type: 'string', enum: ['changed', 'no_change']}, justification: {type: 'string'}}, required: ['series', 'verdict', 'justification'], additionalProperties: false}},
+    curve_reviews: {type: 'array', items: {type: 'object', properties: {series: {type: 'string'}, verdict: {type: 'string', enum: ['changed', 'no_change']}, justification: {type: 'string', description: 'One short sentence, at most 15 words.'}}, required: ['series', 'verdict', 'justification'], additionalProperties: false}},
     notes: {type: 'string'}
   },
   required: ['decision', 'decisions', 'curve_reviews', 'notes'], additionalProperties: false
@@ -4289,7 +4289,7 @@ function aiSleep(ms, signal) {
 }
 // One plate: ask Claude, check the answer against the real points and build an operation (nothing is applied here).
 async function aiReviewPlate(p, signal) {
-  const payload = aiPlatePayload(p), text = JSON.stringify(payload);
+  const payload = aiPlatePayload(p), text = JSON.stringify(payload), t0 = performance.now();
   let data;
   for (let attempt = 0; ; attempt++) {
     try {
@@ -4331,7 +4331,7 @@ async function aiReviewPlate(p, signal) {
   const canAccept = out.decision === 'accept' && !unreviewed.length && !undecided && !plateFlags(pc).noStd;
   const op = {review, p, excl: excl.map(x => x.key).filter(k => !review.excl.has(k)), ign: ign.map(x => x.key).filter(k => review.suggested.has(k)),
               wasAccepted: review.accepted.has(p), reasons: Object.fromEntries(excl.map(x => [x.key, 1])), note: notes, model: data.model || aiState.model, accept: aiState.autoAccept && canAccept, needs: out.decision === 'needs_human' ? (notes || 'Claude could not decide.') : ''};
-  const proposal = {p, decision: out.decision, notes, excl, ign, undecided, reviews, unreviewed, skipped, accepted: op.accept, usage: data.usage || null, model: data.model || aiState.model};
+  const proposal = {p, decision: out.decision, notes, excl, ign, undecided, reviews, unreviewed, skipped, accepted: op.accept, usage: data.usage || null, secs: (performance.now() - t0) / 1000, model: data.model || aiState.model};
   return {op, proposal, chars: text.length};
 }
 function aiPush(op) { aiUndoStack.push(op); aiRedoStack.length = 0; }
@@ -4346,7 +4346,7 @@ async function aiAsk() {
     aiState.proposal = proposal;
     aiState.busy = false;
     aiApplyOp(op); aiPush(op);
-    aiSet(`Claude's decisions for plate ${p + 1} are applied: ${op.excl.length} exclusion${op.excl.length === 1 ? '' : 's'}, ${op.ign.length} suggestion${op.ign.length === 1 ? '' : 's'} ignored${op.accept ? ', plate accepted' : ''}${op.needs ? ', flagged for you' : ''}. Use Undo if you disagree.`, 'ok');
+    aiSet(`Claude's decisions for plate ${p + 1} are applied: ${op.excl.length} exclusion${op.excl.length === 1 ? '' : 's'}, ${op.ign.length} suggestion${op.ign.length === 1 ? '' : 's'} ignored${op.accept ? ', plate accepted' : ''}${op.needs ? ', flagged for you' : ''}. Use Undo if you disagree. (${proposal.secs.toFixed(1)} s${proposal.usage ? `, ${proposal.usage.input_tokens} tokens in / ${proposal.usage.output_tokens} out` : ''})`, 'ok');
     return;
   } catch (e) { aiSet(e.message, 'err'); }
   aiState.busy = false; aiRefresh();

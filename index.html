@@ -470,7 +470,7 @@ body.rv-lock #aiOpenBtn{flex:none;margin-bottom:10px}
 </div>
 
 <div id="aiModal" class="ai-modal"><div id="reviewAI" class="card adv-fit"></div></div>
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.55.0 &nbsp;·&nbsp; 20/11/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.55.1 &nbsp;·&nbsp; 20/11/2026</div>
 
 <script>
 'use strict';
@@ -4183,7 +4183,7 @@ const AI_KEY_STORE = 'elisaApiKey';
 const aiState = (() => {
   let k = '';
   try { k = localStorage.getItem(AI_KEY_STORE) || ''; } catch (e) {}
-  return {key: k, remember: !!k, model: AI_MODELS[0].id, consent: false, busy: false, msg: null, proposal: null, autoAccept: false, skipAccepted: true, thorough: false, bulk: null};
+  return {key: k, remember: !!k, model: AI_MODELS[0].id, consent: false, busy: false, msg: null, proposal: null, autoAccept: true, skipAccepted: true, thorough: false, bulk: null};
 })();
 const AI_SYSTEM = `You review one 96-well ELISA plate for a lab analysis tool. Your job is to decide which individual readings are technical outliers and should be excluded from curve fitting, so the scientist has less manual work.
 

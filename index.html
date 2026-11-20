@@ -460,7 +460,7 @@ body.rv-lock #reviewAI{margin-bottom:10px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.52.0 &nbsp;·&nbsp; 20/11/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.53.0 &nbsp;·&nbsp; 20/11/2026</div>
 
 <script>
 'use strict';
@@ -616,11 +616,17 @@ function storeGet(k)    { return storeOp('readonly',  st => st.get(k)); }
 
 // The review state (exclusions, accepted plates, hidden samples) and the options used are saved
 // on every change. After a reload the files come back and the run is redone with that state.
+// Claude's reasons for the points it excluded, its per-plate notes, "needs your look" flags and the model/date of the run
+// are part of the session (never the API key).
+function aiSessionPart(r) {
+  return {aiReasons: Object.fromEntries(r.aiReasons || []), aiNotes: Object.fromEntries(r.aiNotes || []),
+          aiFlags: Object.fromEntries(r.aiFlags || []), aiRun: r.aiRun || null};
+}
 function saveSession() {
   const r = review;
   if (!r || r.stale) return;
   storeSet('session', {
-    excl: [...r.excl], ignored: [...(r.ignored || [])], accepted: [...r.accepted], hidden: [...r.hidden], stdFrom: r.stdFrom || {},
+    excl: [...r.excl], ignored: [...(r.ignored || [])], accepted: [...r.accepted], hidden: [...r.hidden], stdFrom: r.stdFrom || {}, ...aiSessionPart(r),
     files: r.files,
     opts: {
       subtractBg: document.getElementById('subtractBgChk').checked,
@@ -654,7 +660,9 @@ function remapSession(sess, files) {
   const keys = a => (a || []).map(key).filter(k => k != null);
   const stdFrom = {};
   for (const [d, src] of Object.entries(sess.stdFrom || {})) if (map[d] != null && map[src] != null) stdFrom[map[d]] = map[src];
-  return {...sess,
+  const byPlate = o => Object.fromEntries(Object.entries(o || {}).filter(([i]) => map[i] != null).map(([i, v]) => [map[i], v]));
+  const byKey = o => Object.fromEntries(Object.entries(o || {}).map(([k, v]) => [key(k), v]).filter(([k]) => k != null));
+  return {...sess, aiReasons: byKey(sess.aiReasons), aiNotes: byPlate(sess.aiNotes), aiFlags: byPlate(sess.aiFlags),
     excl: keys(sess.excl), ignored: keys(sess.ignored), hidden: keys(sess.hidden), stdFrom,
     accepted: (sess.accepted || []).map(i => map[i]).filter(n => n != null),
     kept: Object.keys(map).length, lost: sess.files.length - Object.keys(map).length};
@@ -2515,7 +2523,8 @@ function buildProtocolSheet(meta, plateFits, plateCharts, fit) {
   function r4(v) { return Math.round(v * 10000) / 10000; }
 
   data[0] = [{v:'ELISA Run Parameters', t:'s', s:titleS}];
-  data[1] = [];
+  data[1] = review && review.aiRun && review.aiReasons && review.aiReasons.size
+    ? [{v:'Claude auto-review', t:'s', s:lblS}, {v:`${review.aiRun.model}, ${review.aiRun.date} (reasons in the Excluded Points sheet)`, t:'s'}] : [];
   data[2] = [{v:'Standard Curve', t:'s', s:hdrS}];
   data[3] = [{v:'Starting Concentration (ng/mL)', t:'s', s:lblS}, {v:stdStart, t:'n'}];
   data[4] = [{v:'Dilution Factor', t:'s', s:lblS}, {v:stdDil, t:'n'}];
@@ -3798,7 +3807,7 @@ function buildResultsTableSheet() {
 function buildExcludedSheet() {
   const r = review, off = p => p * 14;
   const hs = { font: { bold: true }, fill: { patternType: 'solid', fgColor: { rgb: 'FFDCE6F1' } } };
-  const data = [['Plate', 'Sample', 'Well', 'Dilution / conc. factor', 'OD', 'Origin']
+  const data = [['Plate', 'Sample', 'Well', 'Dilution / conc. factor', 'OD', 'Origin', 'Reason (Claude)']
     .map(h => ({ v: h, t: 's', s: hs }))];
   const keys = [...r.excl].map(k => k.split('|').map(Number))
     .sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]);
@@ -3806,13 +3815,14 @@ function buildExcludedSheet() {
     const name = String(r.grid[7][off(p) + c] ?? '');
     const x = name === 'standard' ? r.meta.seriesST[i] : r.meta.seriesSA[i];
     const od = r.grid[9 + i][off(p) + c];
+    const aiWhy = r.aiReasons && r.aiReasons.get(exKey(p, c, i));
     const row = [p + 1, name, 'ABCDEFGH'[i] + c, Math.round(x * 100) / 100,
       typeof od === 'number' ? Math.round(od * 1e4) / 1e4 : '',
-      r.suggested.has(exKey(p, c, i)) ? 'Suggested + accepted' : 'Manual'];
+      aiWhy ? 'Claude suggested + applied' : r.suggested.has(exKey(p, c, i)) ? 'Suggested + accepted' : 'Manual', aiWhy || ''];
     data.push(row.map(v => ({ v, t: typeof v === 'number' ? 'n' : 's' })));
   }
   const ws = aoaToSheet(data);
-  ws['!cols'] = [{ wch: 6 }, { wch: 16 }, { wch: 6 }, { wch: 22 }, { wch: 9 }, { wch: 20 }];
+  ws['!cols'] = [{ wch: 6 }, { wch: 16 }, { wch: 6 }, { wch: 22 }, { wch: 9 }, { wch: 26 }, { wch: 70 }];
   return ws;
 }
 
@@ -3837,7 +3847,7 @@ function buildSessionSheet() {
     app: 'elisa', v: 1,
     csv: csvFiles, meta: {name: metaName, b64: bytesToB64(metaBytes)},
     plate384: document.getElementById('plate384Chk').checked,
-    sess: {excl: [...r.excl], ignored: [...(r.ignored || [])], accepted: [...r.accepted], hidden: [...r.hidden], stdFrom: r.stdFrom || {}, files: r.files,
+    sess: {excl: [...r.excl], ignored: [...(r.ignored || [])], accepted: [...r.accepted], hidden: [...r.hidden], stdFrom: r.stdFrom || {}, ...aiSessionPart(r), files: r.files,
            opts: {subtractBg: document.getElementById('subtractBgChk').checked,
                   detectOutliers: document.getElementById('detectChk').checked, minImpact: Math.round(OUTLIER.MIN_IMPACT * 100),
                   outputName: document.getElementById('outputName').value}},
@@ -4013,7 +4023,9 @@ async function runProcessing(saved) {
     review = {grid, numPlates, meta, outputName,
               excl: new Set(saved && saved.excl || []), ignored: new Set(saved && saved.ignored || []), suggested: new Set(), sugImpact: new Map(), hidden: new Set(saved && saved.hidden || []),
               accepted: new Set(saved && saved.accepted || []), analysis: null, cache: new Map(),
-              files, view: 'all', cur: null, limit: FLAG.BATCH, flagCache: null, stdFrom: saved && saved.stdFrom || {},
+              files, aiReasons: new Map(Object.entries(saved && saved.aiReasons || {})), aiNotes: new Map(Object.entries(saved && saved.aiNotes || {}).map(([i, v]) => [+i, v])),
+              aiFlags: new Map(Object.entries(saved && saved.aiFlags || {}).map(([i, v]) => [+i, v])), aiRun: saved && saved.aiRun || null,
+              view: 'all', cur: null, limit: FLAG.BATCH, flagCache: null, stdFrom: saved && saved.stdFrom || {},
               ready: new Set(), done: new Set(), nextRel: 0, seen: new Set(), fresh: null, fitting: false, shown: false, restoring: !!saved};
     // Open the review right away: every plate is a grey tile until its fit is done.
     review.fitting = true;
@@ -4318,7 +4330,7 @@ async function aiReviewPlate(p, signal) {
   const notes = String(out.notes || '');
   const canAccept = out.decision === 'accept' && !unreviewed.length && !undecided && !plateFlags(pc).noStd;
   const op = {review, p, excl: excl.map(x => x.key).filter(k => !review.excl.has(k)), ign: ign.map(x => x.key).filter(k => review.suggested.has(k)),
-              wasAccepted: review.accepted.has(p), accept: aiState.autoAccept && canAccept, needs: out.decision === 'needs_human' ? (notes || 'Claude could not decide.') : ''};
+              wasAccepted: review.accepted.has(p), reasons: Object.fromEntries(excl.map(x => [x.key, x.reason])), note: notes, model: data.model || aiState.model, accept: aiState.autoAccept && canAccept, needs: out.decision === 'needs_human' ? (notes || 'Claude could not decide.') : ''};
   const proposal = {p, decision: out.decision, notes, excl, ign, undecided, reviews, unreviewed, skipped, accepted: op.accept, usage: data.usage || null, model: data.model || aiState.model};
   return {op, proposal, chars: text.length};
 }
@@ -4393,7 +4405,9 @@ function aiApplyOp(op) {
   if (op.children) { op.children.forEach(aiApplyOp); return; }
   const r = review;
   op.ign.forEach(k => { r.ignored.add(k); r.suggested.delete(k); });
-  op.excl.forEach(k => r.excl.add(k));
+  op.excl.forEach(k => { r.excl.add(k); if (op.reasons && op.reasons[k]) (r.aiReasons || (r.aiReasons = new Map())).set(k, op.reasons[k]); });
+  if (op.note) (r.aiNotes || (r.aiNotes = new Map())).set(op.p, op.note);
+  if (op.model) r.aiRun = {model: op.model, date: new Date().toISOString().slice(0, 10)};
   r.accepted.delete(op.p);
   if (op.accept) r.accepted.add(op.p);
   if (op.needs) (r.aiFlags || (r.aiFlags = new Map())).set(op.p, op.needs);
@@ -4405,7 +4419,8 @@ function aiApplyOp(op) {
 function aiRevertOp(op) {
   if (op.children) { [...op.children].reverse().forEach(aiRevertOp); return; }
   const r = review;
-  op.excl.forEach(k => r.excl.delete(k));
+  op.excl.forEach(k => { r.excl.delete(k); if (r.aiReasons) r.aiReasons.delete(k); });
+  if (op.note && r.aiNotes) r.aiNotes.delete(op.p);
   op.ign.forEach(k => r.ignored.delete(k));
   refilterSuggested();
   r.accepted.delete(op.p);
@@ -4593,6 +4608,8 @@ const TOUR_STEPS = [
    body: '<p>Edge effects are suggested automatically. To drop a whole row, use the <b>A–H</b> buttons: here for this plate, or in the header for all plates.</p>'},
   {view: 'review', target: '#reviewImpact', pos: 'left', title: '3 · Outlier sensitivity',
    body: '<p>A candidate is suggested when excluding it would shift the ED50 by at least this percentage. Slide towards 0 % to see more candidates, higher to keep only the influential ones. No refit is needed.</p>'},
+  {view: 'review', target: '#reviewAI', pos: 'left', title: '3 · Claude auto-review (optional)',
+   body: '<p>With your own Anthropic API key, Claude can review the plate (or all plates): it decides on every suggested outlier, justifies every poor-fit curve and can accept clean plates. Nothing is sent until you tick the consent box, and only OD values and sample names leave your computer. Everything it does can be undone, and its reasons land in the <i>Excluded Points</i> sheet.</p><p>This tour never calls the API.</p>'},
   {view: 'review', target: '#reviewAdv', pos: 'left', title: '3 · Advanced fit settings',
    body: '<p>Lower, initial and upper bounds of the 4PL parameters. Applying them refits every plate and clears the accepted plates. The defaults, or the <i>Advanced (optional)</i> sheet in the metadata, are usually enough.</p>'},
   {view: 'review', target: '#reviewActions', pos: 'left', title: '3 · Accept plates',

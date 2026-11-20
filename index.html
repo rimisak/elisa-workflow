@@ -460,7 +460,7 @@ body.rv-lock #reviewAI{margin-bottom:10px}
   </div>
 </div>
 
-<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.53.0 &nbsp;·&nbsp; 20/11/2026</div>
+<div class="page-footer">Kasimir Reich &nbsp;·&nbsp; v1.54.0 &nbsp;·&nbsp; 20/11/2026</div>
 
 <script>
 'use strict';
@@ -2524,7 +2524,7 @@ function buildProtocolSheet(meta, plateFits, plateCharts, fit) {
 
   data[0] = [{v:'ELISA Run Parameters', t:'s', s:titleS}];
   data[1] = review && review.aiRun && review.aiReasons && review.aiReasons.size
-    ? [{v:'Claude auto-review', t:'s', s:lblS}, {v:`${review.aiRun.model}, ${review.aiRun.date} (reasons in the Excluded Points sheet)`, t:'s'}] : [];
+    ? [{v:'Claude auto-review', t:'s', s:lblS}, {v:`${review.aiRun.model}, ${review.aiRun.date} (see Origin in the Excluded Points sheet)`, t:'s'}] : [];
   data[2] = [{v:'Standard Curve', t:'s', s:hdrS}];
   data[3] = [{v:'Starting Concentration (ng/mL)', t:'s', s:lblS}, {v:stdStart, t:'n'}];
   data[4] = [{v:'Dilution Factor', t:'s', s:lblS}, {v:stdDil, t:'n'}];
@@ -3807,7 +3807,7 @@ function buildResultsTableSheet() {
 function buildExcludedSheet() {
   const r = review, off = p => p * 14;
   const hs = { font: { bold: true }, fill: { patternType: 'solid', fgColor: { rgb: 'FFDCE6F1' } } };
-  const data = [['Plate', 'Sample', 'Well', 'Dilution / conc. factor', 'OD', 'Origin', 'Reason (Claude)']
+  const data = [['Plate', 'Sample', 'Well', 'Dilution / conc. factor', 'OD', 'Origin']
     .map(h => ({ v: h, t: 's', s: hs }))];
   const keys = [...r.excl].map(k => k.split('|').map(Number))
     .sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]);
@@ -3818,11 +3818,11 @@ function buildExcludedSheet() {
     const aiWhy = r.aiReasons && r.aiReasons.get(exKey(p, c, i));
     const row = [p + 1, name, 'ABCDEFGH'[i] + c, Math.round(x * 100) / 100,
       typeof od === 'number' ? Math.round(od * 1e4) / 1e4 : '',
-      aiWhy ? 'Claude suggested + applied' : r.suggested.has(exKey(p, c, i)) ? 'Suggested + accepted' : 'Manual', aiWhy || ''];
+      aiWhy ? 'Claude suggested + applied' : r.suggested.has(exKey(p, c, i)) ? 'Suggested + accepted' : 'Manual'];
     data.push(row.map(v => ({ v, t: typeof v === 'number' ? 'n' : 's' })));
   }
   const ws = aoaToSheet(data);
-  ws['!cols'] = [{ wch: 6 }, { wch: 16 }, { wch: 6 }, { wch: 22 }, { wch: 9 }, { wch: 26 }, { wch: 70 }];
+  ws['!cols'] = [{ wch: 6 }, { wch: 16 }, { wch: 6 }, { wch: 22 }, { wch: 9 }, { wch: 26 }];
   return ws;
 }
 
@@ -4161,16 +4161,16 @@ async function runProcessing(saved) {
 let API_URL = 'https://api.anthropic.com/v1/messages';   // overridable in the console (tests use a local stub)
 // $ per million tokens at the time of writing (input, output); the UI says these are not updated automatically.
 const AI_MODELS = [
-  {id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5 (recommended)', inp: 2, out: 10, fallback: true},
+  {id: 'claude-haiku-5-5', label: 'Claude Haiku 5.5 (fastest, cheapest, default)', inp: 0.1, out: 0.5, fallback: false},
+  {id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5 (more careful)', inp: 2, out: 10, fallback: true},
   {id: 'claude-opus-5-5', label: 'Claude Opus 5.5', inp: 4, out: 20, fallback: true},
-  {id: 'claude-fable-5-2', label: 'Claude Fable 5.2', inp: 8, out: 40, fallback: true},
-  {id: 'claude-haiku-5-5', label: 'Claude Haiku 5.5 (cheapest)', inp: 0.1, out: 0.5, fallback: false}
+  {id: 'claude-fable-5-2', label: 'Claude Fable 5.2', inp: 8, out: 40, fallback: true}
 ];
 const AI_KEY_STORE = 'elisaApiKey';
 const aiState = (() => {
   let k = '';
   try { k = localStorage.getItem(AI_KEY_STORE) || ''; } catch (e) {}
-  return {key: k, remember: !!k, model: AI_MODELS[0].id, consent: false, busy: false, msg: null, proposal: null, autoAccept: false, skipAccepted: true, bulk: null};
+  return {key: k, remember: !!k, model: AI_MODELS[0].id, consent: false, busy: false, msg: null, proposal: null, autoAccept: false, skipAccepted: true, thorough: false, bulk: null};
 })();
 const AI_SYSTEM = `You review one 96-well ELISA plate for a lab analysis tool. Your job is to decide which individual readings are technical outliers and should be excluded from curve fitting, so the scientist has less manual work.
 
@@ -4192,12 +4192,12 @@ Poor-fit curves: the list poor_fit_curves holds every curve (samples and the sta
 
 Plate decision: use "accept" whenever the plate is fine once your exclusions are applied. The goal is LESS manual work for the scientist, so decide yourself whenever you reasonably can. Use "needs_human" only for things that excluding points cannot fix: no usable standard curve (flat, missing, failed fit), a failed fit on many samples, or data so ambiguous that you cannot tell which readings are wrong. Give a one-sentence reason in notes.
 
-Answer only with the requested JSON. For each decision give the well-column (column, 1-12, as in the data), the dose_index, the action and a short reason.`;
+Answer only with the requested JSON. For each decision give the well-column (column, 1-12, as in the data), the dose_index, and the action. Give no reason for these decisions.`;
 const AI_SCHEMA = {
   type: 'object',
   properties: {
     decision: {type: 'string', enum: ['accept', 'needs_human']},
-    decisions: {type: 'array', items: {type: 'object', properties: {column: {type: 'integer'}, dose_index: {type: 'integer'}, action: {type: 'string', enum: ['exclude', 'ignore']}, reason: {type: 'string'}}, required: ['column', 'dose_index', 'action', 'reason'], additionalProperties: false}},
+    decisions: {type: 'array', items: {type: 'object', properties: {column: {type: 'integer'}, dose_index: {type: 'integer'}, action: {type: 'string', enum: ['exclude', 'ignore']}}, required: ['column', 'dose_index', 'action'], additionalProperties: false}},
     curve_reviews: {type: 'array', items: {type: 'object', properties: {series: {type: 'string'}, verdict: {type: 'string', enum: ['changed', 'no_change']}, justification: {type: 'string'}}, required: ['series', 'verdict', 'justification'], additionalProperties: false}},
     notes: {type: 'string'}
   },
@@ -4249,7 +4249,7 @@ function aiPoorFits(pc, fl) {
   return out;
 }
 function aiEstimate(nPlates, payloadChars) {
-  const m = aiModel(), inTok = (AI_SYSTEM.length + (payloadChars || 6000)) / 4 * nPlates, outTok = 1500 * nPlates;
+  const m = aiModel(), inTok = (AI_SYSTEM.length + (payloadChars || 6000)) / 4 * nPlates, outTok = 1000 * nPlates;
   return {inTok: Math.round(inTok), outTok, usd: (inTok * m.inp + outTok * m.out) / 1e6};
 }
 async function aiCall(body, withFallback, signal) {
@@ -4295,7 +4295,7 @@ async function aiReviewPlate(p, signal) {
     try {
       data = await aiCall({model: aiState.model, max_tokens: 16000, system: AI_SYSTEM,
         messages: [{role: 'user', content: text}],
-        output_config: {effort: 'medium', format: {type: 'json_schema', schema: AI_SCHEMA}}}, true, signal);
+        output_config: {effort: aiState.thorough ? 'medium' : 'low', format: {type: 'json_schema', schema: AI_SCHEMA}}}, true, signal);
       break;
     } catch (e) {
       if (e.status === 429 && attempt < 3 && !(signal && signal.aborted)) { await aiSleep((e.retryAfter || 20) * 1000, signal); continue; }
@@ -4315,7 +4315,7 @@ async function aiReviewPlate(p, signal) {
     const key = exKey(p, x.column, x.dose_index), q = pts.get(key);
     if (!q || q.excluded || seen.has(key)) { skipped++; continue; }
     seen.add(key);
-    const item = {key, label: 'ABCDEFGH'[x.dose_index] + x.column, reason: String(x.reason || ''), od: q.y};
+    const item = {key, label: 'ABCDEFGH'[x.dose_index] + x.column, od: q.y};
     if (x.action === 'ignore') { if (review.suggested.has(key)) ign.push(item); else skipped++; }
     else excl.push(item);
   }
@@ -4330,7 +4330,7 @@ async function aiReviewPlate(p, signal) {
   const notes = String(out.notes || '');
   const canAccept = out.decision === 'accept' && !unreviewed.length && !undecided && !plateFlags(pc).noStd;
   const op = {review, p, excl: excl.map(x => x.key).filter(k => !review.excl.has(k)), ign: ign.map(x => x.key).filter(k => review.suggested.has(k)),
-              wasAccepted: review.accepted.has(p), reasons: Object.fromEntries(excl.map(x => [x.key, x.reason])), note: notes, model: data.model || aiState.model, accept: aiState.autoAccept && canAccept, needs: out.decision === 'needs_human' ? (notes || 'Claude could not decide.') : ''};
+              wasAccepted: review.accepted.has(p), reasons: Object.fromEntries(excl.map(x => [x.key, 1])), note: notes, model: data.model || aiState.model, accept: aiState.autoAccept && canAccept, needs: out.decision === 'needs_human' ? (notes || 'Claude could not decide.') : ''};
   const proposal = {p, decision: out.decision, notes, excl, ign, undecided, reviews, unreviewed, skipped, accepted: op.accept, usage: data.usage || null, model: data.model || aiState.model};
   return {op, proposal, chars: text.length};
 }
@@ -4387,7 +4387,7 @@ async function aiAll() {
       }
     }
   };
-  await Promise.all([worker(), worker(), worker()]);
+  await Promise.all([worker(), worker(), worker(), worker()]);
   const cancelled = ctrl.signal.aborted && !fatal;
   aiState.bulk = null; aiState.busy = false;
   if (children.length) {
@@ -4465,8 +4465,8 @@ function aiCardHtml() {
   if (s.proposal) {
     const pr = s.proposal;
     prop = `<div class="ai-prop"><b>Plate ${pr.p + 1}: Claude says ${pr.decision === 'accept' ? 'accept' : 'needs your look'}${pr.accepted ? ' (plate accepted)' : ''}.</b> ${esc(pr.notes)}`
-      + (pr.excl.length ? `<div class="ai-sub">Exclude (${pr.excl.length})</div><ul>${pr.excl.map(x => `<li><b>${esc(x.label)}</b> (OD ${x.od.toFixed(3)}): ${esc(x.reason)}</li>`).join('')}</ul>` : '<div>No readings to exclude.</div>')
-      + (pr.ign.length ? `<div class="ai-sub">Ignore suggestion, keep the point (${pr.ign.length})</div><ul>${pr.ign.map(x => `<li><b>${esc(x.label)}</b> (OD ${x.od.toFixed(3)}): ${esc(x.reason)}</li>`).join('')}</ul>` : '')
+      + (pr.excl.length ? `<div class="ai-sub">Exclude (${pr.excl.length})</div><ul>${pr.excl.map(x => `<li><b>${esc(x.label)}</b> (OD ${x.od.toFixed(3)})</li>`).join('')}</ul>` : '<div>No readings to exclude.</div>')
+      + (pr.ign.length ? `<div class="ai-sub">Ignore suggestion, keep the point (${pr.ign.length})</div><ul>${pr.ign.map(x => `<li><b>${esc(x.label)}</b> (OD ${x.od.toFixed(3)})</li>`).join('')}</ul>` : '')
       + (pr.reviews.length ? `<div class="ai-sub">Poor-fit curves checked (${pr.reviews.length})</div><ul>${pr.reviews.map(x => `<li><b>${esc(x.series)}</b> (${esc(x.problems.join(', '))}) — ${x.verdict === 'changed' ? 'changed' : 'no change'}: ${esc(x.justification)}</li>`).join('')}</ul>` : '')
       + (pr.unreviewed.length ? `<div class="adv-note" style="color:#c0392b">Claude gave no justification for: ${esc(pr.unreviewed.join(', '))}. Look at ${pr.unreviewed.length > 1 ? 'these curves' : 'this curve'} yourself or ask again.</div>` : '')
       + (pr.undecided ? `<div class="adv-note">${pr.undecided} suggested point(s) got no decision and stay suggested for you.</div>` : '')
@@ -4480,6 +4480,7 @@ function aiCardHtml() {
       <div class="adv-note">Without this the key stays in memory until you reload. A remembered key can be read by anyone who uses this browser profile. It is never saved in the session or the downloaded workbook.</div>
       <div class="adv-note">No key yet? <a href="https://platform.claude.com/settings/keys" target="_blank" rel="noopener">Create one in the Claude Console</a> (<a href="https://platform.claude.com/docs/en/get-started" target="_blank" rel="noopener">how it works</a>). API usage is billed separately from a claude.ai subscription.</div>
       <label>Model <select data-aifield="model">${AI_MODELS.map(x => `<option value="${x.id}" ${x.id === s.model ? 'selected' : ''}>${esc(x.label)}</option>`).join('')}</select></label>
+      <label class="ai-check"><input type="checkbox" data-aifield="thorough" ${s.thorough ? 'checked' : ''}> Thorough mode (Claude thinks longer: slower and a little dearer, may catch subtler outliers)</label>
       <label class="ai-check ai-consent"><input type="checkbox" data-aifield="consent" ${s.consent ? 'checked' : ''}> I agree to send this plate's OD values, fit results and sample names to the Anthropic API.</label>
       <label class="ai-check"><input type="checkbox" data-aifield="autoAccept" ${s.autoAccept ? 'checked' : ''}> Also accept plates Claude marks clean (every poor-fit curve justified, no suggestion left undecided)</label>
       <label class="ai-check"><input type="checkbox" data-aifield="skipAccepted" ${s.skipAccepted ? 'checked' : ''}> Skip plates I already accepted when reviewing all plates</label>
@@ -4525,6 +4526,7 @@ document.addEventListener('change', e => {
   else if (k === 'autoAccept') aiState.autoAccept = f.checked;
   else if (k === 'skipAccepted') aiState.skipAccepted = f.checked;
   else if (k === 'model') aiState.model = f.value;
+  else if (k === 'thorough') aiState.thorough = f.checked;
   try {
     if (aiState.remember && aiState.key.trim()) localStorage.setItem(AI_KEY_STORE, aiState.key.trim());
     else localStorage.removeItem(AI_KEY_STORE);
@@ -4609,7 +4611,7 @@ const TOUR_STEPS = [
   {view: 'review', target: '#reviewImpact', pos: 'left', title: '3 · Outlier sensitivity',
    body: '<p>A candidate is suggested when excluding it would shift the ED50 by at least this percentage. Slide towards 0 % to see more candidates, higher to keep only the influential ones. No refit is needed.</p>'},
   {view: 'review', target: '#reviewAI', pos: 'left', title: '3 · Claude auto-review (optional)',
-   body: '<p>With your own Anthropic API key, Claude can review the plate (or all plates): it decides on every suggested outlier, justifies every poor-fit curve and can accept clean plates. Nothing is sent until you tick the consent box, and only OD values and sample names leave your computer. Everything it does can be undone, and its reasons land in the <i>Excluded Points</i> sheet.</p><p>This tour never calls the API.</p>'},
+   body: '<p>With your own Anthropic API key, Claude can review the plate (or all plates): it decides on every suggested outlier, justifies every poor-fit curve and can accept clean plates. Nothing is sent until you tick the consent box, and only OD values and sample names leave your computer. Everything it does can be undone, and the points it excluded are marked in the <i>Excluded Points</i> sheet.</p><p>This tour never calls the API.</p>'},
   {view: 'review', target: '#reviewAdv', pos: 'left', title: '3 · Advanced fit settings',
    body: '<p>Lower, initial and upper bounds of the 4PL parameters. Applying them refits every plate and clears the accepted plates. The defaults, or the <i>Advanced (optional)</i> sheet in the metadata, are usually enough.</p>'},
   {view: 'review', target: '#reviewActions', pos: 'left', title: '3 · Accept plates',
